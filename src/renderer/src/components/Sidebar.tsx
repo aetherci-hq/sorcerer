@@ -1,0 +1,141 @@
+import { useCallback, useRef, useEffect } from 'react'
+import { ActionBar } from './ActionBar'
+import { SearchBar } from './SearchBar'
+import { ProjectTree } from './ProjectTree'
+import { SidebarFooter } from './SidebarFooter'
+import { Tooltip } from './Tooltip'
+import { PanelLeftCloseIcon, PanelLeftOpenIcon } from './icons'
+import { useUIStore } from '../stores/useUIStore'
+import { useProjectStore } from '../stores/useProjectStore'
+import { useSessionStore } from '../stores/useSessionStore'
+
+export function Sidebar() {
+  const {
+    sidebarCollapsed, toggleSidebar,
+    sidebarWidth, setSidebarWidth
+  } = useUIStore()
+
+  const SNAP_THRESHOLD = 120
+
+  /* ---- Drag to resize ---- */
+  const isResizing = useRef(false)
+  const sidebarRef = useRef<HTMLElement>(null)
+
+  const onMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+    isResizing.current = true
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+  }, [])
+
+  useEffect(() => {
+    const onMouseMove = (e: MouseEvent) => {
+      if (!isResizing.current) return
+      if (e.clientX < SNAP_THRESHOLD) {
+        if (sidebarRef.current) {
+          sidebarRef.current.style.opacity = '0.5'
+        }
+      } else {
+        if (sidebarRef.current) {
+          sidebarRef.current.style.opacity = ''
+        }
+        setSidebarWidth(e.clientX)
+      }
+    }
+    const onMouseUp = (e: MouseEvent) => {
+      if (!isResizing.current) return
+      isResizing.current = false
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+      if (sidebarRef.current) {
+        sidebarRef.current.style.opacity = ''
+      }
+      if (e.clientX < SNAP_THRESHOLD && !sidebarCollapsed) {
+        toggleSidebar()
+      }
+    }
+    window.addEventListener('mousemove', onMouseMove)
+    window.addEventListener('mouseup', onMouseUp)
+    return () => {
+      window.removeEventListener('mousemove', onMouseMove)
+      window.removeEventListener('mouseup', onMouseUp)
+    }
+  }, [setSidebarWidth, sidebarCollapsed, toggleSidebar])
+
+  /* ---- Collapsed view ---- */
+  if (sidebarCollapsed) {
+    return (
+      <aside className="sidebar sidebar--collapsed" ref={sidebarRef}>
+        <div className="titlebar stagger-1">
+          <div className="titlebar-logo" />
+        </div>
+
+        <button className="sidebar-toggle-btn" onClick={toggleSidebar}>
+          <PanelLeftOpenIcon />
+        </button>
+
+        <ActionBar collapsed />
+
+        <CollapsedTree />
+
+        <SidebarFooter collapsed />
+      </aside>
+    )
+  }
+
+  /* ---- Expanded view ---- */
+  return (
+    <aside
+      className="sidebar"
+      ref={sidebarRef}
+      style={{ width: sidebarWidth, minWidth: sidebarWidth }}
+    >
+      <div className="titlebar stagger-1">
+        <div className="titlebar-logo" />
+        <span className="titlebar-text">Sorcerer</span>
+        <button className="sidebar-toggle-btn" onClick={toggleSidebar}>
+          <PanelLeftCloseIcon />
+        </button>
+      </div>
+
+      <ActionBar collapsed={false} />
+      <SearchBar />
+      <ProjectTree />
+      <SidebarFooter collapsed={false} />
+
+      {/* Resize handle */}
+      <div className="sidebar-resize-handle" onMouseDown={onMouseDown} />
+    </aside>
+  )
+}
+
+/** Collapsed view: just status dots for active sessions */
+function CollapsedTree() {
+  const { projects } = useProjectStore()
+  const { sessions, activeSessionId, setActiveSession } = useSessionStore()
+
+  return (
+    <div className="collapsed-tree">
+      {projects.map((p) => {
+        const projectSessions = sessions.filter((s) => s.project_id === p.id && s.status !== 'deleted' && s.status !== 'archived')
+        return (
+          <div key={p.id} className="collapsed-project-group">
+            <Tooltip label={p.name} position="right">
+              <div className="collapsed-project-label" />
+            </Tooltip>
+            {projectSessions.map((s) => (
+              <Tooltip key={s.id} label={s.name} position="right">
+                <button
+                  className={`collapsed-session-btn ${s.id === activeSessionId ? 'collapsed-session-btn--active' : ''}`}
+                  onClick={() => setActiveSession(s.id)}
+                >
+                  <span className={`status-dot status-dot--${s.status}`} />
+                </button>
+              </Tooltip>
+            ))}
+          </div>
+        )
+      })}
+    </div>
+  )
+}

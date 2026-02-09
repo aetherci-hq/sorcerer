@@ -1,0 +1,80 @@
+import { useEffect, useRef, type ReactNode } from 'react'
+import { useUIStore } from '../stores/useUIStore'
+
+interface DialogProps {
+  open: boolean
+  onClose: () => void
+  title: string
+  children: ReactNode
+  variant?: 'default' | 'danger'
+}
+
+export function Dialog({ open, onClose, title, children, variant = 'default' }: DialogProps) {
+  const overlayRef = useRef<HTMLDivElement>(null)
+  const dialogClosing = useUIStore((s) => s.dialogClosing)
+
+  useEffect(() => {
+    if (!open) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [open, onClose])
+
+  if (!open) return null
+
+  return (
+    <div
+      className={`dialog-overlay ${dialogClosing ? 'dialog-overlay--closing' : ''}`}
+      ref={overlayRef}
+      onClick={(e) => { if (e.target === overlayRef.current) onClose() }}
+    >
+      <div className={`dialog ${variant === 'danger' ? 'dialog--danger' : ''} ${dialogClosing ? 'dialog--closing' : ''}`}>
+        <div className="dialog-header">
+          <h2 className="dialog-title">{title}</h2>
+          <button className="dialog-close" onClick={onClose}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
+        </div>
+        <div className="dialog-body">
+          {children}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/* Reusable form pieces */
+export function DialogField({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="dialog-field">
+      <label className="dialog-label">{label}</label>
+      {children}
+    </div>
+  )
+}
+
+export function DialogActions({ children }: { children: ReactNode }) {
+  return <div className="dialog-actions">{children}</div>
+}
+
+export function DialogButton({ children, variant = 'secondary', onClick, type }: {
+  children: ReactNode
+  variant?: 'primary' | 'secondary' | 'danger'
+  onClick?: () => void
+  type?: 'submit' | 'button'
+}) {
+  return (
+    <button
+      className={`dialog-btn dialog-btn--${variant}`}
+      onClick={onClick}
+      type={type || 'button'}
+    >
+      {children}
+    </button>
+  )
+}
