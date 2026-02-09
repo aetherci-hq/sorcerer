@@ -59,12 +59,14 @@ export function registerIPC(
     return dbService.addProject(id, name, projectPath)
   })
 
-  ipcMain.handle('project:addPath', (_event, projectPath: string) => {
-    const name = path.basename(projectPath)
+  ipcMain.handle('project:addPath', (_event, projectPath: string, customName?: string) => {
+    const name = customName || path.basename(projectPath)
     const gitDir = path.join(projectPath, '.git')
     if (!fs.existsSync(gitDir)) {
       throw new Error('Selected directory is not a git repository')
     }
+    const existing = dbService.listProjects().find((p: any) => p.path === projectPath)
+    if (existing) return existing
     const id = uuidv4()
     return dbService.addProject(id, name, projectPath)
   })

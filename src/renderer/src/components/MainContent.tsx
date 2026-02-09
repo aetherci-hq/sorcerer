@@ -8,6 +8,25 @@ import { Tooltip } from './Tooltip'
 import { TerminalView } from './TerminalView'
 import type { Session, SplitNode } from '../types'
 
+function IdleSessionPanel({ session }: { session: Session }) {
+  const restartSession = useSessionStore((s) => s.restartSession)
+  return (
+    <div className="terminal-placeholder">
+      <TerminalIcon className="terminal-placeholder-icon" />
+      <div className="terminal-placeholder-text">
+        Session <strong>{session.name}</strong> has ended.
+      </div>
+      <button className="terminal-restart-btn" style={{ marginTop: 16 }} onClick={() => restartSession(session.id)}>
+        <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+          <path d="M11.534 7h3.932a.25.25 0 0 1 .192.41l-1.966 2.36a.25.25 0 0 1-.384 0l-1.966-2.36a.25.25 0 0 1 .192-.41zm-11 2h3.932a.25.25 0 0 0 .192-.41L2.692 6.23a.25.25 0 0 0-.384 0L.342 8.59A.25.25 0 0 0 .534 9z" />
+          <path fillRule="evenodd" d="M8 3c-1.552 0-2.94.707-3.857 1.818a.5.5 0 1 1-.771-.636A6.002 6.002 0 0 1 13.917 7H12.9A5.002 5.002 0 0 0 8 3zM3.1 9a5.002 5.002 0 0 0 8.757 2.182.5.5 0 1 1 .771.636A6.002 6.002 0 0 1 2.083 9H3.1z" />
+        </svg>
+        Restart Session
+      </button>
+    </div>
+  )
+}
+
 function TerminalPanel({ session }: { session: Session | undefined }) {
   if (!session) {
     return (
@@ -33,7 +52,10 @@ function TerminalPanel({ session }: { session: Session | undefined }) {
     )
   }
 
-  // Active or idle sessions get a real terminal
+  if (session.status === 'idle') {
+    return <IdleSessionPanel session={session} />
+  }
+
   return <TerminalView sessionId={session.id} isFocused={true} />
 }
 
@@ -141,6 +163,8 @@ function SplitNodeView({ node }: { node: SplitNode }) {
               Session <strong>{session.name}</strong> is archived.
             </div>
           </div>
+        ) : session?.status === 'idle' ? (
+          <IdleSessionPanel session={session} />
         ) : session ? (
           <TerminalView sessionId={session.id} isFocused={isFocused} />
         ) : (

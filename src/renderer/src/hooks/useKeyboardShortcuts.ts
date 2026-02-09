@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { useUIStore } from '../stores/useUIStore'
+import { useSessionStore } from '../stores/useSessionStore'
 
 export function useKeyboardShortcuts() {
   const { openDialog, activeDialog } = useUIStore()
@@ -26,6 +27,33 @@ export function useKeyboardShortcuts() {
       if (e.ctrlKey && e.key === 'b') {
         e.preventDefault()
         useUIStore.getState().toggleSidebar()
+      }
+
+      // Ctrl+\ — split right
+      if (e.ctrlKey && !e.shiftKey && e.key === '\\') {
+        e.preventDefault()
+        const sessionId = useSessionStore.getState().activeSessionId
+        if (sessionId) {
+          useUIStore.getState().splitRight(sessionId)
+        }
+      }
+
+      // Ctrl+Shift+\ — split down
+      if (e.ctrlKey && e.shiftKey && e.key === '|') {
+        e.preventDefault()
+        const sessionId = useSessionStore.getState().activeSessionId
+        if (sessionId) {
+          useUIStore.getState().splitDown(sessionId)
+        }
+      }
+
+      // Ctrl+W — close focused panel (only in split mode)
+      if (e.ctrlKey && e.key === 'w') {
+        const { splitRoot, focusedPanelId, closePanel } = useUIStore.getState()
+        if (splitRoot && focusedPanelId) {
+          e.preventDefault()
+          closePanel(focusedPanelId)
+        }
       }
 
       // Escape — clear search if focused, otherwise blur

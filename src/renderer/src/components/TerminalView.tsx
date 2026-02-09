@@ -32,18 +32,22 @@ export function TerminalView({ sessionId, isFocused }: TerminalViewProps) {
 
     let cached = terminalCache.get(sessionId)
     if (!cached) {
+      // Read the agent-driven terminal background from CSS custom property
+      const terminalBg = getComputedStyle(document.documentElement)
+        .getPropertyValue('--terminal-bg').trim() || '#111114'
+
       const terminal = new Terminal({
         cursorBlink: true,
         fontSize: 13,
         fontFamily: "'JetBrains Mono', 'Cascadia Code', 'Consolas', monospace",
         theme: {
-          background: '#111114',
+          background: terminalBg,
           foreground: '#e8e6e3',
           cursor: '#e2a445',
-          cursorAccent: '#111114',
+          cursorAccent: terminalBg,
           selectionBackground: '#e2a44533',
           selectionForeground: undefined,
-          black: '#111114',
+          black: terminalBg,
           red: '#e25555',
           green: '#5ec269',
           yellow: '#e2a445',

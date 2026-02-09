@@ -2,7 +2,7 @@
   "name": "sorcerer",
   "version": "1.0.0",
   "description": "Claude Code Agent Orchestration App",
-  "main": "./dist/main/index.js",
+  "main": "./out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",

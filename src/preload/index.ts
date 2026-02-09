@@ -4,7 +4,7 @@ const api = {
   project: {
     list: () => ipcRenderer.invoke('project:list'),
     add: () => ipcRenderer.invoke('project:add'),
-    addPath: (path: string) => ipcRenderer.invoke('project:addPath', path),
+    addPath: (path: string, name?: string) => ipcRenderer.invoke('project:addPath', path, name),
     update: (id: string, updates: any) => ipcRenderer.invoke('project:update', id, updates),
     remove: (id: string) => ipcRenderer.invoke('project:remove', id),
     gitStatus: (projectPath: string) => ipcRenderer.invoke('project:git-status', projectPath)

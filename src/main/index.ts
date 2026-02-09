@@ -58,11 +58,11 @@ async function createWindow(): Promise<void> {
     frame: false,
     titleBarStyle: 'hidden',
     titleBarOverlay: {
-      color: '#09090b',
-      symbolColor: '#a1a1aa',
-      height: 52
+      color: '#111114',
+      symbolColor: '#9b9a97',
+      height: 36
     },
-    backgroundColor: '#09090b',
+    backgroundColor: '#111114',
     webPreferences: {
       preload: path.join(__dirname, '../preload/index.js'),
       contextIsolation: true,

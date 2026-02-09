@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react'
 import { useUIStore } from '../../stores/useUIStore'
 import { useToastStore } from '../../stores/useToastStore'
 import {
-  TerminalIcon, GitBranchIcon, SettingsIcon, KeyboardIcon
+  TerminalIcon, GitBranchIcon, SettingsIcon
 } from '../icons'
 
 type SettingsTab = 'sessions' | 'git' | 'general'
@@ -17,6 +17,9 @@ const SHORTCUTS = [
   { keys: 'Ctrl + K', action: 'Search sessions' },
   { keys: 'Ctrl + N', action: 'New session' },
   { keys: 'Ctrl + B', action: 'Toggle sidebar' },
+  { keys: 'Ctrl + \\', action: 'Split right' },
+  { keys: 'Ctrl + Shift + \\', action: 'Split down' },
+  { keys: 'Ctrl + W', action: 'Close focused panel' },
   { keys: 'Escape', action: 'Clear search / close dialog' },
   { keys: 'F2', action: 'Rename selected item' }
 ]
@@ -51,21 +54,28 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
   return <h3 className="settings-section-title">{children}</h3>
 }
 
-function SessionsTab() {
-  const [shell, setShell] = useState('')
-  const { addToast } = useToastStore()
-
-  // Load current shell setting
+/** Helper to load a setting with a fallback */
+function useSetting(key: string, fallback: string) {
+  const [value, setValue] = useState(fallback)
   useEffect(() => {
-    window.sorcerer.settings.get('shell').then((value: string | undefined) => {
-      if (value) setShell(value)
+    window.sorcerer.settings.get(key).then((v: string | undefined) => {
+      if (v !== undefined) setValue(v)
     })
-  }, [])
-
-  const saveShell = () => {
-    window.sorcerer.settings.set('shell', shell)
-    addToast('Shell setting saved', 'success')
+  }, [key])
+  const save = (v: string) => {
+    setValue(v)
+    window.sorcerer.settings.set(key, v)
   }
+  return [value, save] as const
+}
+
+function SessionsTab() {
+  const { addToast } = useToastStore()
+  const [shell, setShell] = useSetting('shell', '')
+  const [branchPrefix, setBranchPrefix] = useSetting('branchPrefix', 'sorcerer/')
+  const [autoArchive, setAutoArchive] = useSetting('autoArchive', 'false')
+  const [idleTimeout, setIdleTimeout] = useSetting('idleTimeout', '30m')
+  const [confirmDelete, setConfirmDelete] = useSetting('confirmDelete', 'true')
 
   return (
     <>
@@ -77,24 +87,89 @@ function SessionsTab() {
             value={shell}
             onChange={(e) => setShell(e.target.value)}
             placeholder="e.g. powershell.exe, /bin/zsh"
-            onBlur={saveShell}
           />
+          <button
+            className="settings-browse-btn"
+            type="button"
+            onClick={async () => {
+              const result = await window.sorcerer.project.add()
+              if (result) {
+                setShell(result.path)
+                addToast('Shell setting saved', 'success')
+              }
+            }}
+          >
+            Browse
+          </button>
         </div>
+      </SettingRow>
+
+      <SectionTitle>Branch &amp; Worktrees</SectionTitle>
+      <SettingRow label="Branch prefix" description="Prefix for auto-created git branches">
+        <input
+          className="settings-input"
+          value={branchPrefix}
+          onChange={(e) => setBranchPrefix(e.target.value)}
+        />
+      </SettingRow>
+
+      <SectionTitle>Lifecycle</SectionTitle>
+      <SettingRow label="Auto-archive idle sessions" description="Automatically archive sessions after idle timeout">
+        <Toggle checked={autoArchive === 'true'} onChange={(v) => setAutoArchive(v ? 'true' : 'false')} />
+      </SettingRow>
+      <SettingRow label="Idle timeout" description="How long before a session is considered idle">
+        <select
+          className="settings-select"
+          value={idleTimeout}
+          onChange={(e) => setIdleTimeout(e.target.value)}
+          disabled={autoArchive !== 'true'}
+        >
+          <option value="15m">15 minutes</option>
+          <option value="30m">30 minutes</option>
+          <option value="1h">1 hour</option>
+          <option value="2h">2 hours</option>
+        </select>
+      </SettingRow>
+      <SettingRow label="Confirm before delete" description="Show confirmation dialog when deleting sessions">
+        <Toggle checked={confirmDelete === 'true'} onChange={(v) => setConfirmDelete(v ? 'true' : 'false')} />
       </SettingRow>
     </>
   )
 }
 
 function GitTab() {
+  const [defaultRemote, setDefaultRemote] = useSetting('defaultRemote', 'origin')
+  const [autoPush, setAutoPush] = useSetting('autoPush', 'false')
+  const [worktreeBase, setWorktreeBase] = useState('~/.sorcerer/workspaces')
+
   return (
     <>
-      <SectionTitle>Worktrees</SectionTitle>
-      <SettingRow label="Worktree base directory" description="Managed by Sorcerer">
+      <SectionTitle>Remote</SectionTitle>
+      <SettingRow label="Default remote" description="Remote to push/pull from by default">
         <input
           className="settings-input"
-          value="~/.sorcerer/workspaces"
-          readOnly
+          value={defaultRemote}
+          onChange={(e) => setDefaultRemote(e.target.value)}
         />
+      </SettingRow>
+      <SettingRow label="Auto-push on create" description="Push branch to remote when creating a session">
+        <Toggle checked={autoPush === 'true'} onChange={(v) => setAutoPush(v ? 'true' : 'false')} />
+      </SettingRow>
+
+      <SectionTitle>Worktrees</SectionTitle>
+      <SettingRow label="Worktree base directory" description="Where git worktrees are created on disk">
+        <div className="settings-path-row">
+          <input
+            className="settings-input settings-input--path"
+            value={worktreeBase}
+            onChange={(e) => setWorktreeBase(e.target.value)}
+            readOnly
+          />
+          <button className="settings-browse-btn" type="button" onClick={async () => {
+            const result = await window.sorcerer.project.add()
+            if (result) setWorktreeBase(result.path)
+          }}>Browse</button>
+        </div>
       </SettingRow>
     </>
   )
@@ -126,6 +201,18 @@ function GeneralTab() {
           }}
         >
           Reset
+        </button>
+      </SettingRow>
+      <SettingRow label="Clear all data" description="Remove all projects, sessions, and settings">
+        <button
+          className="settings-action-btn settings-action-btn--danger"
+          type="button"
+          onClick={() => {
+            localStorage.clear()
+            addToast('All data cleared — reload to see defaults', 'info')
+          }}
+        >
+          Clear Data
         </button>
       </SettingRow>
     </>

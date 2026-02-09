@@ -8,7 +8,7 @@ interface ProjectState {
 
   loadProjects: () => Promise<void>
   addProject: () => Promise<Project | null>
-  addProjectByPath: (path: string) => Promise<Project | null>
+  addProjectByPath: (path: string, name?: string) => Promise<Project | null>
   removeProject: (id: string) => Promise<void>
   updateProject: (id: string, updates: { name?: string; setup_script?: string | null }) => Promise<void>
   setActiveProject: (id: string | null) => void
@@ -42,9 +42,9 @@ export const useProjectStore = create<ProjectState>((set) => ({
     }
   },
 
-  addProjectByPath: async (path: string) => {
+  addProjectByPath: async (path: string, name?: string) => {
     try {
-      const project = await window.sorcerer.project.addPath(path)
+      const project = await window.sorcerer.project.addPath(path, name)
       if (!project) return null
       set((state) => ({ projects: [project, ...state.projects] }))
       return project
