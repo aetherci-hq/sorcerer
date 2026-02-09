@@ -5,7 +5,7 @@ import { useSessionStore } from '../stores/useSessionStore'
 import { useToastStore } from '../stores/useToastStore'
 import {
   PlusIcon, CopyIcon, TrashIcon, SplitHorizontalIcon, SplitVerticalIcon,
-  RefreshIcon, UploadIcon, ExternalLinkIcon, ArchiveIcon, RotateCcwIcon, EditIcon
+  RefreshIcon, UploadIcon, ExternalLinkIcon, ArchiveIcon, RotateCcwIcon, EditIcon, PlayIcon
 } from './icons'
 
 type MenuItem =
@@ -15,7 +15,7 @@ type MenuItem =
 export function ContextMenu() {
   const { contextMenu, closeContextMenu, openDialog, splitRight, splitDown, setRenamingId } = useUIStore()
   const { projects } = useProjectStore()
-  const { sessions, restartSession, restoreSession, pushBranch } = useSessionStore()
+  const { sessions, resumeSession, restartSession, restoreSession, pushBranch } = useSessionStore()
   const { addToast } = useToastStore()
   const menuRef = useRef<HTMLDivElement>(null)
 
@@ -136,9 +136,13 @@ export function ContextMenu() {
       { label: 'Split Down', icon: <SplitVerticalIcon className={iconClass} />, action: () => splitDown(contextMenu.targetId) },
       { type: 'separator' },
       { label: 'Rename', icon: <EditIcon className={iconClass} />, shortcut: 'F2', action: () => setRenamingId(contextMenu.targetId) },
-      { label: 'Restart Session', icon: <RefreshIcon className={iconClass} />, action: async () => {
+      { label: 'Resume Session', icon: <PlayIcon className={iconClass} />, action: async () => {
+        await resumeSession(contextMenu.targetId)
+        addToast('Session resumed', 'info')
+      }},
+      { label: 'New Session', icon: <RefreshIcon className={iconClass} />, action: async () => {
         await restartSession(contextMenu.targetId)
-        addToast('Session restarted', 'info')
+        addToast('New session started', 'info')
       }},
       { label: 'Copy Worktree Path', icon: <CopyIcon className={iconClass} />, action: () => {
         if (targetSession) copyToClipboard(targetSession.worktree_path, 'Worktree path')

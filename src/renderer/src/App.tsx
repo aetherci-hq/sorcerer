@@ -33,8 +33,17 @@ export function App() {
         useUIStore.setState({ expandedProjects: expanded })
       }
     })
-    loadSessions()
-    loadTeams()
+    // After sessions + teams load, auto-expand sessions that already have teams
+    Promise.all([loadSessions(), loadTeams()]).then(() => {
+      const sessions = useSessionStore.getState().sessions
+      const { expandedSessions } = useUIStore.getState()
+      const withTeams = sessions.filter((s) => s.team_name)
+      if (withTeams.length > 0) {
+        const next = new Set(expandedSessions)
+        for (const s of withTeams) next.add(s.id)
+        useUIStore.setState({ expandedSessions: next })
+      }
+    })
 
     // Subscribe to file watcher for team/task updates
     const unsub = window.sorcerer.teams.onUpdate((data: any) => {
@@ -48,6 +57,15 @@ export function App() {
     // Subscribe to session-team auto-linking
     const unsubLink = window.sorcerer.teams.onSessionLinked((data: { sessionId: string; teamName: string | null }) => {
       useSessionStore.getState().updateSessionInStore(data.sessionId, { team_name: data.teamName })
+      // Auto-expand the session in the sidebar when a team is linked
+      if (data.teamName) {
+        const { expandedSessions } = useUIStore.getState()
+        if (!expandedSessions.has(data.sessionId)) {
+          const next = new Set(expandedSessions)
+          next.add(data.sessionId)
+          useUIStore.setState({ expandedSessions: next })
+        }
+      }
     })
 
     return () => {

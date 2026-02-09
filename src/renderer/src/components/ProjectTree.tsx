@@ -6,15 +6,40 @@ import { useTeamStore } from '../stores/useTeamStore'
 import { ChevronIcon, FolderIcon, TerminalIcon, UserIcon, MoreHorizontalIcon } from './icons'
 import { StatusDot } from './StatusDot'
 import { EmptyState } from './EmptyState'
-import type { Project, Session, TeamMember } from '../types'
+import type { Project, Session, TeamMember, TaskData } from '../types'
 
-function TeammateItem({ member, staggerClass }: { member: TeamMember; staggerClass?: string }) {
+function TaskItem({ task }: { task: TaskData }) {
+  const statusIcon = task.status === 'completed' ? 'completed'
+    : task.status === 'in_progress' ? 'active'
+    : 'idle'
   return (
-    <div className={`tree-item tree-teammate ${staggerClass || ''}`}>
-      <UserIcon className="tree-icon" />
-      <span className="tree-label">{member.name}</span>
-      {member.agentType && <span className="teammate-badge">{member.agentType}</span>}
-      <StatusDot status={(member.status as any) || 'idle'} />
+    <div className="tree-item tree-task">
+      <StatusDot status={statusIcon} />
+      <span className="tree-label tree-task-label">
+        {task.activeForm || task.subject}
+      </span>
+    </div>
+  )
+}
+
+function TeammateItem({ member, tasks, staggerClass }: { member: TeamMember; tasks: TaskData[]; staggerClass?: string }) {
+  // Tasks owned by this member
+  const memberTasks = tasks.filter((t) => t.owner === member.name && t.status !== 'completed')
+  const activeTask = memberTasks.find((t) => t.status === 'in_progress')
+
+  return (
+    <div className={`tree-teammate-group ${staggerClass || ''}`}>
+      <div className="tree-item tree-teammate">
+        <UserIcon className="tree-icon" />
+        <span className="tree-label">{member.name}</span>
+        {member.agentType && <span className="teammate-badge">{member.agentType}</span>}
+        <StatusDot status={(member.status as string) || 'idle'} />
+      </div>
+      {activeTask && (
+        <div className="tree-teammate-task">
+          <span className="tree-task-label">{activeTask.activeForm || activeTask.subject}</span>
+        </div>
+      )}
     </div>
   )
 }
@@ -36,9 +61,13 @@ function SessionItem({
   const isExpanded = expandedSessions.has(session.id)
   const itemRef = useRef<HTMLDivElement>(null)
 
-  // Team members for this session
+  // Team members and tasks for this session
   const team = session.team_name ? teams.find((t) => t.name === session.team_name) : undefined
   const hasTeammates = (team?.members.length ?? 0) > 0
+  const tasks = session.team_name ? (tasksByTeam[session.team_name] || []) : []
+  const totalTaskCount = tasks.length
+  const completedTaskCount = tasks.filter((t) => t.status === 'completed').length
+  const pendingTaskCount = totalTaskCount - completedTaskCount
 
   // Is this session in the split view but not the focused one?
   const splitIds = splitRoot ? getAllSessionIds(splitRoot) : []
@@ -175,9 +204,15 @@ function SessionItem({
               <TeammateItem
                 key={member.name}
                 member={member}
+                tasks={tasks}
                 staggerClass={`stagger-${Math.min(i + 7, 10)}`}
               />
             ))}
+            {pendingTaskCount > 0 && (
+              <div className="tree-team-summary">
+                {completedTaskCount}/{totalTaskCount} tasks done
+              </div>
+            )}
           </div>
         </div>
       )}

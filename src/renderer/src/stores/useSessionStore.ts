@@ -13,6 +13,7 @@ interface SessionState {
   archiveSession: (sessionId: string) => Promise<void>
   deleteSession: (sessionId: string) => Promise<void>
   restartSession: (sessionId: string) => Promise<void>
+  resumeSession: (sessionId: string) => Promise<void>
   restoreSession: (sessionId: string) => Promise<void>
   pushBranch: (sessionId: string) => Promise<{ pushed: boolean; error?: string }>
   setActiveSession: (id: string) => void
@@ -105,6 +106,19 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       }
     } catch (err) {
       console.error('[session-store] restartSession failed:', err)
+    }
+  },
+
+  resumeSession: async (sessionId) => {
+    try {
+      const session = await window.sorcerer.session.resume(sessionId)
+      if (session) {
+        set((state) => ({
+          sessions: state.sessions.map((s) => s.id === sessionId ? session : s)
+        }))
+      }
+    } catch (err) {
+      console.error('[session-store] resumeSession failed:', err)
     }
   },
 

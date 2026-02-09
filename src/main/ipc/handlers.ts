@@ -273,10 +273,36 @@ export function registerIPC(
       ? (session.worktree_path as string)
       : (dbService.getProject(session.project_id as string)?.path as string || process.cwd())
 
-    // Re-spawn Claude Code directly in the worktree
+    // Re-spawn Claude Code directly in the worktree (fresh session)
     ptyService.spawn(sessionId, cwd, {
       command: 'claude',
       args: ['--dangerously-skip-permissions'],
+      env: sessionEnv(sessionId)
+    })
+    const pid = ptyService.getPid(sessionId)
+    dbService.updateSession(sessionId, { status: 'active', pid: pid ?? null })
+
+    return dbService.getSession(sessionId)
+  })
+
+  ipcMain.handle('session:resume', async (_event, sessionId: string) => {
+    const session = dbService.getSession(sessionId)
+    if (!session) throw new Error('Session not found')
+
+    // Kill existing process if running
+    if (ptyService.isRunning(sessionId)) {
+      ptyService.kill(sessionId)
+    }
+
+    // Check if worktree directory still exists
+    const cwd = fs.existsSync(session.worktree_path as string)
+      ? (session.worktree_path as string)
+      : (dbService.getProject(session.project_id as string)?.path as string || process.cwd())
+
+    // Resume the most recent Claude Code conversation in this worktree
+    ptyService.spawn(sessionId, cwd, {
+      command: 'claude',
+      args: ['--continue', '--dangerously-skip-permissions'],
       env: sessionEnv(sessionId)
     })
     const pid = ptyService.getPid(sessionId)
@@ -377,7 +403,24 @@ export function registerIPC(
   })
 
   ipcMain.handle('teams:tasks', (_event, teamName: string) => {
-    return fileWatcherService.getTeamTasks(teamName)
+    // Gather tasks from team-name directory
+    const teamTasks = fileWatcherService.getTeamTasks(teamName)
+    // Also gather tasks from session-ID directories linked to this team
+    const sessions = dbService.listSessions()
+    const linkedSessions = sessions.filter((s: any) => s.team_name === teamName)
+    const sessionTasks = linkedSessions.flatMap((s: any) =>
+      fileWatcherService.getTeamTasks(s.id)
+    )
+    // Merge, deduplicate by id, and filter out internal team-spawn tasks
+    const seen = new Set<string>()
+    const merged: any[] = []
+    for (const t of [...teamTasks, ...sessionTasks]) {
+      if (seen.has(t.id)) continue
+      seen.add(t.id)
+      if (t.metadata?._internal) continue
+      merged.push(t)
+    }
+    return merged
   })
 
   ipcMain.handle('teams:inbox', (_event, teamName: string, agentName: string) => {

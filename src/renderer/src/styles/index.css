@@ -664,6 +664,11 @@ body {
 }
 
 /* Teammate sub-items */
+.tree-teammate-group {
+  display: flex;
+  flex-direction: column;
+}
+
 .tree-teammate {
   padding-left: 4px;
 }
@@ -678,6 +683,30 @@ body {
   color: var(--text-tertiary);
   border: 1px solid var(--border-subtle);
   flex-shrink: 0;
+}
+
+.tree-teammate-task {
+  padding: 2px 12px 2px 36px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tree-task-label {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  font-style: italic;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tree-team-summary {
+  padding: 4px 12px 4px 36px;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--text-tertiary);
+  letter-spacing: 0.02em;
 }
 
 /* ============================
@@ -2442,6 +2471,24 @@ button:focus-visible,
 .terminal-restart-btn:hover {
   border-color: var(--accent);
   color: var(--text-primary);
+}
+
+.terminal-restart-btn--primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--bg-root);
+}
+
+.terminal-restart-btn--primary:hover {
+  background: var(--accent-dim);
+  border-color: var(--accent-dim);
+  color: var(--bg-root);
+}
+
+.terminal-action-row {
+  display: flex;
+  gap: 10px;
+  margin-top: 16px;
 }
 
 /* ── Archived session divider in tree ──────────────────────────── */

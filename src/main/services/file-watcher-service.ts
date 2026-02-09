@@ -42,6 +42,7 @@ interface TaskData {
   owner?: string
   blocks: string[]
   blockedBy: string[]
+  metadata?: Record<string, any>
 }
 
 export class FileWatcherService {
@@ -123,7 +124,13 @@ export class FileWatcherService {
 
     this.tasksWatcher.on('all', (event: string, filePath: string) => {
       if (filePath.endsWith('.json') && !filePath.endsWith('.lock')) {
-        const teamName = path.basename(path.dirname(filePath))
+        let teamName = path.basename(path.dirname(filePath))
+        // If the directory name is a session ID (UUID), resolve to team name
+        if (/^[0-9a-f]{8}-/.test(teamName)) {
+          const sessions = this.dbService.listSessions()
+          const session = sessions.find((s: any) => s.id === teamName)
+          if (session?.team_name) teamName = session.team_name
+        }
         this.debounceEmit('tasks-update', { event, path: filePath, teamName })
       }
     })

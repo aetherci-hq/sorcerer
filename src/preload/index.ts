@@ -18,6 +18,7 @@ const api = {
     archive: (sessionId: string) => ipcRenderer.invoke('session:archive', sessionId),
     delete: (sessionId: string) => ipcRenderer.invoke('session:delete', sessionId),
     restart: (sessionId: string) => ipcRenderer.invoke('session:restart', sessionId),
+    resume: (sessionId: string) => ipcRenderer.invoke('session:resume', sessionId),
     setTeam: (sessionId: string, teamName: string | null) => ipcRenderer.invoke('session:set-team', sessionId, teamName),
     gitStatus: (sessionId: string) => ipcRenderer.invoke('session:git-status', sessionId),
     checkDeleteSafety: (sessionId: string) => ipcRenderer.invoke('session:check-delete-safety', sessionId),
