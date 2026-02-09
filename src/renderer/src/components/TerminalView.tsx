@@ -75,6 +75,24 @@ export function TerminalView({ sessionId, isFocused }: TerminalViewProps) {
       cached = { terminal, fitAddon, attached: false }
       terminalCache.set(sessionId, cached)
 
+      // Intercept Ctrl+I before xterm processes it (Ctrl+I = Tab in terminal)
+      terminal.attachCustomKeyEventHandler((e: KeyboardEvent) => {
+        if (e.ctrlKey && e.key === 'i' && e.type === 'keydown') {
+          e.preventDefault()
+          window.dispatchEvent(new CustomEvent('sorcerer:dictation', { detail: sessionId }))
+          return false
+        }
+        return true
+      })
+
+      // Copy selection to clipboard on select
+      terminal.onSelectionChange(() => {
+        const selection = terminal.getSelection()
+        if (selection) {
+          navigator.clipboard.writeText(selection).catch(() => {})
+        }
+      })
+
       // Forward keyboard input to PTY
       terminal.onData((data) => {
         window.sorcerer.terminal.write(sessionId, data)
@@ -155,9 +173,69 @@ export function TerminalView({ sessionId, isFocused }: TerminalViewProps) {
     }
   }, [sessionId, isFocused])
 
+  // Dictation input overlay — scoped to this panel
+  const [dictationOpen, setDictationOpen] = useState(false)
+  const [dictationValue, setDictationValue] = useState('')
+  const dictationRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail
+      if (detail === sessionId) {
+        setDictationOpen(true)
+        setDictationValue('')
+      }
+    }
+    window.addEventListener('sorcerer:dictation', handler)
+    return () => window.removeEventListener('sorcerer:dictation', handler)
+  }, [sessionId])
+
+  useEffect(() => {
+    if (dictationOpen && dictationRef.current) {
+      dictationRef.current.focus()
+    }
+  }, [dictationOpen])
+
+  const closeDictation = () => {
+    setDictationOpen(false)
+    setDictationValue('')
+    const cached = terminalCache.get(sessionId)
+    if (cached) cached.terminal.focus()
+  }
+
+  const sendDictation = () => {
+    const text = dictationValue.trim()
+    if (!text) return
+    window.sorcerer.terminal.write(sessionId, text + '\r')
+    closeDictation()
+  }
+
   return (
     <div className="terminal-container">
       <div ref={containerRef} className="terminal-xterm" />
+      {dictationOpen && (
+        <div className="dictation-panel-overlay" onClick={(e) => { if (e.target === e.currentTarget) closeDictation() }}>
+          <div className="dictation-box">
+            <input
+              ref={dictationRef}
+              className="dictation-input"
+              type="text"
+              value={dictationValue}
+              onChange={(e) => setDictationValue(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') { e.preventDefault(); sendDictation() }
+                else if (e.key === 'Escape') closeDictation()
+              }}
+              placeholder="Type or dictate, then press Enter..."
+              spellCheck={false}
+              autoComplete="off"
+            />
+            <div className="dictation-hint">
+              <kbd>Enter</kbd> send <kbd>Esc</kbd> cancel
+            </div>
+          </div>
+        </div>
+      )}
       {exited && (
         <div className="terminal-restart-overlay">
           <button className="terminal-restart-btn" onClick={handleRestart}>
