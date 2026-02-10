@@ -1,13 +1,15 @@
 import { useCallback, useRef, useEffect } from 'react'
 import { ActionBar } from './ActionBar'
 import { SearchBar } from './SearchBar'
+import { AgentTree } from './AgentTree'
 import { ProjectTree } from './ProjectTree'
 import { SidebarFooter } from './SidebarFooter'
 import { Tooltip } from './Tooltip'
-import { PanelLeftCloseIcon, PanelLeftOpenIcon } from './icons'
+import { PanelLeftCloseIcon, PanelLeftOpenIcon, BotIcon } from './icons'
 import { useUIStore } from '../stores/useUIStore'
 import { useProjectStore } from '../stores/useProjectStore'
 import { useSessionStore } from '../stores/useSessionStore'
+import { useAgentStore } from '../stores/useAgentStore'
 
 export function Sidebar() {
   const {
@@ -100,6 +102,7 @@ export function Sidebar() {
 
       <ActionBar collapsed={false} />
       <SearchBar />
+      <AgentTree />
       <ProjectTree />
       <SidebarFooter collapsed={false} />
 
@@ -109,13 +112,35 @@ export function Sidebar() {
   )
 }
 
-/** Collapsed view: just status dots for active sessions */
+/** Collapsed view: just status dots for active sessions + agents */
 function CollapsedTree() {
   const { projects } = useProjectStore()
   const { sessions, activeSessionId, setActiveSession } = useSessionStore()
+  const { agents } = useAgentStore()
 
   return (
     <div className="collapsed-tree">
+      {/* Agents */}
+      {agents.length > 0 && (
+        <div className="collapsed-project-group">
+          <Tooltip label="Agents" position="right">
+            <div className="collapsed-project-label">
+              <BotIcon style={{ width: 10, height: 10, opacity: 0.5 }} />
+            </div>
+          </Tooltip>
+          {agents.map((a) => (
+            <Tooltip key={a.id} label={a.name} position="right">
+              <button
+                className={`collapsed-session-btn ${a.id === activeSessionId ? 'collapsed-session-btn--active' : ''}`}
+                onClick={() => setActiveSession(a.id)}
+              >
+                <span className={`status-dot status-dot--${a.status}`} />
+              </button>
+            </Tooltip>
+          ))}
+        </div>
+      )}
+      {/* Projects */}
       {projects.map((p) => {
         const projectSessions = sessions.filter((s) => s.project_id === p.id && s.status !== 'deleted' && s.status !== 'archived')
         return (

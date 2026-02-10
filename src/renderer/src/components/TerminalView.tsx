@@ -2,6 +2,7 @@ import { useEffect, useRef, useCallback, useState } from 'react'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { useSessionStore } from '../stores/useSessionStore'
+import { useAgentStore } from '../stores/useAgentStore'
 import '@xterm/xterm/css/xterm.css'
 
 interface TerminalViewProps {
@@ -17,6 +18,7 @@ export function TerminalView({ sessionId, isFocused }: TerminalViewProps) {
   const cleanupRef = useRef<(() => void) | null>(null)
   const [exited, setExited] = useState(false)
   const restartSession = useSessionStore((s) => s.restartSession)
+  const restartAgent = useAgentStore((s) => s.restartAgent)
 
   const handleRestart = async () => {
     setExited(false)
@@ -24,7 +26,13 @@ export function TerminalView({ sessionId, isFocused }: TerminalViewProps) {
     if (cached) {
       cached.terminal.clear()
     }
-    await restartSession(sessionId)
+    // Determine if this is a session or an agent
+    const session = useSessionStore.getState().sessions.find((s) => s.id === sessionId)
+    if (session) {
+      await restartSession(sessionId)
+    } else {
+      await restartAgent(sessionId)
+    }
   }
 
   const attach = useCallback(() => {
@@ -106,7 +114,13 @@ export function TerminalView({ sessionId, isFocused }: TerminalViewProps) {
       const unsubExit = window.sorcerer.terminal.onExit(sessionId, (exitCode: number) => {
         terminal.writeln(`\r\n\x1b[90m[Process exited with code ${exitCode}]\x1b[0m`)
         setExited(true)
-        useSessionStore.getState().updateSessionInStore(sessionId, { status: 'idle', pid: null })
+        // Update whichever store owns this ID
+        const sess = useSessionStore.getState().sessions.find((s) => s.id === sessionId)
+        if (sess) {
+          useSessionStore.getState().updateSessionInStore(sessionId, { status: 'idle', pid: null })
+        } else {
+          useAgentStore.getState().updateAgentInStore(sessionId, { status: 'idle', pid: null })
+        }
       })
 
       cached._ipcCleanup = () => {

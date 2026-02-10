@@ -3,12 +3,12 @@ import { persist } from 'zustand/middleware'
 import { useSessionStore } from './useSessionStore'
 import type { SplitNode, SplitLeaf, SplitBranch } from '../types'
 
-type DialogType = 'new-session' | 'add-project' | 'delete-session' | 'archive-session' | 'settings' | null
+type DialogType = 'new-session' | 'add-project' | 'delete-session' | 'archive-session' | 'settings' | 'add-agent' | 'delete-agent' | null
 
 interface ContextMenu {
   x: number
   y: number
-  type: 'project' | 'session'
+  type: 'project' | 'session' | 'agent'
   targetId: string
 }
 

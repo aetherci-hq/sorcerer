@@ -2,6 +2,7 @@ import { ipcMain, dialog, shell } from 'electron'
 import { v4 as uuidv4 } from 'uuid'
 import path from 'path'
 import fs from 'fs'
+import os from 'os'
 import simpleGit from 'simple-git'
 import { PTYService } from '../services/pty-service'
 import { DatabaseService } from '../services/database-service'
@@ -386,6 +387,113 @@ export function registerIPC(
     return dbService.getSession(sessionId)
   })
 
+  // ── Agent operations ───────────────────────────────────────
+
+  ipcMain.handle('agent:list', () => {
+    return dbService.listAgents()
+  })
+
+  ipcMain.handle('agent:add', (_event, data: { name: string; description?: string; system_prompt?: string; mcp_config?: string }) => {
+    const id = uuidv4()
+    // Create scratch directory for this agent
+    const cwd = path.join(os.homedir(), '.sorcerer', 'agents', id)
+    fs.mkdirSync(cwd, { recursive: true })
+    return dbService.addAgent({ id, ...data })
+  })
+
+  ipcMain.handle('agent:update', (_event, id: string, updates: any) => {
+    return dbService.updateAgent(id, updates)
+  })
+
+  ipcMain.handle('agent:remove', (_event, id: string) => {
+    if (ptyService.isRunning(id)) {
+      ptyService.kill(id)
+    }
+    dbService.removeAgent(id)
+  })
+
+  ipcMain.handle('agent:start', (_event, agentId: string) => {
+    const agent = dbService.getAgent(agentId)
+    if (!agent) throw new Error('Agent not found')
+
+    if (ptyService.isRunning(agentId)) {
+      ptyService.kill(agentId)
+    }
+
+    const cwd = path.join(os.homedir(), '.sorcerer', 'agents', agentId)
+    fs.mkdirSync(cwd, { recursive: true })
+
+    const args = ['--dangerously-skip-permissions']
+    if (agent.mcp_config) args.push('--mcp-config', agent.mcp_config as string)
+    if (agent.system_prompt) args.push('--append-system-prompt', agent.system_prompt as string)
+
+    ptyService.spawn(agentId, cwd, {
+      command: 'claude',
+      args,
+      env: sessionEnv(agentId)
+    })
+    const pid = ptyService.getPid(agentId)
+    dbService.updateAgent(agentId, { status: 'active', pid: pid ?? null })
+    return dbService.getAgent(agentId)
+  })
+
+  ipcMain.handle('agent:resume', (_event, agentId: string) => {
+    const agent = dbService.getAgent(agentId)
+    if (!agent) throw new Error('Agent not found')
+
+    if (ptyService.isRunning(agentId)) {
+      ptyService.kill(agentId)
+    }
+
+    const cwd = path.join(os.homedir(), '.sorcerer', 'agents', agentId)
+    fs.mkdirSync(cwd, { recursive: true })
+
+    const args = ['--continue', '--dangerously-skip-permissions']
+    if (agent.mcp_config) args.push('--mcp-config', agent.mcp_config as string)
+    if (agent.system_prompt) args.push('--append-system-prompt', agent.system_prompt as string)
+
+    ptyService.spawn(agentId, cwd, {
+      command: 'claude',
+      args,
+      env: sessionEnv(agentId)
+    })
+    const pid = ptyService.getPid(agentId)
+    dbService.updateAgent(agentId, { status: 'active', pid: pid ?? null })
+    return dbService.getAgent(agentId)
+  })
+
+  ipcMain.handle('agent:restart', (_event, agentId: string) => {
+    const agent = dbService.getAgent(agentId)
+    if (!agent) throw new Error('Agent not found')
+
+    if (ptyService.isRunning(agentId)) {
+      ptyService.kill(agentId)
+    }
+
+    const cwd = path.join(os.homedir(), '.sorcerer', 'agents', agentId)
+    fs.mkdirSync(cwd, { recursive: true })
+
+    const args = ['--dangerously-skip-permissions']
+    if (agent.mcp_config) args.push('--mcp-config', agent.mcp_config as string)
+    if (agent.system_prompt) args.push('--append-system-prompt', agent.system_prompt as string)
+
+    ptyService.spawn(agentId, cwd, {
+      command: 'claude',
+      args,
+      env: sessionEnv(agentId)
+    })
+    const pid = ptyService.getPid(agentId)
+    dbService.updateAgent(agentId, { status: 'active', pid: pid ?? null })
+    return dbService.getAgent(agentId)
+  })
+
+  ipcMain.handle('agent:kill', (_event, agentId: string) => {
+    if (ptyService.isRunning(agentId)) {
+      ptyService.kill(agentId)
+    }
+    dbService.updateAgent(agentId, { status: 'idle', pid: null })
+  })
+
   // ── Terminal I/O ────────────────────────────────────────────
 
   ipcMain.on('terminal:write', (_event, sessionId: string, data: string) => {
@@ -405,11 +513,13 @@ export function registerIPC(
   ipcMain.handle('teams:tasks', (_event, teamName: string) => {
     // Gather tasks from team-name directory
     const teamTasks = fileWatcherService.getTeamTasks(teamName)
-    // Also gather tasks from session-ID directories linked to this team
+    // Also gather tasks from session-ID and agent-ID directories linked to this team
     const sessions = dbService.listSessions()
     const linkedSessions = sessions.filter((s: any) => s.team_name === teamName)
-    const sessionTasks = linkedSessions.flatMap((s: any) =>
-      fileWatcherService.getTeamTasks(s.id)
+    const agents = dbService.listAgents()
+    const linkedAgents = agents.filter((a: any) => a.team_name === teamName)
+    const sessionTasks = [...linkedSessions, ...linkedAgents].flatMap((item: any) =>
+      fileWatcherService.getTeamTasks(item.id)
     )
     // Merge, deduplicate by id, and filter out internal team-spawn tasks
     const seen = new Set<string>()

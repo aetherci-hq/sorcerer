@@ -2,10 +2,11 @@ import { useEffect, useRef, type ReactNode } from 'react'
 import { useUIStore } from '../stores/useUIStore'
 import { useProjectStore } from '../stores/useProjectStore'
 import { useSessionStore } from '../stores/useSessionStore'
+import { useAgentStore } from '../stores/useAgentStore'
 import { useToastStore } from '../stores/useToastStore'
 import {
   PlusIcon, CopyIcon, TrashIcon, SplitHorizontalIcon, SplitVerticalIcon,
-  RefreshIcon, UploadIcon, ExternalLinkIcon, ArchiveIcon, RotateCcwIcon, EditIcon, PlayIcon
+  RefreshIcon, UploadIcon, ExternalLinkIcon, ArchiveIcon, RotateCcwIcon, EditIcon, PlayIcon, StopIcon
 } from './icons'
 
 type MenuItem =
@@ -16,6 +17,7 @@ export function ContextMenu() {
   const { contextMenu, closeContextMenu, openDialog, splitRight, splitDown, setRenamingId } = useUIStore()
   const { projects } = useProjectStore()
   const { sessions, resumeSession, restartSession, restoreSession, pushBranch } = useSessionStore()
+  const { agents, startAgent, resumeAgent, restartAgent, killAgent } = useAgentStore()
   const { addToast } = useToastStore()
   const menuRef = useRef<HTMLDivElement>(null)
 
@@ -97,9 +99,12 @@ export function ContextMenu() {
     })
   }
 
-  // Find session to determine if archived
+  // Find session/agent to determine state
   const targetSession = contextMenu.type === 'session'
     ? sessions.find((s) => s.id === contextMenu.targetId)
+    : undefined
+  const targetAgent = contextMenu.type === 'agent'
+    ? agents.find((a) => a.id === contextMenu.targetId)
     : undefined
   const isArchived = targetSession?.status === 'archived'
 
@@ -107,7 +112,33 @@ export function ContextMenu() {
 
   let items: MenuItem[]
 
-  if (contextMenu.type === 'project') {
+  if (contextMenu.type === 'agent') {
+    const isRunning = targetAgent?.status === 'active'
+    items = [
+      ...(isRunning ? [
+        { label: 'Stop Agent', icon: <StopIcon className={iconClass} />, action: async () => {
+          await killAgent(contextMenu.targetId)
+          addToast('Agent stopped', 'info')
+        }}
+      ] : [
+        { label: 'Resume Agent', icon: <PlayIcon className={iconClass} />, action: async () => {
+          await resumeAgent(contextMenu.targetId)
+          addToast('Agent resumed', 'info')
+        }},
+        { label: 'Start New Session', icon: <RefreshIcon className={iconClass} />, action: async () => {
+          await restartAgent(contextMenu.targetId)
+          addToast('New agent session started', 'info')
+        }}
+      ]),
+      { type: 'separator' as const },
+      { label: 'Split Right', icon: <SplitHorizontalIcon className={iconClass} />, action: () => splitRight(contextMenu.targetId) },
+      { label: 'Split Down', icon: <SplitVerticalIcon className={iconClass} />, action: () => splitDown(contextMenu.targetId) },
+      { type: 'separator' as const },
+      { label: 'Rename', icon: <EditIcon className={iconClass} />, shortcut: 'F2', action: () => setRenamingId(contextMenu.targetId) },
+      { type: 'separator' as const },
+      { label: 'Delete Agent', icon: <TrashIcon className={iconClass} />, danger: true, action: () => openDialog('delete-agent', contextMenu.targetId) }
+    ]
+  } else if (contextMenu.type === 'project') {
     items = [
       { label: 'New Session', icon: <PlusIcon className={iconClass} />, shortcut: 'Ctrl+N', action: () => openDialog('new-session', contextMenu.targetId) },
       { type: 'separator' },

@@ -1,12 +1,13 @@
 import { useCallback, useRef, useEffect } from 'react'
 import { useSessionStore } from '../stores/useSessionStore'
 import { useProjectStore } from '../stores/useProjectStore'
+import { useAgentStore } from '../stores/useAgentStore'
 import { useUIStore } from '../stores/useUIStore'
 import { useTeamStore } from '../stores/useTeamStore'
-import { GitBranchIcon, TerminalIcon, ClockIcon, UserIcon } from './icons'
+import { GitBranchIcon, TerminalIcon, ClockIcon, UserIcon, BotIcon } from './icons'
 import { Tooltip } from './Tooltip'
 import { TerminalView } from './TerminalView'
-import type { Session, SplitNode } from '../types'
+import type { Session, Agent, SplitNode } from '../types'
 
 function IdleSessionPanel({ session }: { session: Session }) {
   const resumeSession = useSessionStore((s) => s.resumeSession)
@@ -36,8 +37,38 @@ function IdleSessionPanel({ session }: { session: Session }) {
   )
 }
 
-function TerminalPanel({ session }: { session: Session | undefined }) {
-  if (!session) {
+function IdleAgentPanel({ agent }: { agent: Agent }) {
+  const resumeAgent = useAgentStore((s) => s.resumeAgent)
+  const restartAgent = useAgentStore((s) => s.restartAgent)
+  return (
+    <div className="terminal-placeholder">
+      <BotIcon className="terminal-placeholder-icon" />
+      <div className="terminal-placeholder-text">
+        Agent <strong>{agent.name}</strong> has ended.
+      </div>
+      <div className="terminal-action-row">
+        <button className="terminal-restart-btn terminal-restart-btn--primary" onClick={() => resumeAgent(agent.id)}>
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+            <path d="M6 3.5a.5.5 0 0 1 .795-.404l6 4.5a.5.5 0 0 1 0 .808l-6 4.5A.5.5 0 0 1 6 12.5v-9z" />
+          </svg>
+          Resume
+        </button>
+        <button className="terminal-restart-btn" onClick={() => restartAgent(agent.id)}>
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+            <path d="M11.534 7h3.932a.25.25 0 0 1 .192.41l-1.966 2.36a.25.25 0 0 1-.384 0l-1.966-2.36a.25.25 0 0 1 .192-.41zm-11 2h3.932a.25.25 0 0 0 .192-.41L2.692 6.23a.25.25 0 0 0-.384 0L.342 8.59A.25.25 0 0 0 .534 9z" />
+            <path fillRule="evenodd" d="M8 3c-1.552 0-2.94.707-3.857 1.818a.5.5 0 1 1-.771-.636A6.002 6.002 0 0 1 13.917 7H12.9A5.002 5.002 0 0 0 8 3zM3.1 9a5.002 5.002 0 0 0 8.757 2.182.5.5 0 1 1 .771.636A6.002 6.002 0 0 1 2.083 9H3.1z" />
+          </svg>
+          New Session
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function TerminalPanel({ session, agent }: { session: Session | undefined; agent: Agent | undefined }) {
+  const activeItem = session || agent
+
+  if (!activeItem) {
     return (
       <div className="terminal-placeholder">
         <TerminalIcon className="terminal-placeholder-icon" />
@@ -49,7 +80,7 @@ function TerminalPanel({ session }: { session: Session | undefined }) {
     )
   }
 
-  if (session.status === 'archived') {
+  if (session?.status === 'archived') {
     return (
       <div className="terminal-placeholder">
         <TerminalIcon className="terminal-placeholder-icon" />
@@ -61,11 +92,12 @@ function TerminalPanel({ session }: { session: Session | undefined }) {
     )
   }
 
-  if (session.status === 'idle') {
-    return <IdleSessionPanel session={session} />
+  if (activeItem.status === 'idle') {
+    if (agent) return <IdleAgentPanel agent={agent} />
+    return <IdleSessionPanel session={session!} />
   }
 
-  return <TerminalView sessionId={session.id} isFocused={true} />
+  return <TerminalView sessionId={activeItem.id} isFocused={true} />
 }
 
 function SplitDivider({ direction, onDrag }: { direction: 'horizontal' | 'vertical'; onDrag: (ratio: number) => void }) {
@@ -117,9 +149,12 @@ function SplitDivider({ direction, onDrag }: { direction: 'horizontal' | 'vertic
 function SplitNodeView({ node }: { node: SplitNode }) {
   const { focusedPanelId, setFocusedPanel, closePanel, setSplitRatio, setPanelSession } = useUIStore()
   const { sessions, setActiveSession } = useSessionStore()
+  const { agents: agentsList } = useAgentStore()
 
   if (node.type === 'leaf') {
     const session = node.sessionId ? sessions.find((s) => s.id === node.sessionId) : undefined
+    const agent = node.sessionId && !session ? agentsList.find((a) => a.id === node.sessionId) : undefined
+    const activeItem = session || agent
     const isFocused = focusedPanelId === node.id
     const isEmpty = node.sessionId === null
 
@@ -151,7 +186,7 @@ function SplitNodeView({ node }: { node: SplitNode }) {
         onClick={handleClick}
       >
         <div className="split-panel-titlebar">
-          <span className="split-panel-name">{session?.name ?? 'Empty'}</span>
+          <span className="split-panel-name">{activeItem?.name ?? 'Empty'}</span>
           <button className="split-panel-close" onClick={(e) => { e.stopPropagation(); closePanel(node.id) }}>&times;</button>
         </div>
         {isEmpty ? (
@@ -172,10 +207,10 @@ function SplitNodeView({ node }: { node: SplitNode }) {
               Session <strong>{session.name}</strong> is archived.
             </div>
           </div>
-        ) : session?.status === 'idle' ? (
-          <IdleSessionPanel session={session} />
-        ) : session ? (
-          <TerminalView sessionId={session.id} isFocused={isFocused} />
+        ) : activeItem?.status === 'idle' ? (
+          agent ? <IdleAgentPanel agent={agent} /> : <IdleSessionPanel session={session!} />
+        ) : activeItem ? (
+          <TerminalView sessionId={activeItem.id} isFocused={isFocused} />
         ) : (
           <div className="terminal-placeholder">
             <TerminalIcon className="terminal-placeholder-icon" />
@@ -216,26 +251,36 @@ function SplitNodeView({ node }: { node: SplitNode }) {
 export function MainContent() {
   const { sessions, activeSessionId } = useSessionStore()
   const { projects } = useProjectStore()
+  const { agents: agentsList } = useAgentStore()
   const { teams } = useTeamStore()
   const { splitRoot } = useUIStore()
 
   const activeSession = sessions.find((s) => s.id === activeSessionId)
+  const activeAgent = !activeSession && activeSessionId
+    ? agentsList.find((a) => a.id === activeSessionId)
+    : undefined
   const activeProject = activeSession
     ? projects.find((p) => p.id === activeSession.project_id)
     : undefined
 
-  // Count team members for active session
-  const activeTeam = activeSession?.team_name
-    ? teams.find((t) => t.name === activeSession.team_name)
+  // Count team members for active session/agent
+  const teamName = activeSession?.team_name || activeAgent?.team_name
+  const activeTeam = teamName
+    ? teams.find((t) => t.name === teamName)
     : undefined
-  const agentCount = activeTeam?.members.length ?? 0
+  const teamMemberCount = activeTeam?.members.length ?? 0
 
   return (
     <div className="main-content">
       {/* Titlebar */}
       <div className="main-titlebar">
         <div className="main-titlebar-info">
-          {activeSession && (
+          {activeAgent ? (
+            <>
+              <BotIcon style={{ width: 14, height: 14, opacity: 0.6 }} />
+              <span className="main-titlebar-session">{activeAgent.name}</span>
+            </>
+          ) : activeSession ? (
             <>
               {activeProject && (
                 <>
@@ -251,7 +296,7 @@ export function MainContent() {
                 </span>
               </Tooltip>
             </>
-          )}
+          ) : null}
         </div>
       </div>
 
@@ -259,24 +304,41 @@ export function MainContent() {
       {splitRoot ? (
         <SplitNodeView node={splitRoot} />
       ) : (
-        <TerminalPanel session={activeSession} />
+        <TerminalPanel session={activeSession} agent={activeAgent} />
       )}
 
       {/* Status bar */}
       <div className="status-bar">
-        {activeSession ? (
+        {activeAgent ? (
+          <>
+            <div className={`status-bar-indicator status-bar-indicator--${activeAgent.status}`} />
+            <div className="status-bar-item">
+              <BotIcon />
+              <span>Agent: {activeAgent.status}</span>
+            </div>
+            {teamMemberCount > 0 && (
+              <>
+                <div className="status-bar-separator" />
+                <div className="status-bar-item">
+                  <UserIcon />
+                  <span>{teamMemberCount} member{teamMemberCount !== 1 ? 's' : ''}</span>
+                </div>
+              </>
+            )}
+          </>
+        ) : activeSession ? (
           <>
             <div className={`status-bar-indicator status-bar-indicator--${activeSession.status}`} />
             <div className="status-bar-item">
               <ClockIcon />
               <span>Session: {activeSession.status}</span>
             </div>
-            {agentCount > 0 && (
+            {teamMemberCount > 0 && (
               <>
                 <div className="status-bar-separator" />
                 <div className="status-bar-item">
                   <UserIcon />
-                  <span>{agentCount} agent{agentCount !== 1 ? 's' : ''}</span>
+                  <span>{teamMemberCount} member{teamMemberCount !== 1 ? 's' : ''}</span>
                 </div>
               </>
             )}

@@ -27,6 +27,18 @@ const api = {
     restore: (sessionId: string) => ipcRenderer.invoke('session:restore', sessionId)
   },
 
+  agent: {
+    list: () => ipcRenderer.invoke('agent:list'),
+    add: (data: { name: string; description?: string; system_prompt?: string; mcp_config?: string }) =>
+      ipcRenderer.invoke('agent:add', data),
+    update: (id: string, updates: any) => ipcRenderer.invoke('agent:update', id, updates),
+    remove: (id: string) => ipcRenderer.invoke('agent:remove', id),
+    start: (id: string) => ipcRenderer.invoke('agent:start', id),
+    resume: (id: string) => ipcRenderer.invoke('agent:resume', id),
+    restart: (id: string) => ipcRenderer.invoke('agent:restart', id),
+    kill: (id: string) => ipcRenderer.invoke('agent:kill', id),
+  },
+
   terminal: {
     write: (sessionId: string, data: string) => {
       ipcRenderer.send('terminal:write', sessionId, data)

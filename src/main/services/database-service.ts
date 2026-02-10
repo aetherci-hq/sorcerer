@@ -76,6 +76,20 @@ export class DatabaseService {
       );
     `)
 
+    this.db.run(`
+      CREATE TABLE IF NOT EXISTS agents (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        description TEXT DEFAULT '',
+        system_prompt TEXT DEFAULT '',
+        mcp_config TEXT DEFAULT '',
+        status TEXT NOT NULL DEFAULT 'idle',
+        pid INTEGER,
+        team_name TEXT,
+        created_at INTEGER NOT NULL DEFAULT (strftime('%s','now'))
+      );
+    `)
+
     this.save()
   }
 
@@ -216,6 +230,79 @@ export class DatabaseService {
   removeSession(id: string): void {
     if (!this.db) return
     this.db.run('DELETE FROM sessions WHERE id = ?', [id])
+    this.save()
+  }
+
+  // Agent operations
+  listAgents(): any[] {
+    if (!this.db) return []
+    const stmt = this.db.prepare('SELECT * FROM agents ORDER BY created_at DESC')
+    const results: any[] = []
+    while (stmt.step()) {
+      results.push(stmt.getAsObject())
+    }
+    stmt.free()
+    return results
+  }
+
+  getAgent(id: string): any | undefined {
+    if (!this.db) return undefined
+    const stmt = this.db.prepare('SELECT * FROM agents WHERE id = ?')
+    stmt.bind([id])
+    const result = stmt.step() ? stmt.getAsObject() : undefined
+    stmt.free()
+    return result
+  }
+
+  addAgent(data: {
+    id: string
+    name: string
+    description?: string
+    system_prompt?: string
+    mcp_config?: string
+  }): any {
+    if (!this.db) throw new Error('Database not initialized')
+    this.db.run(
+      `INSERT INTO agents (id, name, description, system_prompt, mcp_config)
+       VALUES (?, ?, ?, ?, ?)`,
+      [data.id, data.name, data.description || '', data.system_prompt || '', data.mcp_config || '']
+    )
+    this.save()
+    return this.getAgent(data.id)
+  }
+
+  updateAgent(id: string, updates: Partial<{
+    name: string
+    description: string
+    system_prompt: string
+    mcp_config: string
+    status: string
+    pid: number | null
+    team_name: string | null
+  }>): any {
+    if (!this.db) return undefined
+    const setClauses: string[] = []
+    const values: any[] = []
+
+    for (const [key, value] of Object.entries(updates)) {
+      if (value !== undefined) {
+        setClauses.push(`${key} = ?`)
+        values.push(value)
+      }
+    }
+
+    if (setClauses.length > 0) {
+      values.push(id)
+      this.db.run(`UPDATE agents SET ${setClauses.join(', ')} WHERE id = ?`, values)
+      this.save()
+    }
+
+    return this.getAgent(id)
+  }
+
+  removeAgent(id: string): void {
+    if (!this.db) return
+    this.db.run('DELETE FROM agents WHERE id = ?', [id])
     this.save()
   }
 

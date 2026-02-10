@@ -48,6 +48,20 @@ export interface TaskData {
   blockedBy: string[]
 }
 
+// ── Agent (standalone Claude Code session) ────────────────────────
+
+export interface Agent {
+  id: string
+  name: string
+  description: string
+  system_prompt: string
+  mcp_config: string
+  status: 'active' | 'idle' | 'archived'
+  pid: number | null
+  team_name: string | null
+  created_at: number
+}
+
 // ── Split view — recursive binary tree ────────────────────────────
 
 export type SplitLeaf = { type: 'leaf'; id: string; sessionId: string | null }

@@ -8,9 +8,12 @@ import { AddProjectDialog } from './components/dialogs/AddProjectDialog'
 import { DeleteDialog } from './components/dialogs/DeleteDialog'
 import { ArchiveDialog } from './components/dialogs/ArchiveDialog'
 import { SettingsDialog } from './components/dialogs/SettingsDialog'
+import { AddAgentDialog } from './components/dialogs/AddAgentDialog'
+import { DeleteAgentDialog } from './components/dialogs/DeleteAgentDialog'
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts'
 import { useProjectStore } from './stores/useProjectStore'
 import { useSessionStore } from './stores/useSessionStore'
+import { useAgentStore } from './stores/useAgentStore'
 import { useTeamStore } from './stores/useTeamStore'
 import { useUIStore } from './stores/useUIStore'
 
@@ -20,9 +23,11 @@ export function App() {
   useEffect(() => {
     const { loadProjects } = useProjectStore.getState()
     const { loadSessions } = useSessionStore.getState()
+    const { loadAgents } = useAgentStore.getState()
     const { loadTeams, loadTasks } = useTeamStore.getState()
 
     // Load all data on mount
+    loadAgents()
     loadProjects().then(() => {
       // Auto-expand all projects on first load
       const projects = useProjectStore.getState().projects
@@ -85,6 +90,8 @@ export function App() {
       <DeleteDialog />
       <ArchiveDialog />
       <SettingsDialog />
+      <AddAgentDialog />
+      <DeleteAgentDialog />
     </div>
   )
 }

@@ -1,0 +1,194 @@
+import { useEffect, useRef, useState } from 'react'
+import { useAgentStore } from '../stores/useAgentStore'
+import { useSessionStore } from '../stores/useSessionStore'
+import { useUIStore, getAllSessionIds } from '../stores/useUIStore'
+import { BotIcon, ChevronIcon, MoreHorizontalIcon, PlusIcon } from './icons'
+import { StatusDot } from './StatusDot'
+import type { Agent } from '../types'
+
+function AgentItem({ agent, staggerClass }: { agent: Agent; staggerClass?: string }) {
+  const { setActiveSession, activeSessionId } = useSessionStore()
+  const { openContextMenu, renamingId, setRenamingId, splitRoot } = useUIStore()
+  const { renameAgent } = useAgentStore()
+  const isActive = activeSessionId === agent.id
+  const itemRef = useRef<HTMLDivElement>(null)
+
+  // Is this agent in the split view but not the focused one?
+  const splitIds = splitRoot ? getAllSessionIds(splitRoot) : []
+  const isInSplit = !isActive && splitIds.includes(agent.id)
+
+  // Inline rename state
+  const [isRenaming, setIsRenaming] = useState(false)
+  const [renameValue, setRenameValue] = useState('')
+  const renameInputRef = useRef<HTMLInputElement>(null)
+
+  // Watch renamingId from UI store (context menu trigger)
+  useEffect(() => {
+    if (renamingId === agent.id) {
+      setIsRenaming(true)
+      setRenameValue(agent.name)
+      setRenamingId(null)
+    }
+  }, [renamingId, agent.id, agent.name, setRenamingId])
+
+  // Focus input when rename mode activates
+  useEffect(() => {
+    if (isRenaming && renameInputRef.current) {
+      renameInputRef.current.focus()
+      renameInputRef.current.select()
+    }
+  }, [isRenaming])
+
+  // Scroll active agent into view
+  useEffect(() => {
+    if (isActive && itemRef.current) {
+      itemRef.current.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+    }
+  }, [isActive])
+
+  const commitRename = () => {
+    const trimmed = renameValue.trim()
+    if (trimmed && trimmed !== agent.name) {
+      renameAgent(agent.id, trimmed)
+    }
+    setIsRenaming(false)
+  }
+
+  const cancelRename = () => {
+    setIsRenaming(false)
+    setRenameValue(agent.name)
+  }
+
+  const handleDoubleClick = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    setIsRenaming(true)
+    setRenameValue(agent.name)
+  }
+
+  const handleRenameKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') { commitRename() }
+    else if (e.key === 'Escape') { cancelRename() }
+  }
+
+  const handleContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    openContextMenu({ x: e.clientX, y: e.clientY, type: 'agent', targetId: agent.id })
+  }
+
+  const handleMoreClick = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+    openContextMenu({ x: rect.right, y: rect.bottom, type: 'agent', targetId: agent.id })
+  }
+
+  // Drag source for split view
+  const handleDragStart = (e: React.DragEvent) => {
+    if (isRenaming) { e.preventDefault(); return }
+    e.dataTransfer.setData('application/json', JSON.stringify({
+      type: 'session', id: agent.id
+    }))
+    e.dataTransfer.effectAllowed = 'move'
+    requestAnimationFrame(() => {
+      itemRef.current?.classList.add('tree-item--dragging')
+    })
+  }
+
+  const handleDragEnd = () => {
+    itemRef.current?.classList.remove('tree-item--dragging')
+  }
+
+  return (
+    <div className={`tree-project ${staggerClass || ''}`}>
+      <div
+        ref={itemRef}
+        className={`tree-item ${isActive ? 'tree-item--active' : ''} ${isInSplit ? 'tree-item--split' : ''}`}
+        onClick={() => !isRenaming && setActiveSession(agent.id)}
+        onContextMenu={handleContextMenu}
+        draggable={!isRenaming}
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
+      >
+        <BotIcon className="tree-icon tree-icon--agent" />
+        <div className="tree-label-group">
+          {isRenaming ? (
+            <input
+              ref={renameInputRef}
+              className="tree-rename-input"
+              value={renameValue}
+              onChange={(e) => setRenameValue(e.target.value)}
+              onKeyDown={handleRenameKeyDown}
+              onBlur={commitRename}
+              onClick={(e) => e.stopPropagation()}
+            />
+          ) : (
+            <>
+              <span className="tree-label" onDoubleClick={handleDoubleClick}>{agent.name}</span>
+              {agent.description && (
+                <span className="tree-hint">{agent.description}</span>
+              )}
+            </>
+          )}
+        </div>
+        {!isRenaming && (
+          <>
+            <button className="tree-item-actions" onClick={handleMoreClick}>
+              <MoreHorizontalIcon />
+            </button>
+            <StatusDot status={agent.status} />
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
+export function AgentTree() {
+  const { agents } = useAgentStore()
+  const { searchQuery, openDialog } = useUIStore()
+
+  const query = searchQuery.toLowerCase().trim()
+
+  const filteredAgents = query
+    ? agents.filter((a) =>
+        a.name.toLowerCase().includes(query) ||
+        a.description.toLowerCase().includes(query)
+      )
+    : agents
+
+  if (agents.length === 0 && !query) {
+    return null // Don't show empty section if no agents exist yet
+  }
+
+  return (
+    <div className="agent-tree-section stagger-3">
+      <div className="section-header">
+        <span className="section-label">Agents</span>
+        <span className="section-count">{filteredAgents.length}</span>
+        <button
+          className="section-add-btn"
+          onClick={(e) => { e.stopPropagation(); openDialog('add-agent') }}
+          title="Add Agent"
+        >
+          <PlusIcon />
+        </button>
+      </div>
+
+      {filteredAgents.length > 0 ? (
+        <div className="tree">
+          {filteredAgents.map((agent, i) => (
+            <AgentItem
+              key={agent.id}
+              agent={agent}
+              staggerClass={`stagger-${Math.min(i + 4, 10)}`}
+            />
+          ))}
+        </div>
+      ) : query ? (
+        <div className="empty-state empty-state--compact">
+          <p className="empty-state-text">No agents match "{searchQuery}"</p>
+        </div>
+      ) : null}
+    </div>
+  )
+}
