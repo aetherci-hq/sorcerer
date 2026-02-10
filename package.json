@@ -38,7 +38,8 @@
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true
-    }
+    },
+    "npmRebuild": false
   },
   "keywords": [],
   "author": "",
