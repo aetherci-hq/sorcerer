@@ -1,12 +1,12 @@
 import { useEffect, useRef, type ReactNode } from 'react'
-import { useUIStore } from '../stores/useUIStore'
+import { useUIStore, findLeafBySession } from '../stores/useUIStore'
 import { useProjectStore } from '../stores/useProjectStore'
 import { useSessionStore } from '../stores/useSessionStore'
 import { useAgentStore } from '../stores/useAgentStore'
 import { useToastStore } from '../stores/useToastStore'
 import {
   PlusIcon, CopyIcon, TrashIcon, SplitHorizontalIcon, SplitVerticalIcon,
-  RefreshIcon, UploadIcon, ExternalLinkIcon, ArchiveIcon, RotateCcwIcon, EditIcon, PlayIcon, StopIcon
+  RefreshIcon, UploadIcon, ExternalLinkIcon, ArchiveIcon, RotateCcwIcon, EditIcon, PlayIcon, StopIcon, TerminalIcon
 } from './icons'
 
 type MenuItem =
@@ -16,7 +16,7 @@ type MenuItem =
 export function ContextMenu() {
   const { contextMenu, closeContextMenu, openDialog, splitRight, splitDown, setRenamingId } = useUIStore()
   const { projects } = useProjectStore()
-  const { sessions, resumeSession, restartSession, restoreSession, pushBranch } = useSessionStore()
+  const { sessions, resumeSession, restartSession, restoreSession, pushBranch, createQuickTerminal } = useSessionStore()
   const { agents, startAgent, resumeAgent, restartAgent, killAgent } = useAgentStore()
   const { addToast } = useToastStore()
   const menuRef = useRef<HTMLDivElement>(null)
@@ -106,6 +106,7 @@ export function ContextMenu() {
   const targetAgent = contextMenu.type === 'agent'
     ? agents.find((a) => a.id === contextMenu.targetId)
     : undefined
+  const isQuickTerminal = targetSession?.type === 'quick-terminal'
   const isArchived = targetSession?.status === 'archived'
 
   const iconClass = 'context-menu-icon'
@@ -147,6 +148,18 @@ export function ContextMenu() {
       { type: 'separator' },
       { label: 'Remove Project', icon: <TrashIcon className={iconClass} />, danger: true, action: () => openDialog('delete-session', contextMenu.targetId) }
     ]
+  } else if (isQuickTerminal) {
+    items = [
+      { label: 'Split Right', icon: <SplitHorizontalIcon className={iconClass} />, action: () => splitRight(contextMenu.targetId) },
+      { label: 'Split Down', icon: <SplitVerticalIcon className={iconClass} />, action: () => splitDown(contextMenu.targetId) },
+      { type: 'separator' },
+      { label: 'Restart Shell', icon: <RefreshIcon className={iconClass} />, action: async () => {
+        await restartSession(contextMenu.targetId)
+        addToast('Shell restarted', 'info')
+      }},
+      { type: 'separator' },
+      { label: 'Close Terminal', icon: <TrashIcon className={iconClass} />, danger: true, action: () => openDialog('delete-session', contextMenu.targetId) }
+    ]
   } else if (isArchived) {
     items = [
       { label: 'Restore Session', icon: <RotateCcwIcon className={iconClass} />, action: async () => {
@@ -165,6 +178,18 @@ export function ContextMenu() {
     items = [
       { label: 'Split Right', icon: <SplitHorizontalIcon className={iconClass} />, action: () => splitRight(contextMenu.targetId) },
       { label: 'Split Down', icon: <SplitVerticalIcon className={iconClass} />, action: () => splitDown(contextMenu.targetId) },
+      { label: 'Open Quick Terminal', icon: <TerminalIcon className={iconClass} />, action: async () => {
+        const newSession = await createQuickTerminal(contextMenu.targetId)
+        if (newSession) {
+          splitRight(newSession.id)
+          const { splitRoot: root, setFocusedPanel } = useUIStore.getState()
+          if (root) {
+            const leaf = findLeafBySession(root, newSession.id)
+            if (leaf) setFocusedPanel(leaf.id)
+          }
+          useSessionStore.getState().setActiveSession(newSession.id)
+        }
+      }},
       { type: 'separator' },
       { label: 'Rename', icon: <EditIcon className={iconClass} />, shortcut: 'F2', action: () => setRenamingId(contextMenu.targetId) },
       { label: 'Resume Session', icon: <PlayIcon className={iconClass} />, action: async () => {

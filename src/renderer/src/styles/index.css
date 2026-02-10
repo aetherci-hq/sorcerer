@@ -2093,6 +2093,39 @@ button:focus-visible,
   white-space: nowrap;
 }
 
+.split-panel-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.split-panel-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  transition: all 0.15s var(--ease-out);
+  padding: 0;
+}
+
+.split-panel-action svg {
+  width: 13px;
+  height: 13px;
+}
+
+.split-panel-action:hover {
+  background: var(--bg-hover);
+  color: var(--accent);
+}
+
 .split-panel-close {
   display: flex;
   align-items: center;
@@ -2657,4 +2690,10 @@ button:focus-visible,
   text-transform: uppercase;
   letter-spacing: 0.5px;
   color: var(--text-tertiary);
+}
+
+/* ── Quick Terminal ──────────────────────────────────────────────── */
+
+.tree-icon--quick-terminal {
+  opacity: 0.6;
 }

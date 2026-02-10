@@ -9,6 +9,7 @@ interface SessionState {
 
   loadSessions: (projectId?: string) => Promise<void>
   createSession: (projectId: string, name: string) => Promise<Session | null>
+  createQuickTerminal: (sourceSessionId: string) => Promise<Session | null>
   killSession: (sessionId: string) => Promise<void>
   archiveSession: (sessionId: string) => Promise<void>
   deleteSession: (sessionId: string) => Promise<void>
@@ -47,6 +48,21 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       return session
     } catch (err) {
       console.error('[session-store] createSession failed:', err)
+      return null
+    }
+  },
+
+  createQuickTerminal: async (sourceSessionId) => {
+    try {
+      const session = await window.sorcerer.session.createQuickTerminal(sourceSessionId)
+      if (!session) return null
+      set((state) => ({
+        sessions: [session, ...state.sessions],
+        activeSessionId: session.id
+      }))
+      return session
+    } catch (err) {
+      console.error('[session-store] createQuickTerminal failed:', err)
       return null
     }
   },
