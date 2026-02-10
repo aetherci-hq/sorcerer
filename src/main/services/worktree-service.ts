@@ -47,19 +47,36 @@ export class WorktreeService {
       fs.mkdirSync(parentDir, { recursive: true })
     }
 
+    // Prune stale worktree references (e.g. from deleted sessions)
+    try { await git.raw(['worktree', 'prune']) } catch { /* ignore */ }
+
+    // If the worktree directory already exists on disk (stale), remove it
+    if (fs.existsSync(worktreePath)) {
+      try {
+        await git.raw(['worktree', 'remove', worktreePath, '--force'])
+      } catch {
+        fs.rmSync(worktreePath, { recursive: true, force: true })
+      }
+    }
+
     // Create worktree with a new branch
     try {
       await git.raw(['worktree', 'add', '-b', branch, worktreePath])
     } catch (err: any) {
-      // If branch exists, try without -b (attach to existing branch)
-      if (err.message?.includes('already exists')) {
+      if (!err.message?.includes('already exists')) throw err
+
+      // Branch exists — try to attach worktree to existing branch
+      try {
+        await git.raw(['worktree', 'add', worktreePath, branch])
+      } catch (err2: any) {
+        // Branch is locked to a stale worktree — prune again, delete the branch, recreate
         try {
-          await git.raw(['worktree', 'add', worktreePath, branch])
-        } catch {
-          throw new Error(`Failed to create worktree: branch "${branch}" already exists and may be in use`)
+          await git.raw(['worktree', 'prune'])
+          await git.raw(['branch', '-D', branch])
+          await git.raw(['worktree', 'add', '-b', branch, worktreePath])
+        } catch (err3: any) {
+          throw new Error(`Failed to create worktree for branch "${branch}": ${err3.message}`)
         }
-      } else {
-        throw err
       }
     }
 
