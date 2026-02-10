@@ -15,6 +15,7 @@ export interface Session {
   branch: string
   worktree_path: string
   status: 'active' | 'idle' | 'archived' | 'deleted'
+  type?: 'session' | 'quick-terminal'
   parent_session_id?: string | null
   team_name?: string | null
   pid?: number | null

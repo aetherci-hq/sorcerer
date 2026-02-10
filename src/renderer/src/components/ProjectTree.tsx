@@ -171,7 +171,7 @@ function SessionItem({
             }}
           />
         )}
-        <TerminalIcon className="tree-icon" />
+        <TerminalIcon className={`tree-icon${session.type === 'quick-terminal' ? ' tree-icon--quick-terminal' : ''}`} />
         <div className="tree-label-group">
           {isRenaming ? (
             <input

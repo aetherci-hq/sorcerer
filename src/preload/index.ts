@@ -25,6 +25,7 @@ const api = {
     pushBranch: (sessionId: string) => ipcRenderer.invoke('session:push-branch', sessionId),
     openRemote: (sessionId: string) => ipcRenderer.invoke('session:open-remote', sessionId),
     restore: (sessionId: string) => ipcRenderer.invoke('session:restore', sessionId),
+    createQuickTerminal: (sourceSessionId: string) => ipcRenderer.invoke('session:create-quick-terminal', sourceSessionId)
     landOnMain: (sessionId: string) => ipcRenderer.invoke('session:land-on-main', sessionId)
   },
 

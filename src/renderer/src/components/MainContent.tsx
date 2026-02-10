@@ -2,7 +2,7 @@ import { useCallback, useRef, useEffect } from 'react'
 import { useSessionStore } from '../stores/useSessionStore'
 import { useProjectStore } from '../stores/useProjectStore'
 import { useAgentStore } from '../stores/useAgentStore'
-import { useUIStore } from '../stores/useUIStore'
+import { useUIStore, findLeafBySession } from '../stores/useUIStore'
 import { useTeamStore } from '../stores/useTeamStore'
 import { GitBranchIcon, TerminalIcon, ClockIcon, UserIcon, BotIcon } from './icons'
 import { Tooltip } from './Tooltip'
@@ -31,6 +31,27 @@ function IdleSessionPanel({ session }: { session: Session }) {
             <path fillRule="evenodd" d="M8 3c-1.552 0-2.94.707-3.857 1.818a.5.5 0 1 1-.771-.636A6.002 6.002 0 0 1 13.917 7H12.9A5.002 5.002 0 0 0 8 3zM3.1 9a5.002 5.002 0 0 0 8.757 2.182.5.5 0 1 1 .771.636A6.002 6.002 0 0 1 2.083 9H3.1z" />
           </svg>
           New Session
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function IdleQuickTerminalPanel({ session }: { session: Session }) {
+  const restartSession = useSessionStore((s) => s.restartSession)
+  return (
+    <div className="terminal-placeholder">
+      <TerminalIcon className="terminal-placeholder-icon" />
+      <div className="terminal-placeholder-text">
+        Terminal has ended.
+      </div>
+      <div className="terminal-action-row">
+        <button className="terminal-restart-btn terminal-restart-btn--primary" onClick={() => restartSession(session.id)}>
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+            <path d="M11.534 7h3.932a.25.25 0 0 1 .192.41l-1.966 2.36a.25.25 0 0 1-.384 0l-1.966-2.36a.25.25 0 0 1 .192-.41zm-11 2h3.932a.25.25 0 0 0 .192-.41L2.692 6.23a.25.25 0 0 0-.384 0L.342 8.59A.25.25 0 0 0 .534 9z" />
+            <path fillRule="evenodd" d="M8 3c-1.552 0-2.94.707-3.857 1.818a.5.5 0 1 1-.771-.636A6.002 6.002 0 0 1 13.917 7H12.9A5.002 5.002 0 0 0 8 3zM3.1 9a5.002 5.002 0 0 0 8.757 2.182.5.5 0 1 1 .771.636A6.002 6.002 0 0 1 2.083 9H3.1z" />
+          </svg>
+          Restart
         </button>
       </div>
     </div>
@@ -93,6 +114,7 @@ function TerminalPanel({ session, agent }: { session: Session | undefined; agent
   }
 
   if (activeItem.status === 'idle') {
+    if (session?.type === 'quick-terminal') return <IdleQuickTerminalPanel session={session} />
     if (agent) return <IdleAgentPanel agent={agent} />
     return <IdleSessionPanel session={session!} />
   }
@@ -147,8 +169,8 @@ function SplitDivider({ direction, onDrag }: { direction: 'horizontal' | 'vertic
 }
 
 function SplitNodeView({ node }: { node: SplitNode }) {
-  const { focusedPanelId, setFocusedPanel, closePanel, setSplitRatio, setPanelSession } = useUIStore()
-  const { sessions, setActiveSession } = useSessionStore()
+  const { focusedPanelId, setFocusedPanel, closePanel, setSplitRatio, setPanelSession, splitRight } = useUIStore()
+  const { sessions, setActiveSession, deleteSession, createQuickTerminal } = useSessionStore()
   const { agents: agentsList } = useAgentStore()
 
   if (node.type === 'leaf') {
@@ -187,7 +209,40 @@ function SplitNodeView({ node }: { node: SplitNode }) {
       >
         <div className="split-panel-titlebar">
           <span className="split-panel-name">{activeItem?.name ?? 'Empty'}</span>
-          <button className="split-panel-close" onClick={(e) => { e.stopPropagation(); closePanel(node.id) }}>&times;</button>
+          <div className="split-panel-actions">
+            {session && session.type !== 'quick-terminal' && (
+              <button
+                className="split-panel-action"
+                title="Open Quick Terminal"
+                onClick={async (e) => {
+                  e.stopPropagation()
+                  // Focus this panel so splitRight splits relative to it
+                  setFocusedPanel(node.id)
+                  const newSession = await createQuickTerminal(session.id)
+                  if (newSession) {
+                    splitRight(newSession.id)
+                    // Focus the new terminal panel
+                    const { splitRoot: root } = useUIStore.getState()
+                    if (root) {
+                      const leaf = findLeafBySession(root, newSession.id)
+                      if (leaf) setFocusedPanel(leaf.id)
+                    }
+                    setActiveSession(newSession.id)
+                  }
+                }}
+              >
+                <TerminalIcon />
+              </button>
+            )}
+            <button className="split-panel-close" onClick={(e) => {
+              e.stopPropagation()
+              // Quick terminals: auto-delete on panel close
+              if (session?.type === 'quick-terminal') {
+                deleteSession(session.id)
+              }
+              closePanel(node.id)
+            }}>&times;</button>
+          </div>
         </div>
         {isEmpty ? (
           <div
@@ -208,7 +263,8 @@ function SplitNodeView({ node }: { node: SplitNode }) {
             </div>
           </div>
         ) : activeItem?.status === 'idle' ? (
-          agent ? <IdleAgentPanel agent={agent} /> : <IdleSessionPanel session={session!} />
+          session?.type === 'quick-terminal' ? <IdleQuickTerminalPanel session={session} />
+          : agent ? <IdleAgentPanel agent={agent} /> : <IdleSessionPanel session={session!} />
         ) : activeItem ? (
           <TerminalView sessionId={activeItem.id} isFocused={isFocused} />
         ) : (

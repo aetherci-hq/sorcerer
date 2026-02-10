@@ -177,6 +177,42 @@ export function registerIPC(
     return { pid }
   })
 
+  ipcMain.handle('session:create-quick-terminal', async (_event, sourceSessionId: string) => {
+    const source = dbService.getSession(sourceSessionId)
+    if (!source) throw new Error('Source session not found')
+
+    // Generate unique name: "Terminal", "Terminal (2)", etc.
+    const projectSessions = dbService.listSessions(source.project_id as string)
+    const terminalNames = projectSessions
+      .filter((s: any) => s.type === 'quick-terminal' && s.status !== 'deleted')
+      .map((s: any) => s.name as string)
+    let name = 'Terminal'
+    if (terminalNames.includes(name)) {
+      let n = 2
+      while (terminalNames.includes(`Terminal (${n})`)) n++
+      name = `Terminal (${n})`
+    }
+
+    const id = uuidv4()
+    const session = dbService.addSession({
+      id,
+      project_id: source.project_id as string,
+      name,
+      branch: source.branch as string,
+      worktree_path: source.worktree_path as string,
+      type: 'quick-terminal'
+    })
+
+    // Spawn plain shell (no command = default shell)
+    ptyService.spawn(id, source.worktree_path as string)
+    const pid = ptyService.getPid(id)
+    if (pid) {
+      dbService.updateSession(id, { pid })
+    }
+
+    return session
+  })
+
   ipcMain.handle('session:kill', (_event, sessionId: string) => {
     ptyService.kill(sessionId)
     dbService.updateSession(sessionId, { status: 'idle', pid: null })
@@ -186,6 +222,13 @@ export function registerIPC(
     ptyService.kill(sessionId)
 
     const session = dbService.getSession(sessionId)
+
+    // Quick terminals: just kill and delete — no archiving
+    if (session && session.type === 'quick-terminal') {
+      dbService.removeSession(sessionId)
+      return
+    }
+
     if (session) {
       const project = dbService.getProject(session.project_id)
 
@@ -219,6 +262,13 @@ export function registerIPC(
     }
 
     const session = dbService.getSession(sessionId)
+
+    // Quick terminals: just kill PTY and remove DB record — no worktree/branch ops
+    if (session && session.type === 'quick-terminal') {
+      dbService.removeSession(sessionId)
+      return
+    }
+
     if (session) {
       const project = dbService.getProject(session.project_id as string)
 
@@ -274,12 +324,17 @@ export function registerIPC(
       ? (session.worktree_path as string)
       : (dbService.getProject(session.project_id as string)?.path as string || process.cwd())
 
-    // Re-spawn Claude Code directly in the worktree (fresh session)
-    ptyService.spawn(sessionId, cwd, {
-      command: 'claude',
-      args: ['--dangerously-skip-permissions'],
-      env: sessionEnv(sessionId)
-    })
+    if (session.type === 'quick-terminal') {
+      // Quick terminal: spawn plain shell
+      ptyService.spawn(sessionId, cwd)
+    } else {
+      // Re-spawn Claude Code directly in the worktree (fresh session)
+      ptyService.spawn(sessionId, cwd, {
+        command: 'claude',
+        args: ['--dangerously-skip-permissions'],
+        env: sessionEnv(sessionId)
+      })
+    }
     const pid = ptyService.getPid(sessionId)
     dbService.updateSession(sessionId, { status: 'active', pid: pid ?? null })
 
@@ -300,12 +355,17 @@ export function registerIPC(
       ? (session.worktree_path as string)
       : (dbService.getProject(session.project_id as string)?.path as string || process.cwd())
 
-    // Resume the most recent Claude Code conversation in this worktree
-    ptyService.spawn(sessionId, cwd, {
-      command: 'claude',
-      args: ['--continue', '--dangerously-skip-permissions'],
-      env: sessionEnv(sessionId)
-    })
+    if (session.type === 'quick-terminal') {
+      // Quick terminal: just restart the shell (no Claude conversation to resume)
+      ptyService.spawn(sessionId, cwd)
+    } else {
+      // Resume the most recent Claude Code conversation in this worktree
+      ptyService.spawn(sessionId, cwd, {
+        command: 'claude',
+        args: ['--continue', '--dangerously-skip-permissions'],
+        env: sessionEnv(sessionId)
+      })
+    }
     const pid = ptyService.getPid(sessionId)
     dbService.updateSession(sessionId, { status: 'active', pid: pid ?? null })
 
@@ -351,6 +411,12 @@ export function registerIPC(
   ipcMain.handle('session:check-delete-safety', async (_event, sessionId: string) => {
     const session = dbService.getSession(sessionId)
     if (!session) throw new Error('Session not found')
+
+    // Quick terminals have no worktree to protect
+    if (session.type === 'quick-terminal') {
+      return { dirty: false, unmergedCount: 0, hasRemote: false }
+    }
+
     const project = dbService.getProject(session.project_id as string)
     if (!project) return { dirty: false, unmergedCount: 0, hasRemote: false }
 

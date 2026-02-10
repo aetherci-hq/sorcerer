@@ -90,6 +90,11 @@ export class DatabaseService {
       );
     `)
 
+    // Add type column to sessions (idempotent migration)
+    try {
+      this.db.run(`ALTER TABLE sessions ADD COLUMN type TEXT NOT NULL DEFAULT 'session'`)
+    } catch { /* column already exists */ }
+
     this.save()
   }
 
@@ -187,15 +192,16 @@ export class DatabaseService {
     name: string
     branch: string
     worktree_path: string
+    type?: 'session' | 'quick-terminal'
     team_name?: string
     parent_session_id?: string
   }): any {
     if (!this.db) throw new Error('Database not initialized')
     this.db.run(
-      `INSERT INTO sessions (id, project_id, name, branch, worktree_path, status, team_name, parent_session_id)
-       VALUES (?, ?, ?, ?, ?, 'active', ?, ?)`,
+      `INSERT INTO sessions (id, project_id, name, branch, worktree_path, status, type, team_name, parent_session_id)
+       VALUES (?, ?, ?, ?, ?, 'active', ?, ?, ?)`,
       [data.id, data.project_id, data.name, data.branch, data.worktree_path,
-       data.team_name || null, data.parent_session_id || null]
+       data.type || 'session', data.team_name || null, data.parent_session_id || null]
     )
     this.save()
     return this.getSession(data.id)
