@@ -1,0 +1,85 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#1a1a2e"/>
+      <stop offset="100%" stop-color="#0f0f1a"/>
+    </linearGradient>
+    <linearGradient id="hat" x1="0.5" y1="0" x2="0.5" y2="1">
+      <stop offset="0%" stop-color="#e2a445"/>
+      <stop offset="60%" stop-color="#c8842a"/>
+      <stop offset="100%" stop-color="#9a6420"/>
+    </linearGradient>
+    <linearGradient id="band" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#f0c060"/>
+      <stop offset="50%" stop-color="#e2a445"/>
+      <stop offset="100%" stop-color="#f0c060"/>
+    </linearGradient>
+    <linearGradient id="star" x1="0.5" y1="0" x2="0.5" y2="1">
+      <stop offset="0%" stop-color="#ffe4a0"/>
+      <stop offset="100%" stop-color="#e2a445"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.3" r="0.5">
+      <stop offset="0%" stop-color="#e2a44520"/>
+      <stop offset="100%" stop-color="#e2a44500"/>
+    </radialGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="4" stdDeviation="12" flood-color="#000000" flood-opacity="0.5"/>
+    </filter>
+    <filter id="starGlow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="8" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1024" height="1024" rx="220" fill="url(#bg)"/>
+
+  <!-- Ambient glow -->
+  <circle cx="512" cy="380" r="320" fill="url(#glow)"/>
+
+  <!-- Wizard hat body -->
+  <g filter="url(#shadow)">
+    <!-- Hat cone -->
+    <path d="M512 140 L340 680 L684 680 Z" fill="url(#hat)" stroke="none"/>
+
+    <!-- Hat tip curl -->
+    <path d="M512 140 Q580 120 560 200 Q540 170 512 140" fill="#e2a445" stroke="none"/>
+
+    <!-- Hat brim -->
+    <ellipse cx="512" cy="680" rx="260" ry="55" fill="#9a6420"/>
+    <ellipse cx="512" cy="672" rx="260" ry="55" fill="url(#hat)"/>
+
+    <!-- Hat band -->
+    <path d="M360 620 Q512 590 664 620 L664 655 Q512 625 360 655 Z" fill="url(#band)"/>
+
+    <!-- Band buckle -->
+    <rect x="484" y="610" width="56" height="50" rx="6" fill="#f0c060" stroke="#9a6420" stroke-width="3"/>
+    <rect x="498" y="622" width="28" height="26" rx="3" fill="url(#hat)"/>
+  </g>
+
+  <!-- Sparkle stars -->
+  <g filter="url(#starGlow)">
+    <!-- Large star top-right -->
+    <path d="M680 260 L688 280 L710 284 L692 298 L696 320 L680 308 L664 320 L668 298 L650 284 L672 280 Z" fill="url(#star)"/>
+
+    <!-- Medium star left -->
+    <path d="M310 340 L316 354 L332 357 L320 367 L323 383 L310 374 L297 383 L300 367 L288 357 L304 354 Z" fill="url(#star)" opacity="0.8"/>
+
+    <!-- Small star top-left -->
+    <path d="M380 200 L384 210 L394 212 L387 219 L389 229 L380 224 L371 229 L373 219 L366 212 L376 210 Z" fill="url(#star)" opacity="0.6"/>
+
+    <!-- Tiny sparkle dots -->
+    <circle cx="720" cy="360" r="4" fill="#ffe4a0" opacity="0.7"/>
+    <circle cx="280" cy="260" r="3" fill="#ffe4a0" opacity="0.5"/>
+    <circle cx="650" cy="180" r="3" fill="#ffe4a0" opacity="0.6"/>
+    <circle cx="400" cy="300" r="2.5" fill="#ffe4a0" opacity="0.4"/>
+  </g>
+
+  <!-- Terminal cursor under hat (subtle code reference) -->
+  <g opacity="0.6">
+    <text x="430" y="840" font-family="monospace" font-size="48" fill="#e2a445" font-weight="bold">&gt;_</text>
+  </g>
+</svg>
