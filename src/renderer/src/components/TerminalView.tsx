@@ -13,6 +13,34 @@ interface TerminalViewProps {
 // Cache terminal instances so they survive React re-renders
 const terminalCache = new Map<string, { terminal: Terminal; fitAddon: FitAddon; attached: boolean; _ipcCleanup?: () => void }>()
 
+// Module-level font size — loaded once from settings, kept in sync via custom event
+let terminalFontSize = 13
+window.sorcerer.settings.get('terminalFontSize').then((v: string | undefined) => {
+  const size = v ? Number(v) : 13
+  if (!size || size === terminalFontSize) return
+  terminalFontSize = size
+  for (const [sid, cached] of terminalCache) {
+    cached.terminal.options.fontSize = size
+    try {
+      cached.fitAddon.fit()
+      window.sorcerer.terminal.resize(sid, cached.terminal.cols, cached.terminal.rows)
+    } catch { /* ignore fit errors */ }
+  }
+})
+
+window.addEventListener('sorcerer:fontSizeChange', (e: Event) => {
+  const size = (e as CustomEvent).detail as number
+  if (!size) return
+  terminalFontSize = size
+  for (const [sid, cached] of terminalCache) {
+    cached.terminal.options.fontSize = size
+    try {
+      cached.fitAddon.fit()
+      window.sorcerer.terminal.resize(sid, cached.terminal.cols, cached.terminal.rows)
+    } catch { /* ignore fit errors */ }
+  }
+})
+
 export function TerminalView({ sessionId, isFocused }: TerminalViewProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const cleanupRef = useRef<(() => void) | null>(null)
@@ -46,7 +74,7 @@ export function TerminalView({ sessionId, isFocused }: TerminalViewProps) {
 
       const terminal = new Terminal({
         cursorBlink: true,
-        fontSize: 13,
+        fontSize: terminalFontSize,
         fontFamily: "'JetBrains Mono', 'Cascadia Code', 'Consolas', monospace",
         theme: {
           background: terminalBg,

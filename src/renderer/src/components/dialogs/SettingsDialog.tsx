@@ -72,6 +72,7 @@ function useSetting(key: string, fallback: string) {
 function SessionsTab() {
   const { addToast } = useToastStore()
   const [shell, setShell] = useSetting('shell', '')
+  const [fontSize, setFontSize] = useSetting('terminalFontSize', '13')
   const [branchPrefix, setBranchPrefix] = useSetting('branchPrefix', 'sorcerer/')
   const [autoArchive, setAutoArchive] = useSetting('autoArchive', 'false')
   const [idleTimeout, setIdleTimeout] = useSetting('idleTimeout', '30m')
@@ -102,6 +103,28 @@ function SessionsTab() {
             Browse
           </button>
         </div>
+      </SettingRow>
+
+      <SectionTitle>Terminal</SectionTitle>
+      <SettingRow label="Font size" description="Font size for terminal text in pixels">
+        <select
+          className="settings-select"
+          value={fontSize}
+          onChange={(e) => {
+            setFontSize(e.target.value)
+            window.dispatchEvent(new CustomEvent('sorcerer:fontSizeChange', { detail: Number(e.target.value) }))
+          }}
+        >
+          <option value="10">10</option>
+          <option value="11">11</option>
+          <option value="12">12</option>
+          <option value="13">13</option>
+          <option value="14">14</option>
+          <option value="15">15</option>
+          <option value="16">16</option>
+          <option value="18">18</option>
+          <option value="20">20</option>
+        </select>
       </SettingRow>
 
       <SectionTitle>Branch &amp; Worktrees</SectionTitle>
