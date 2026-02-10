@@ -47,19 +47,36 @@ export class WorktreeService {
       fs.mkdirSync(parentDir, { recursive: true })
     }
 
+    // Prune stale worktree references (e.g. from deleted sessions)
+    try { await git.raw(['worktree', 'prune']) } catch { /* ignore */ }
+
+    // If the worktree directory already exists on disk (stale), remove it
+    if (fs.existsSync(worktreePath)) {
+      try {
+        await git.raw(['worktree', 'remove', worktreePath, '--force'])
+      } catch {
+        fs.rmSync(worktreePath, { recursive: true, force: true })
+      }
+    }
+
     // Create worktree with a new branch
     try {
       await git.raw(['worktree', 'add', '-b', branch, worktreePath])
     } catch (err: any) {
-      // If branch exists, try without -b (attach to existing branch)
-      if (err.message?.includes('already exists')) {
+      if (!err.message?.includes('already exists')) throw err
+
+      // Branch exists — try to attach worktree to existing branch
+      try {
+        await git.raw(['worktree', 'add', worktreePath, branch])
+      } catch (err2: any) {
+        // Branch is locked to a stale worktree — prune again, delete the branch, recreate
         try {
-          await git.raw(['worktree', 'add', worktreePath, branch])
-        } catch {
-          throw new Error(`Failed to create worktree: branch "${branch}" already exists and may be in use`)
+          await git.raw(['worktree', 'prune'])
+          await git.raw(['branch', '-D', branch])
+          await git.raw(['worktree', 'add', '-b', branch, worktreePath])
+        } catch (err3: any) {
+          throw new Error(`Failed to create worktree for branch "${branch}": ${err3.message}`)
         }
-      } else {
-        throw err
       }
     }
 
@@ -224,6 +241,57 @@ export class WorktreeService {
     }
 
     return worktrees
+  }
+
+  async squashMergeToMain(projectPath: string, branch: string, sessionName: string): Promise<{ merged: boolean; error?: string }> {
+    try {
+      const git: SimpleGit = simpleGit(projectPath)
+
+      // Detect default branch
+      let defaultBranch = 'main'
+      try {
+        await git.raw(['rev-parse', '--verify', 'main'])
+      } catch {
+        try {
+          await git.raw(['rev-parse', '--verify', 'master'])
+          defaultBranch = 'master'
+        } catch {
+          return { merged: false, error: 'No main or master branch found' }
+        }
+      }
+
+      // Check that the default branch worktree has no staged or modified files
+      // (untracked files are fine — they don't interfere with a merge)
+      const status = await git.status()
+      if (status.modified.length > 0 || status.staged.length > 0 || status.deleted.length > 0 || status.renamed.length > 0 || status.conflicted.length > 0) {
+        return { merged: false, error: `The ${defaultBranch} branch has uncommitted changes` }
+      }
+
+      // Check there are actually commits to land
+      const log = await git.raw(['log', `${defaultBranch}..${branch}`, '--oneline']).catch(() => '')
+      if (!log.trim()) {
+        return { merged: false, error: 'Nothing to land — no changes ahead of ' + defaultBranch }
+      }
+
+      // Squash merge the branch
+      try {
+        await git.raw(['merge', '--squash', branch])
+      } catch (err: any) {
+        // Conflict — abort and reset
+        try { await git.raw(['merge', '--abort']) } catch { /* ignore */ }
+        try { await git.raw(['reset', '--hard']) } catch { /* ignore */ }
+        return { merged: false, error: 'Merge conflict — the branch could not be cleanly merged into ' + defaultBranch }
+      }
+
+      // Commit the squash merge
+      const message = `Land "${sessionName}"\n\nSquash-merged from branch ${branch}`
+      await git.commit(message)
+
+      return { merged: true }
+    } catch (err: any) {
+      console.error('[squashMergeToMain] Failed:', err)
+      return { merged: false, error: err?.message || 'Squash merge failed' }
+    }
   }
 
   getWorkspacesRoot(): string {
