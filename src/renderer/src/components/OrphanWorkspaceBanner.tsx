@@ -88,12 +88,13 @@ export function OrphanWorkspaceBanner() {
     try {
       const data = orphan.manifest
         ? {
+            id: orphan.dirName,
             name: orphan.manifest.name,
             description: orphan.manifest.description,
             system_prompt: orphan.manifest.system_prompt,
             mcp_config: orphan.manifest.mcp_config
           }
-        : { name: orphan.agentName }
+        : { id: orphan.dirName, name: orphan.agentName }
       await window.sorcerer.agent.add(data)
       await loadAgents()
       setOrphanAgents((prev) => prev.filter((o) => o.dirName !== orphan.dirName))

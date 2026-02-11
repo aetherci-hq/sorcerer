@@ -33,7 +33,7 @@ const api = {
 
   agent: {
     list: () => ipcRenderer.invoke('agent:list'),
-    add: (data: { name: string; description?: string; system_prompt?: string; mcp_config?: string }) =>
+    add: (data: { id?: string; name: string; description?: string; system_prompt?: string; mcp_config?: string }) =>
       ipcRenderer.invoke('agent:add', data),
     update: (id: string, updates: any) => ipcRenderer.invoke('agent:update', id, updates),
     remove: (id: string) => ipcRenderer.invoke('agent:remove', id),

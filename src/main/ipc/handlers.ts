@@ -722,8 +722,8 @@ export function registerIPC(
     return dbService.listAgents()
   })
 
-  ipcMain.handle('agent:add', (_event, data: { name: string; description?: string; system_prompt?: string; mcp_config?: string }) => {
-    const id = uuidv4()
+  ipcMain.handle('agent:add', (_event, data: { id?: string; name: string; description?: string; system_prompt?: string; mcp_config?: string }) => {
+    const id = data.id || uuidv4()
     // Create scratch directory for this agent
     const cwd = path.join(os.homedir(), '.sorcerer', 'agents', id)
     fs.mkdirSync(cwd, { recursive: true })
@@ -752,6 +752,16 @@ export function registerIPC(
       ptyService.kill(id)
     }
     dbService.removeAgent(id)
+    // Remove manifest immediately (not locked) so orphan scanner won't offer re-import
+    const agentDir = path.join(os.homedir(), '.sorcerer', 'agents', id)
+    const manifestPath = path.join(agentDir, 'agent.json')
+    try { fs.unlinkSync(manifestPath) } catch { /* already gone */ }
+    // Attempt full directory cleanup after PTY file handles are released
+    setTimeout(() => {
+      try {
+        fs.rmSync(agentDir, { recursive: true, force: true })
+      } catch { /* will be cleaned up on next restart or manually */ }
+    }, 3000)
   })
 
   ipcMain.handle('agent:start', (_event, agentId: string) => {
