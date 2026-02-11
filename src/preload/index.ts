@@ -7,12 +7,13 @@ const api = {
     addPath: (path: string, name?: string) => ipcRenderer.invoke('project:addPath', path, name),
     update: (id: string, updates: any) => ipcRenderer.invoke('project:update', id, updates),
     remove: (id: string) => ipcRenderer.invoke('project:remove', id),
-    gitStatus: (projectPath: string) => ipcRenderer.invoke('project:git-status', projectPath)
+    gitStatus: (projectPath: string) => ipcRenderer.invoke('project:git-status', projectPath),
+    syncWorktrees: (projectId: string) => ipcRenderer.invoke('project:sync-worktrees', projectId)
   },
 
   session: {
     list: (projectId?: string) => ipcRenderer.invoke('session:list', projectId),
-    create: (projectId: string, name: string) => ipcRenderer.invoke('session:create', projectId, name),
+    create: (projectId: string, name: string, useMainRepo?: boolean) => ipcRenderer.invoke('session:create', projectId, name, useMainRepo),
     spawnShell: (sessionId: string, cwd: string) => ipcRenderer.invoke('session:spawn-shell', sessionId, cwd),
     kill: (sessionId: string) => ipcRenderer.invoke('session:kill', sessionId),
     archive: (sessionId: string) => ipcRenderer.invoke('session:archive', sessionId),
@@ -25,7 +26,8 @@ const api = {
     pushBranch: (sessionId: string) => ipcRenderer.invoke('session:push-branch', sessionId),
     openRemote: (sessionId: string) => ipcRenderer.invoke('session:open-remote', sessionId),
     restore: (sessionId: string) => ipcRenderer.invoke('session:restore', sessionId),
-    createQuickTerminal: (sourceSessionId: string) => ipcRenderer.invoke('session:create-quick-terminal', sourceSessionId)
+    createQuickTerminal: (sourceSessionId: string) => ipcRenderer.invoke('session:create-quick-terminal', sourceSessionId),
+    rename: (sessionId: string, name: string) => ipcRenderer.invoke('session:rename', sessionId, name),
     landOnMain: (sessionId: string) => ipcRenderer.invoke('session:land-on-main', sessionId)
   },
 
@@ -39,6 +41,7 @@ const api = {
     resume: (id: string) => ipcRenderer.invoke('agent:resume', id),
     restart: (id: string) => ipcRenderer.invoke('agent:restart', id),
     kill: (id: string) => ipcRenderer.invoke('agent:kill', id),
+    createQuickTerminal: (agentId: string) => ipcRenderer.invoke('agent:create-quick-terminal', agentId),
   },
 
   terminal: {

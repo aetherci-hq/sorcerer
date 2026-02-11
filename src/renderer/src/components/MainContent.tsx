@@ -170,7 +170,7 @@ function SplitDivider({ direction, onDrag }: { direction: 'horizontal' | 'vertic
 
 function SplitNodeView({ node }: { node: SplitNode }) {
   const { focusedPanelId, setFocusedPanel, closePanel, setSplitRatio, setPanelSession, splitRight } = useUIStore()
-  const { sessions, setActiveSession, deleteSession, createQuickTerminal } = useSessionStore()
+  const { sessions, setActiveSession, deleteSession, createQuickTerminal, addLocalSession } = useSessionStore()
   const { agents: agentsList } = useAgentStore()
 
   if (node.type === 'leaf') {
@@ -228,6 +228,29 @@ function SplitNodeView({ node }: { node: SplitNode }) {
                       if (leaf) setFocusedPanel(leaf.id)
                     }
                     setActiveSession(newSession.id)
+                  }
+                }}
+              >
+                <TerminalIcon />
+              </button>
+            )}
+            {agent && (
+              <button
+                className="split-panel-action"
+                title="Open Quick Terminal"
+                onClick={async (e) => {
+                  e.stopPropagation()
+                  setFocusedPanel(node.id)
+                  const qt = await window.sorcerer.agent.createQuickTerminal(agent.id)
+                  if (qt) {
+                    addLocalSession(qt as any)
+                    splitRight(qt.id)
+                    const { splitRoot: root } = useUIStore.getState()
+                    if (root) {
+                      const leaf = findLeafBySession(root, qt.id)
+                      if (leaf) setFocusedPanel(leaf.id)
+                    }
+                    setActiveSession(qt.id)
                   }
                 }}
               >
@@ -305,11 +328,11 @@ function SplitNodeView({ node }: { node: SplitNode }) {
 }
 
 export function MainContent() {
-  const { sessions, activeSessionId } = useSessionStore()
+  const { sessions, activeSessionId, setActiveSession, createQuickTerminal, addLocalSession } = useSessionStore()
   const { projects } = useProjectStore()
   const { agents: agentsList } = useAgentStore()
   const { teams } = useTeamStore()
-  const { splitRoot } = useUIStore()
+  const { splitRoot, splitRight } = useUIStore()
 
   const activeSession = sessions.find((s) => s.id === activeSessionId)
   const activeAgent = !activeSession && activeSessionId
@@ -359,6 +382,65 @@ export function MainContent() {
       {/* Terminal area */}
       {splitRoot ? (
         <SplitNodeView node={splitRoot} />
+      ) : (activeSession || activeAgent) ? (
+        <div className="split-panel split-panel--focused">
+          <div className="split-panel-titlebar">
+            <span className="split-panel-name">{(activeSession || activeAgent)?.name}</span>
+            <div className="split-panel-actions">
+              {activeSession && activeSession.type !== 'quick-terminal' && (
+                <button
+                  className="split-panel-action"
+                  title="Open Quick Terminal"
+                  onClick={async () => {
+                    const originalId = activeSession.id
+                    const newSession = await createQuickTerminal(activeSession.id)
+                    if (newSession) {
+                      // Restore so splitRight puts original in left panel
+                      useSessionStore.setState({ activeSessionId: originalId })
+                      splitRight(newSession.id)
+                      const { splitRoot: root, setFocusedPanel } = useUIStore.getState()
+                      if (root) {
+                        const leaf = findLeafBySession(root, newSession.id)
+                        if (leaf) setFocusedPanel(leaf.id)
+                      }
+                      setActiveSession(newSession.id)
+                    }
+                  }}
+                >
+                  <TerminalIcon />
+                </button>
+              )}
+              {activeAgent && (
+                <button
+                  className="split-panel-action"
+                  title="Open Quick Terminal"
+                  onClick={async () => {
+                    const originalId = activeAgent.id
+                    const qt = await window.sorcerer.agent.createQuickTerminal(activeAgent.id)
+                    if (qt) {
+                      addLocalSession(qt as any)
+                      // Restore so splitRight puts original in left panel
+                      useSessionStore.setState({ activeSessionId: originalId })
+                      splitRight(qt.id)
+                      const { splitRoot: root, setFocusedPanel } = useUIStore.getState()
+                      if (root) {
+                        const leaf = findLeafBySession(root, qt.id)
+                        if (leaf) setFocusedPanel(leaf.id)
+                      }
+                      setActiveSession(qt.id)
+                    }
+                  }}
+                >
+                  <TerminalIcon />
+                </button>
+              )}
+              <button className="split-panel-close" onClick={() => {
+                useSessionStore.setState({ activeSessionId: null })
+              }}>&times;</button>
+            </div>
+          </div>
+          <TerminalPanel session={activeSession} agent={activeAgent} />
+        </div>
       ) : (
         <TerminalPanel session={activeSession} agent={activeAgent} />
       )}

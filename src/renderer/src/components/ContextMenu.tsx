@@ -6,8 +6,7 @@ import { useAgentStore } from '../stores/useAgentStore'
 import { useToastStore } from '../stores/useToastStore'
 import {
   PlusIcon, CopyIcon, TrashIcon, SplitHorizontalIcon, SplitVerticalIcon,
-  RefreshIcon, UploadIcon, ExternalLinkIcon, ArchiveIcon, RotateCcwIcon, EditIcon, PlayIcon, StopIcon, TerminalIcon
-  RefreshIcon, UploadIcon, ExternalLinkIcon, ArchiveIcon, RotateCcwIcon, EditIcon, PlayIcon, StopIcon, MergeIcon
+  RefreshIcon, UploadIcon, ExternalLinkIcon, ArchiveIcon, RotateCcwIcon, EditIcon, PlayIcon, StopIcon, TerminalIcon, MergeIcon
 } from './icons'
 
 type MenuItem =
@@ -109,6 +108,10 @@ export function ContextMenu() {
     : undefined
   const isQuickTerminal = targetSession?.type === 'quick-terminal'
   const isArchived = targetSession?.status === 'archived'
+  const targetProject = targetSession
+    ? projects.find((p) => p.id === targetSession.project_id)
+    : undefined
+  const isMainRepo = targetProject && targetSession?.worktree_path === targetProject.path
 
   const iconClass = 'context-menu-icon'
 
@@ -135,6 +138,19 @@ export function ContextMenu() {
       { type: 'separator' as const },
       { label: 'Split Right', icon: <SplitHorizontalIcon className={iconClass} />, action: () => splitRight(contextMenu.targetId) },
       { label: 'Split Down', icon: <SplitVerticalIcon className={iconClass} />, action: () => splitDown(contextMenu.targetId) },
+      { label: 'Open Quick Terminal', icon: <TerminalIcon className={iconClass} />, action: async () => {
+        const qt = await window.sorcerer.agent.createQuickTerminal(contextMenu.targetId)
+        if (qt) {
+          useSessionStore.getState().addLocalSession(qt as any)
+          splitRight(qt.id)
+          const { splitRoot: root, setFocusedPanel } = useUIStore.getState()
+          if (root) {
+            const leaf = findLeafBySession(root, qt.id)
+            if (leaf) setFocusedPanel(leaf.id)
+          }
+          useSessionStore.getState().setActiveSession(qt.id)
+        }
+      }},
       { type: 'separator' as const },
       { label: 'Rename', icon: <EditIcon className={iconClass} />, shortcut: 'F2', action: () => setRenamingId(contextMenu.targetId) },
       { type: 'separator' as const },
@@ -146,6 +162,18 @@ export function ContextMenu() {
       { type: 'separator' },
       { label: 'Rename', icon: <EditIcon className={iconClass} />, shortcut: 'F2', action: () => setRenamingId(contextMenu.targetId) },
       { label: 'Copy Project Path', icon: <CopyIcon className={iconClass} />, action: () => copyToClipboard(findProjectPath(contextMenu.targetId), 'Path') },
+      { label: 'Sync Worktrees', icon: <RefreshIcon className={iconClass} />, action: async () => {
+        const result = await window.sorcerer.project.syncWorktrees(contextMenu.targetId)
+        await useSessionStore.getState().loadSessions()
+        if (result.created === 0 && result.removed === 0) {
+          addToast('All worktrees in sync', 'info')
+        } else {
+          const parts: string[] = []
+          if (result.created > 0) parts.push(`${result.created} session${result.created > 1 ? 's' : ''} found`)
+          if (result.removed > 0) parts.push(`${result.removed} stale removed`)
+          addToast(parts.join(', '), 'success')
+        }
+      }},
       { type: 'separator' },
       { label: 'Remove Project', icon: <TrashIcon className={iconClass} />, danger: true, action: () => openDialog('delete-session', contextMenu.targetId) }
     ]
@@ -224,7 +252,9 @@ export function ContextMenu() {
           addToast('Failed to open remote', 'error')
         }
       }},
-      { label: 'Land on Main', icon: <MergeIcon className={iconClass} />, action: () => openDialog('land-session', contextMenu.targetId) },
+      ...(!isMainRepo ? [
+        { label: 'Land on Main', icon: <MergeIcon className={iconClass} />, action: () => openDialog('land-session', contextMenu.targetId) },
+      ] : []),
       { type: 'separator' },
       { label: 'Archive Session', icon: <ArchiveIcon className={iconClass} />, action: () => openDialog('archive-session', contextMenu.targetId) },
       { type: 'separator' },

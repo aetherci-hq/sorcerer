@@ -80,6 +80,64 @@ export function registerIPC(
     dbService.removeProject(id)
   })
 
+  ipcMain.handle('project:sync-worktrees', async (_event, projectId: string) => {
+    const project = dbService.getProject(projectId)
+    if (!project) throw new Error('Project not found')
+
+    const repoName = path.basename(project.path as string)
+    const workspacesDir = path.join(os.homedir(), '.sorcerer', 'workspaces', repoName)
+    if (!fs.existsSync(workspacesDir)) return { created: 0, removed: 0 }
+
+    // Get existing session worktree paths from DB
+    const dbSessions = dbService.listSessions(projectId)
+    const dbPaths = new Set(dbSessions.map((s: any) => s.worktree_path))
+
+    // Scan filesystem for valid worktree directories
+    let created = 0
+    const entries = fs.readdirSync(workspacesDir, { withFileTypes: true })
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue
+      const dirPath = path.join(workspacesDir, entry.name)
+      if (dbPaths.has(dirPath)) continue // already registered
+
+      // Verify it's a valid git worktree (has .git file or directory)
+      const gitPath = path.join(dirPath, '.git')
+      if (!fs.existsSync(gitPath)) continue
+
+      // Get branch name from worktree
+      const git = simpleGit(dirPath)
+      let branch: string
+      try {
+        branch = (await git.revparse(['--abbrev-ref', 'HEAD'])).trim()
+      } catch {
+        continue // skip broken worktrees
+      }
+
+      const id = uuidv4()
+      dbService.addSession({
+        id,
+        project_id: projectId,
+        name: entry.name,
+        branch,
+        worktree_path: dirPath
+      })
+      created++
+    }
+
+    // Clean stale: DB sessions whose worktree_path doesn't exist
+    let removed = 0
+    for (const session of dbSessions) {
+      if (session.worktree_path === project.path) continue // main repo session
+      if (session.type === 'quick-terminal') continue
+      if (!fs.existsSync(session.worktree_path as string)) {
+        dbService.removeSession(session.id)
+        removed++
+      }
+    }
+
+    return { created, removed }
+  })
+
   ipcMain.handle('project:git-status', async (_event, projectPath: string) => {
     try {
       const git = simpleGit(projectPath)
@@ -128,15 +186,28 @@ export function registerIPC(
     return dbService.listSessions(projectId)
   })
 
-  ipcMain.handle('session:create', async (_event, projectId: string, sessionName: string) => {
-    console.log('[session:create] Starting:', { projectId, sessionName })
+  ipcMain.handle('session:create', async (_event, projectId: string, sessionName: string, useMainRepo?: boolean) => {
+    console.log('[session:create] Starting:', { projectId, sessionName, useMainRepo })
     const project = dbService.getProject(projectId)
     if (!project) throw new Error('Project not found')
     console.log('[session:create] Project found:', project.path)
 
-    // Create git worktree
-    const { worktreePath, branch } = await worktreeService.create(project.path, sessionName)
-    console.log('[session:create] Worktree created:', { worktreePath, branch })
+    let worktreePath: string
+    let branch: string
+
+    if (useMainRepo) {
+      // Work directly in the main repository — no worktree
+      worktreePath = project.path as string
+      branch = await simpleGit(project.path as string).revparse(['--abbrev-ref', 'HEAD'])
+      branch = branch.trim()
+      console.log('[session:create] Using main repo:', { worktreePath, branch })
+    } else {
+      // Create git worktree
+      const result = await worktreeService.create(project.path, sessionName)
+      worktreePath = result.worktreePath
+      branch = result.branch
+      console.log('[session:create] Worktree created:', { worktreePath, branch })
+    }
 
     // Create session record
     const id = uuidv4()
@@ -161,11 +232,13 @@ export function registerIPC(
       dbService.updateSession(id, { pid })
     }
 
-    // Push branch to remote on creation (fire-and-forget)
-    worktreeService.pushBranch(project.path, branch).then((r) => {
-      if (r.pushed) console.log('[session:create] Branch pushed to remote')
-      else console.log('[session:create] Push skipped:', r.error)
-    })
+    // Push branch to remote on creation (fire-and-forget) — skip for main repo sessions
+    if (!useMainRepo) {
+      worktreeService.pushBranch(project.path, branch).then((r) => {
+        if (r.pushed) console.log('[session:create] Branch pushed to remote')
+        else console.log('[session:create] Push skipped:', r.error)
+      })
+    }
 
     return session
   })
@@ -213,6 +286,11 @@ export function registerIPC(
     return session
   })
 
+  ipcMain.handle('session:rename', (_event, sessionId: string, newName: string) => {
+    dbService.updateSession(sessionId, { name: newName })
+    return dbService.getSession(sessionId)
+  })
+
   ipcMain.handle('session:kill', (_event, sessionId: string) => {
     ptyService.kill(sessionId)
     dbService.updateSession(sessionId, { status: 'idle', pid: null })
@@ -231,17 +309,18 @@ export function registerIPC(
 
     if (session) {
       const project = dbService.getProject(session.project_id)
+      const isMainRepo = project && session.worktree_path === project.path
 
-      // Auto-commit dirty work (non-destructive — worktree stays alive)
-      if (session.worktree_path && fs.existsSync(session.worktree_path as string)) {
+      // Auto-commit dirty work (non-destructive — worktree stays alive) — skip for main repo
+      if (!isMainRepo && session.worktree_path && fs.existsSync(session.worktree_path as string)) {
         const commitResult = await worktreeService.autoCommit(session.worktree_path as string)
         if (commitResult.committed) {
           console.log('[session:archive] Auto-committed:', commitResult.message)
         }
       }
 
-      // Push to remote (fire-and-forget)
-      if (project && session.branch) {
+      // Push to remote (fire-and-forget) — skip for main repo
+      if (!isMainRepo && project && session.branch) {
         worktreeService.pushBranch(project.path as string, session.branch as string).then((r) => {
           if (r.pushed) console.log('[session:archive] Pushed to remote')
           else console.log('[session:archive] Push skipped:', r.error)
@@ -271,17 +350,18 @@ export function registerIPC(
 
     if (session) {
       const project = dbService.getProject(session.project_id as string)
+      const isMainRepo = project && session.worktree_path === project.path
 
-      // Auto-commit dirty work before destruction
-      if (session.worktree_path && fs.existsSync(session.worktree_path as string)) {
+      // Auto-commit dirty work before destruction — skip for main repo
+      if (!isMainRepo && session.worktree_path && fs.existsSync(session.worktree_path as string)) {
         const commitResult = await worktreeService.autoCommit(session.worktree_path as string)
         if (commitResult.committed) {
           console.log('[session:delete] Auto-committed:', commitResult.message)
         }
       }
 
-      // Push to remote (blocking — ensure backup before destruction)
-      if (project && session.branch) {
+      // Push to remote (blocking — ensure backup before destruction) — skip for main repo
+      if (!isMainRepo && project && session.branch) {
         const pushResult = await worktreeService.pushBranch(project.path as string, session.branch as string)
         if (pushResult.pushed) {
           console.log('[session:delete] Pushed to remote before deletion')
@@ -290,8 +370,8 @@ export function registerIPC(
         }
       }
 
-      // Remove worktree + local branch
-      if (project && session.worktree_path && fs.existsSync(session.worktree_path as string)) {
+      // Remove worktree + local branch — skip for main repo
+      if (!isMainRepo && project && session.worktree_path && fs.existsSync(session.worktree_path as string)) {
         try {
           await worktreeService.remove(project.path as string, session.worktree_path as string, session.branch as string)
         } catch (err) {
@@ -299,8 +379,8 @@ export function registerIPC(
         }
       }
 
-      // Delete remote branch (fire-and-forget)
-      if (project && session.branch) {
+      // Delete remote branch (fire-and-forget) — skip for main repo
+      if (!isMainRepo && project && session.branch) {
         worktreeService.deleteRemoteBranch(project.path as string, session.branch as string).then((r) => {
           if (r.deleted) console.log('[session:delete] Remote branch deleted')
         })
@@ -383,8 +463,10 @@ export function registerIPC(
     const project = dbService.getProject(session.project_id as string)
     if (!project) throw new Error('Project not found')
 
-    // Auto-commit first
-    if (session.worktree_path && fs.existsSync(session.worktree_path as string)) {
+    const isMainRepo = session.worktree_path === project.path
+
+    // Auto-commit first — skip for main repo sessions
+    if (!isMainRepo && session.worktree_path && fs.existsSync(session.worktree_path as string)) {
       const commitResult = await worktreeService.autoCommit(session.worktree_path as string)
       if (commitResult.committed) {
         console.log('[session:push-branch] Auto-committed:', commitResult.message)
@@ -458,6 +540,11 @@ export function registerIPC(
     if (!session) throw new Error('Session not found')
     const project = dbService.getProject(session.project_id as string)
     if (!project) throw new Error('Project not found')
+
+    // Main repo sessions have nothing to land — already on main
+    if (session.worktree_path === project.path) {
+      return { landed: false, error: 'Cannot land a main repository session — it is already working in the main repo.' }
+    }
 
     // Auto-commit dirty work in the worktree
     if (session.worktree_path && fs.existsSync(session.worktree_path as string)) {
@@ -603,6 +690,22 @@ export function registerIPC(
     const pid = ptyService.getPid(agentId)
     dbService.updateAgent(agentId, { status: 'active', pid: pid ?? null })
     return dbService.getAgent(agentId)
+  })
+
+  ipcMain.handle('agent:create-quick-terminal', (_event, agentId: string) => {
+    const agent = dbService.getAgent(agentId)
+    if (!agent) throw new Error('Agent not found')
+
+    const cwd = path.join(os.homedir(), '.sorcerer', 'agents', agentId)
+    fs.mkdirSync(cwd, { recursive: true })
+
+    const id = uuidv4()
+    const name = `Terminal (${(agent.name as string)})`
+
+    ptyService.spawn(id, cwd)
+    const pid = ptyService.getPid(id)
+
+    return { id, name, status: 'active', type: 'quick-terminal', agentId, pid: pid ?? null }
   })
 
   ipcMain.handle('agent:kill', (_event, agentId: string) => {

@@ -12,6 +12,7 @@ export function NewSessionDialog() {
   const { addToast } = useToastStore()
   const [name, setName] = useState('')
   const [projectId, setProjectId] = useState('')
+  const [useMainRepo, setUseMainRepo] = useState(false)
 
   const open = activeDialog === 'new-session'
 
@@ -22,13 +23,14 @@ export function NewSessionDialog() {
   const handleClose = () => {
     setName('')
     setProjectId('')
+    setUseMainRepo(false)
     closeDialog()
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!name.trim() || !effectiveProjectId) return
-    const session = await createSession(effectiveProjectId, name.trim())
+    const session = await createSession(effectiveProjectId, name.trim(), useMainRepo)
     if (session) {
       addToast(`Session "${name.trim()}" created`, 'success')
     } else {
@@ -66,8 +68,19 @@ export function NewSessionDialog() {
             autoFocus
           />
         </DialogField>
+        <label className="dialog-checkbox">
+          <input
+            type="checkbox"
+            checked={useMainRepo}
+            onChange={(e) => setUseMainRepo(e.target.checked)}
+          />
+          Work in main repository
+        </label>
         <div className="dialog-hint">
-          A git worktree branch <span className="dialog-hint-mono">{project?.name || '...'}/{name || '...'}</span> will be created.
+          {useMainRepo
+            ? 'Will use current branch in main repository'
+            : <>A git worktree branch <span className="dialog-hint-mono">{project?.name || '...'}/{name || '...'}</span> will be created.</>
+          }
         </div>
         <DialogActions>
           <DialogButton onClick={handleClose}>Cancel</DialogButton>

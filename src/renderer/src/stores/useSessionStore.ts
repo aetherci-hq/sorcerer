@@ -8,7 +8,7 @@ interface SessionState {
   loading: boolean
 
   loadSessions: (projectId?: string) => Promise<void>
-  createSession: (projectId: string, name: string) => Promise<Session | null>
+  createSession: (projectId: string, name: string, useMainRepo?: boolean) => Promise<Session | null>
   createQuickTerminal: (sourceSessionId: string) => Promise<Session | null>
   killSession: (sessionId: string) => Promise<void>
   archiveSession: (sessionId: string) => Promise<void>
@@ -19,6 +19,8 @@ interface SessionState {
   landOnMain: (sessionId: string) => Promise<void>
   pushBranch: (sessionId: string) => Promise<{ pushed: boolean; error?: string }>
   setActiveSession: (id: string) => void
+  renameSession: (sessionId: string, name: string) => Promise<void>
+  addLocalSession: (session: Session) => void
   updateSessionInStore: (id: string, updates: Partial<Session>) => void
 }
 
@@ -38,9 +40,9 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     }
   },
 
-  createSession: async (projectId, name) => {
+  createSession: async (projectId, name, useMainRepo?) => {
     try {
-      const session = await window.sorcerer.session.create(projectId, name)
+      const session = await window.sorcerer.session.create(projectId, name, useMainRepo)
       if (!session) return null
       set((state) => ({
         sessions: [session, ...state.sessions]
@@ -204,6 +206,26 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       }
     }
     set({ activeSessionId: id })
+  },
+
+  renameSession: async (sessionId, name) => {
+    try {
+      await window.sorcerer.session.rename(sessionId, name)
+      set((state) => ({
+        sessions: state.sessions.map((s) =>
+          s.id === sessionId ? { ...s, name } : s
+        )
+      }))
+    } catch (err) {
+      console.error('[session-store] renameSession failed:', err)
+    }
+  },
+
+  addLocalSession: (session) => {
+    set((state) => ({
+      sessions: [session, ...state.sessions],
+      activeSessionId: session.id
+    }))
   },
 
   updateSessionInStore: (id, updates) => {
