@@ -104,7 +104,7 @@ export function Sidebar() {
       <SearchBar />
       <AgentTree />
       <ProjectTree />
-      <SidebarFooter collapsed={false} />
+      <SidebarFooter collapsed={false} width={sidebarWidth} />
 
       {/* Resize handle */}
       <div className="sidebar-resize-handle" onMouseDown={onMouseDown} />
