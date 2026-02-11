@@ -49,6 +49,11 @@ import {
   getUserInfo
 } from './shared-handlers'
 
+let globalApiServer: any = null
+
+export function getGlobalApiServer(): any { return globalApiServer }
+export function setGlobalApiServer(server: any): void { globalApiServer = server }
+
 export function registerIPC(
   ptyService: PTYService,
   dbService: DatabaseService,
@@ -281,6 +286,48 @@ export function registerIPC(
 
   ipcMain.handle('system:userInfo', () => {
     return getUserInfo()
+  })
+
+  // ── Remote access ──────────────────────────────────────────
+
+  ipcMain.handle('remote:status', () => {
+    return {
+      running: globalApiServer?.isRunning() ?? false,
+      port: dbService.getSetting('remotePort') || '7437',
+      bindAddress: dbService.getSetting('remoteBindAddress') || '127.0.0.1',
+      token: dbService.getSetting('remoteAuthToken') || ''
+    }
+  })
+
+  ipcMain.handle('remote:enable', async () => {
+    const { ApiServer } = await import('../server/api-server')
+    const { getOrCreateAuthToken } = await import('../server/auth')
+
+    const port = parseInt(dbService.getSetting('remotePort') || '7437')
+    const bindAddress = dbService.getSetting('remoteBindAddress') || '127.0.0.1'
+    const authToken = getOrCreateAuthToken(dbService)
+
+    if (globalApiServer) globalApiServer.stop()
+    globalApiServer = new ApiServer(services, { port, bindAddress, authToken })
+    await globalApiServer.start()
+    dbService.setSetting('remoteEnabled', 'true')
+    return { port, bindAddress, token: authToken }
+  })
+
+  ipcMain.handle('remote:disable', () => {
+    if (globalApiServer) { globalApiServer.stop(); globalApiServer = null }
+    dbService.setSetting('remoteEnabled', 'false')
+  })
+
+  ipcMain.handle('remote:regenerate-token', async () => {
+    const { regenerateAuthToken } = await import('../server/auth')
+    const token = regenerateAuthToken(dbService)
+    return token
+  })
+
+  ipcMain.handle('remote:update-config', (_event, config: { port?: number; bindAddress?: string }) => {
+    if (config.port !== undefined) dbService.setSetting('remotePort', String(config.port))
+    if (config.bindAddress !== undefined) dbService.setSetting('remoteBindAddress', config.bindAddress)
   })
 
   // Electron-only: uses child_process execSync and Windows registry

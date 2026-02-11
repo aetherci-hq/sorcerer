@@ -134,6 +134,28 @@ async function createWindow(): Promise<void> {
   // Register IPC handlers
   registerIPC(ptyService, dbService, worktreeService, fileWatcherService)
 
+  // Auto-start remote access if previously enabled
+  const remoteEnabled = dbService.getSetting('remoteEnabled')
+  if (remoteEnabled === 'true') {
+    import('./server/api-server').then(async ({ ApiServer }) => {
+      const { getOrCreateAuthToken } = await import('./server/auth')
+      const port = parseInt(dbService.getSetting('remotePort') || '7437')
+      const bindAddress = dbService.getSetting('remoteBindAddress') || '127.0.0.1'
+      const authToken = getOrCreateAuthToken(dbService)
+
+      const { setGlobalApiServer } = await import('./ipc/handlers')
+      const server = new ApiServer(
+        { db: dbService, pty: ptyService, worktree: worktreeService, fileWatcher: fileWatcherService },
+        { port, bindAddress, authToken }
+      )
+      await server.start()
+      setGlobalApiServer(server)
+      console.log(`[remote-access] Auto-started on ${bindAddress}:${port}`)
+    }).catch((err) => {
+      console.error('[remote-access] Auto-start failed:', err)
+    })
+  }
+
   // Save window bounds on resize/move
   mainWindow.on('resize', saveWindowBounds)
   mainWindow.on('move', saveWindowBounds)
@@ -173,6 +195,12 @@ app.on('window-all-closed', () => {
   if (ptyService) ptyService.killAll()
   if (fileWatcherService) fileWatcherService.close()
   if (dbService) dbService.close()
+
+  // Stop remote access server
+  import('./ipc/handlers').then(({ getGlobalApiServer }) => {
+    const server = getGlobalApiServer()
+    if (server) server.stop()
+  }).catch(() => {})
 
   if (process.platform !== 'darwin') {
     app.quit()

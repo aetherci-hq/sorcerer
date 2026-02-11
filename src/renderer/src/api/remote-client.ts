@@ -242,6 +242,14 @@ export function createRemoteClient(baseUrl: string, token: string): SorcererAPI 
       accountPicture: async () => null
     },
 
+    remote: {
+      status: async () => ({ running: true, port: '0', bindAddress: '0.0.0.0', token: '' }),
+      enable: async () => ({ port: 0, bindAddress: '', token: '' }),
+      disable: async () => {},
+      regenerateToken: async () => '',
+      updateConfig: async () => {}
+    },
+
     window: {
       minimize: () => {},
       maximize: () => {},
