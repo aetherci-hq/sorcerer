@@ -354,15 +354,28 @@ export class WorktreeService {
       try {
         await git.raw(['merge', '--squash', branch])
       } catch (err: any) {
-        // Conflict — abort and reset
-        try { await git.raw(['merge', '--abort']) } catch { /* ignore */ }
+        // merge --squash threw — clean up and report
         try { await git.raw(['reset', '--hard']) } catch { /* ignore */ }
         return { merged: false, error: 'Merge conflict — the branch could not be cleanly merged into ' + defaultBranch }
       }
 
+      // Check for unmerged files — squash merge can exit 0 but leave conflicts
+      const postStatus = await git.status()
+      if (postStatus.conflicted.length > 0) {
+        const files = postStatus.conflicted.join(', ')
+        try { await git.raw(['reset', '--hard']) } catch { /* ignore */ }
+        return { merged: false, error: `Merge conflict in ${files} — resolve manually or rebase the branch onto ${defaultBranch}` }
+      }
+
       // Commit the squash merge
-      const message = `Land "${sessionName}"\n\nSquash-merged from branch ${branch}`
-      await git.commit(message)
+      try {
+        const message = `Land "${sessionName}"\n\nSquash-merged from branch ${branch}`
+        await git.commit(message)
+      } catch (err: any) {
+        // Commit failed for unexpected reason — clean up
+        try { await git.raw(['reset', '--hard']) } catch { /* ignore */ }
+        return { merged: false, error: 'Commit failed after squash merge: ' + (err?.message || 'unknown error') }
+      }
 
       // Push main back to remote
       try {
@@ -374,6 +387,11 @@ export class WorktreeService {
 
       return { merged: true }
     } catch (err: any) {
+      // Unexpected error — ensure we don't leave main in a dirty state
+      try {
+        const git: SimpleGit = simpleGit(projectPath)
+        await git.raw(['reset', '--hard'])
+      } catch { /* ignore */ }
       console.error('[squashMergeToMain] Failed:', err)
       return { merged: false, error: err?.message || 'Squash merge failed' }
     }
