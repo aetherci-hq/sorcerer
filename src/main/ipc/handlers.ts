@@ -1,5 +1,6 @@
 import { ipcMain, dialog, shell } from 'electron'
 import { v4 as uuidv4 } from 'uuid'
+import os from 'os'
 import path from 'path'
 import fs from 'fs'
 import { PTYService } from '../services/pty-service'
@@ -105,6 +106,101 @@ export function registerIPC(
 
   ipcMain.handle('project:addPath', (_event, projectPath: string, customName?: string) => {
     return addProjectByPath(services, projectPath, customName)
+  })
+
+  // ── Workspace orphan detection ─────────────────────────────
+
+  ipcMain.handle('workspace:scan-orphans', () => {
+    const root = worktreeService.getWorkspacesRoot()
+    if (!fs.existsSync(root)) return []
+
+    const projects = dbService.listProjects()
+    const knownNames = new Set(projects.map((p: any) => path.basename(p.path)))
+
+    // Load dismissed list
+    const dismissedRaw = dbService.getSetting('dismissedWorkspaces')
+    const dismissed = new Set<string>(dismissedRaw ? JSON.parse(dismissedRaw) : [])
+
+    const entries = fs.readdirSync(root, { withFileTypes: true })
+    const orphans: { dirName: string; sessionCount: number; fullPath: string }[] = []
+
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue
+      if (knownNames.has(entry.name)) continue
+      if (dismissed.has(entry.name)) continue
+
+      const dirPath = path.join(root, entry.name)
+      // Count child directories (sessions)
+      let sessionCount = 0
+      try {
+        const children = fs.readdirSync(dirPath, { withFileTypes: true })
+        sessionCount = children.filter((c) => c.isDirectory()).length
+      } catch { /* skip unreadable */ }
+
+      if (sessionCount > 0) {
+        orphans.push({ dirName: entry.name, sessionCount, fullPath: dirPath })
+      }
+    }
+
+    return orphans
+  })
+
+  ipcMain.handle('workspace:dismiss-orphan', (_event, dirName: string) => {
+    const raw = dbService.getSetting('dismissedWorkspaces')
+    const list: string[] = raw ? JSON.parse(raw) : []
+    if (!list.includes(dirName)) {
+      list.push(dirName)
+    }
+    dbService.setSetting('dismissedWorkspaces', JSON.stringify(list))
+  })
+
+  // ── Agent orphan detection ──────────────────────────────────
+
+  ipcMain.handle('workspace:scan-orphan-agents', () => {
+    const agentsRoot = path.join(os.homedir(), '.sorcerer', 'agents')
+    if (!fs.existsSync(agentsRoot)) return []
+
+    const knownAgents = dbService.listAgents()
+    const knownIds = new Set(knownAgents.map((a: any) => a.id))
+
+    const dismissedRaw = dbService.getSetting('dismissedAgents')
+    const dismissed = new Set<string>(dismissedRaw ? JSON.parse(dismissedRaw) : [])
+
+    const entries = fs.readdirSync(agentsRoot, { withFileTypes: true })
+    const orphans: { dirName: string; agentName: string; fullPath: string; hasManifest: boolean; manifest?: any }[] = []
+
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue
+      if (knownIds.has(entry.name)) continue
+      if (dismissed.has(entry.name)) continue
+
+      const dirPath = path.join(agentsRoot, entry.name)
+      const manifestPath = path.join(dirPath, 'agent.json')
+      let hasManifest = false
+      let manifest: any = null
+      let agentName = entry.name
+
+      if (fs.existsSync(manifestPath)) {
+        try {
+          manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'))
+          hasManifest = true
+          if (manifest.name) agentName = manifest.name
+        } catch { /* ignore corrupt manifest */ }
+      }
+
+      orphans.push({ dirName: entry.name, agentName, fullPath: dirPath, hasManifest, manifest })
+    }
+
+    return orphans
+  })
+
+  ipcMain.handle('workspace:dismiss-orphan-agent', (_event, dirName: string) => {
+    const raw = dbService.getSetting('dismissedAgents')
+    const list: string[] = raw ? JSON.parse(raw) : []
+    if (!list.includes(dirName)) {
+      list.push(dirName)
+    }
+    dbService.setSetting('dismissedAgents', JSON.stringify(list))
   })
 
   ipcMain.handle('project:update', (_event, id: string, updates: any) => {
@@ -216,7 +312,7 @@ export function registerIPC(
     return listAgents(services)
   })
 
-  ipcMain.handle('agent:add', (_event, data: { name: string; description?: string; system_prompt?: string; mcp_config?: string }) => {
+  ipcMain.handle('agent:add', (_event, data: { id?: string; name: string; description?: string; system_prompt?: string; mcp_config?: string }) => {
     return addAgent(services, data)
   })
 

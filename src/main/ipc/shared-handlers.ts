@@ -633,15 +633,33 @@ export function listAgents({ db }: HandlerServices): any[] {
   return db.listAgents()
 }
 
+function writeAgentManifest(
+  agentId: string,
+  data: { name: string; description?: string; system_prompt?: string; mcp_config?: string; created_at?: number }
+): void {
+  const dir = path.join(os.homedir(), '.sorcerer', 'agents', agentId)
+  fs.mkdirSync(dir, { recursive: true })
+  const manifest = {
+    name: data.name,
+    description: data.description || '',
+    system_prompt: data.system_prompt || '',
+    mcp_config: data.mcp_config || '',
+    created_at: data.created_at || Math.floor(Date.now() / 1000)
+  }
+  fs.writeFileSync(path.join(dir, 'agent.json'), JSON.stringify(manifest, null, 2), 'utf8')
+}
+
 export function addAgent(
   { db }: HandlerServices,
-  data: { name: string; description?: string; system_prompt?: string; mcp_config?: string }
+  data: { id?: string; name: string; description?: string; system_prompt?: string; mcp_config?: string }
 ): any {
-  const id = uuidv4()
+  const id = data.id || uuidv4()
   // Create scratch directory for this agent
   const cwd = path.join(os.homedir(), '.sorcerer', 'agents', id)
   fs.mkdirSync(cwd, { recursive: true })
-  return db.addAgent({ id, ...data })
+  const agent = db.addAgent({ id, ...data })
+  writeAgentManifest(id, data)
+  return agent
 }
 
 export function updateAgent(
@@ -649,7 +667,18 @@ export function updateAgent(
   id: string,
   updates: any
 ): any {
-  return db.updateAgent(id, updates)
+  const agent = db.updateAgent(id, updates)
+  // Keep manifest in sync when metadata changes
+  if (agent && (updates.name || updates.description || updates.system_prompt || updates.mcp_config)) {
+    writeAgentManifest(id, {
+      name: agent.name as string,
+      description: agent.description as string,
+      system_prompt: agent.system_prompt as string,
+      mcp_config: agent.mcp_config as string,
+      created_at: agent.created_at as number
+    })
+  }
+  return agent
 }
 
 export function removeAgent(
@@ -660,6 +689,16 @@ export function removeAgent(
     pty.kill(id)
   }
   db.removeAgent(id)
+  // Remove manifest immediately (not locked) so orphan scanner won't offer re-import
+  const agentDir = path.join(os.homedir(), '.sorcerer', 'agents', id)
+  const manifestPath = path.join(agentDir, 'agent.json')
+  try { fs.unlinkSync(manifestPath) } catch { /* already gone */ }
+  // Attempt full directory cleanup after PTY file handles are released
+  setTimeout(() => {
+    try {
+      fs.rmSync(agentDir, { recursive: true, force: true })
+    } catch { /* will be cleaned up on next restart or manually */ }
+  }, 3000)
 }
 
 export function startAgent(

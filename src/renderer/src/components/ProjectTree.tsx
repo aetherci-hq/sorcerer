@@ -3,7 +3,7 @@ import { useProjectStore } from '../stores/useProjectStore'
 import { useSessionStore } from '../stores/useSessionStore'
 import { useUIStore, getAllSessionIds } from '../stores/useUIStore'
 import { useTeamStore } from '../stores/useTeamStore'
-import { ChevronIcon, FolderIcon, TerminalIcon, UserIcon, MoreHorizontalIcon } from './icons'
+import { ChevronIcon, FolderIcon, TerminalIcon, ShellPromptIcon, UserIcon, MoreHorizontalIcon } from './icons'
 import { StatusDot } from './StatusDot'
 import { EmptyState } from './EmptyState'
 import type { Project, Session, TeamMember, TaskData } from '../types'
@@ -177,7 +177,10 @@ function SessionItem({
             }}
           />
         )}
-        <TerminalIcon className={`tree-icon${session.type === 'quick-terminal' ? ' tree-icon--quick-terminal' : ''}`} />
+        {session.type === 'quick-terminal'
+          ? <ShellPromptIcon className="tree-icon tree-icon--quick-terminal" />
+          : <TerminalIcon className="tree-icon" />
+        }
         <div className="tree-label-group">
           {isRenaming ? (
             <input
@@ -408,7 +411,7 @@ export function ProjectTree() {
     <>
       <div className="section-header stagger-4">
         <span className="section-label">Projects</span>
-        <span className="section-count">{totalSessions} sessions</span>
+        <span className="section-count">{totalSessions}</span>
       </div>
 
       <div className="tree">

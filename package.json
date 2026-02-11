@@ -30,10 +30,9 @@
       "icon": "build/icon.ico"
     },
     "mac": {
-      "target": [
-        "dmg"
-      ],
-      "icon": "build/icon.icns"
+      "target": ["dmg"],
+      "icon": "build/icon.icns",
+      "identity": null
     },
     "linux": {
       "target": [

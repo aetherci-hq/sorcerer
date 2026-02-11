@@ -294,3 +294,17 @@ export function PlayIcon(props: IconProps) {
     </svg>
   )
 }
+
+export function ShellPromptIcon(props: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...props}>
+      {/* # hash prompt */}
+      <line x1="4" y1="9" x2="14" y2="9" />
+      <line x1="4" y1="15" x2="14" y2="15" />
+      <line x1="7" y1="5" x2="7" y2="19" />
+      <line x1="11" y1="5" x2="11" y2="19" />
+      {/* _ cursor */}
+      <line x1="18" y1="19" x2="22" y2="19" />
+    </svg>
+  )
+}

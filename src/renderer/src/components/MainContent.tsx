@@ -5,7 +5,9 @@ import { useProjectStore } from '../stores/useProjectStore'
 import { useAgentStore } from '../stores/useAgentStore'
 import { useUIStore, findLeafBySession } from '../stores/useUIStore'
 import { useTeamStore } from '../stores/useTeamStore'
+import { OrphanWorkspaceBanner } from './OrphanWorkspaceBanner'
 import { GitBranchIcon, TerminalIcon, ClockIcon, UserIcon, BotIcon } from './icons'
+import { StatusDot } from './StatusDot'
 import { Tooltip } from './Tooltip'
 import { TerminalView } from './TerminalView'
 import type { Session, Agent, SplitNode } from '../types'
@@ -380,6 +382,8 @@ export function MainContent() {
         </div>
       </div>
 
+      <OrphanWorkspaceBanner />
+
       {/* Terminal area */}
       {splitRoot ? (
         <SplitNodeView node={splitRoot} />
@@ -450,7 +454,7 @@ export function MainContent() {
       <div className="status-bar">
         {activeAgent ? (
           <>
-            <div className={`status-bar-indicator status-bar-indicator--${activeAgent.status}`} />
+            <StatusDot status={activeAgent.status} />
             <div className="status-bar-item">
               <BotIcon />
               <span>Agent: {activeAgent.status}</span>
@@ -467,7 +471,7 @@ export function MainContent() {
           </>
         ) : activeSession ? (
           <>
-            <div className={`status-bar-indicator status-bar-indicator--${activeSession.status}`} />
+            <StatusDot status={activeSession.status} />
             <div className="status-bar-item">
               <ClockIcon />
               <span>Session: {activeSession.status}</span>

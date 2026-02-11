@@ -33,7 +33,7 @@ const api = {
 
   agent: {
     list: () => ipcRenderer.invoke('agent:list'),
-    add: (data: { name: string; description?: string; system_prompt?: string; mcp_config?: string }) =>
+    add: (data: { id?: string; name: string; description?: string; system_prompt?: string; mcp_config?: string }) =>
       ipcRenderer.invoke('agent:add', data),
     update: (id: string, updates: any) => ipcRenderer.invoke('agent:update', id, updates),
     remove: (id: string) => ipcRenderer.invoke('agent:remove', id),
@@ -82,6 +82,13 @@ const api = {
       ipcRenderer.on('filewatcher:session-linked', handler)
       return () => ipcRenderer.removeListener('filewatcher:session-linked', handler)
     }
+  },
+
+  workspace: {
+    scanOrphans: () => ipcRenderer.invoke('workspace:scan-orphans'),
+    dismissOrphan: (dirName: string) => ipcRenderer.invoke('workspace:dismiss-orphan', dirName),
+    scanOrphanAgents: () => ipcRenderer.invoke('workspace:scan-orphan-agents'),
+    dismissOrphanAgent: (dirName: string) => ipcRenderer.invoke('workspace:dismiss-orphan-agent', dirName)
   },
 
   settings: {

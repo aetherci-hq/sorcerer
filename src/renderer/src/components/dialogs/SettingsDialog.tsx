@@ -499,6 +499,21 @@ function GeneralTab() {
           Reset
         </button>
       </SettingRow>
+      <SettingRow label="Reset dismissed workspaces" description="Re-show orphaned workspace and agent banners you previously dismissed">
+        <button
+          className="settings-action-btn"
+          type="button"
+          onClick={async () => {
+            await Promise.all([
+              getApi().settings.set('dismissedWorkspaces', '[]'),
+              getApi().settings.set('dismissedAgents', '[]')
+            ])
+            addToast('Dismissed items cleared — banner will re-scan on next load', 'success')
+          }}
+        >
+          Reset
+        </button>
+      </SettingRow>
       <SettingRow label="Clear all data" description="Remove all projects, sessions, and settings">
         <button
           className="settings-action-btn settings-action-btn--danger"

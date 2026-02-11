@@ -156,6 +156,13 @@ export function createRemoteClient(baseUrl: string, token: string): SorcererAPI 
       syncWorktrees: (projectId: string) => rpc('project:sync-worktrees', projectId)
     },
 
+    workspace: {
+      scanOrphans: async () => [],
+      dismissOrphan: async () => {},
+      scanOrphanAgents: async () => [],
+      dismissOrphanAgent: async () => {}
+    },
+
     session: {
       list: (projectId?: string) => rpc('session:list', projectId),
       create: (projectId: string, name: string, useMainRepo?: boolean) =>
@@ -256,5 +263,5 @@ export function createRemoteClient(baseUrl: string, token: string): SorcererAPI 
       close: () => {},
       isMaximized: async () => false
     }
-  }
+  } as any as SorcererAPI
 }

@@ -8,7 +8,7 @@ interface AgentState {
   loading: boolean
 
   loadAgents: () => Promise<void>
-  addAgent: (data: { name: string; description?: string; system_prompt?: string; mcp_config?: string }) => Promise<string | null>
+  addAgent: (data: { id?: string; name: string; description?: string; system_prompt?: string; mcp_config?: string }) => Promise<string | null>
   updateAgent: (id: string, updates: Partial<Agent>) => Promise<void>
   removeAgent: (id: string) => Promise<void>
   startAgent: (id: string) => Promise<void>

@@ -164,7 +164,6 @@ export function AgentTree() {
     <div className="agent-tree-section stagger-3">
       <div className="section-header">
         <span className="section-label">Agents</span>
-        <span className="section-count">{filteredAgents.length}</span>
         <button
           className="section-add-btn"
           onClick={(e) => { e.stopPropagation(); openDialog('add-agent') }}
@@ -172,6 +171,7 @@ export function AgentTree() {
         >
           <PlusIcon />
         </button>
+        <span className="section-count">{filteredAgents.length}</span>
       </div>
 
       {filteredAgents.length > 0 ? (
