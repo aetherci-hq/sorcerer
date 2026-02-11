@@ -13,20 +13,116 @@ and the UI. An Android client is feasible as a thin remote viewer once that tran
 exists, but cannot run Sorcerer's backend natively (no node-pty, no git worktrees on
 Android).
 
+**The desktop app remains the primary target.** Remote access is an opt-in feature
+(disabled by default) that can be toggled on/off from Settings. The local Electron
+experience is completely unchanged whether remote is enabled or not.
+
 The two efforts are sequential: **remote capability is a prerequisite for Android**.
 
 ---
 
-## Part 1: Remote Capability
+## Design Principle: Modular, Opt-In, Desktop-First
 
-### What "Remote" Means Here
+Remote access is a **feature of the desktop app**, not a pivot away from it. The core
+design principles:
 
-The Sorcerer desktop host continues running the backend (PTY processes, git worktrees,
-SQLite, file watchers) on a real machine. A remote client — whether a browser tab, a
-second desktop, or a phone — connects over the network and gets the same UI experience:
-sidebar, terminal I/O, session management.
+1. **Desktop-first, always.** The Electron app is the primary interface. It works
+   identically whether remote access is on or off. No degradation, no new dependencies
+   on the critical path.
 
-### Current Architecture Coupling Points
+2. **Opt-in toggle.** Remote access is off by default. A `Remote Access: Enabled/Disabled`
+   switch in the Settings dialog controls whether the API server starts. Disabling it
+   shuts down the server immediately — no restart required.
+
+3. **Additive, not invasive.** The API server is a second consumer of the existing
+   services, running alongside (not replacing) the Electron IPC path. If the server
+   has a bug, the desktop app is unaffected.
+
+4. **Zero-config for local use.** Users who never enable remote access see no difference
+   in behavior, performance, or UI. The server code is loaded lazily only when enabled.
+
+### Architecture: Local vs. Remote Paths
+
+```
+Electron Main Process
+  │
+  └── Services (PTYService, DatabaseService, WorktreeService, FileWatcherService)
+        │
+        ├── IPC Handlers ←→ Electron Renderer    [ALWAYS active, unchanged]
+        │                    (local React UI)
+        │
+        └── API Server   ←→ Browser Clients       [OPT-IN, toggled via Settings]
+             (HTTP + WS)     (remote React UI)
+```
+
+Both paths call the **exact same service methods**. The IPC path is never modified,
+never rerouted, and never depends on the API server. They are fully independent
+consumers of a shared service layer.
+
+### What "Remote" Means
+
+"Remote" means: **a browser tab on another device connecting to the Sorcerer host over
+the network.** It is not a separate app, a cloud deployment, or a rewrite. Concretely:
+
+- You're at your desktop. Sorcerer is running as the normal Electron app.
+- You toggle on Remote Access in Settings. A server starts on port 7437.
+- You open `http://192.168.1.x:7437` in a browser on your phone, tablet, or laptop.
+- The browser loads the same React UI and connects via WebSocket for terminal I/O.
+- Your desktop Electron window continues working simultaneously — both are live.
+- You toggle Remote Access off. The server stops. The browser client disconnects.
+  The desktop app is unaffected.
+
+### Settings UI for Remote Access
+
+The Settings dialog gains a "Remote Access" section:
+
+| Setting | Default | Description |
+|---|---|---|
+| **Enabled** | Off | Master toggle — starts/stops the API server |
+| **Port** | 7437 | TCP port for HTTP + WebSocket server |
+| **Bind Address** | `127.0.0.1` | `127.0.0.1` = local only; `0.0.0.0` = LAN accessible |
+| **Auth Token** | (auto-generated) | Bearer token for API/WS authentication; regenerate button |
+| **Status** | (read-only) | Shows "Running on http://192.168.1.x:7437" or "Stopped" |
+
+When `Enabled` is toggled on, the main process:
+1. Starts the Express + WebSocket server on the configured port/address.
+2. Serves the renderer bundle as static files (same React app).
+3. Authenticates incoming connections via bearer token.
+4. Displays the access URL in the Settings status line.
+
+When toggled off:
+1. Closes all WebSocket connections gracefully.
+2. Stops the HTTP server.
+3. No lingering processes or open ports.
+
+---
+
+## Part 1: Remote Capability (Implementation Details)
+
+### What Changes and What Doesn't
+
+**Unchanged (local Electron path):**
+- `src/preload/index.ts` — Context bridge stays as-is
+- `src/main/ipc/handlers.ts` — IPC handlers stay registered, always active
+- `src/main/services/*` — All four services unchanged
+- `src/renderer/src/components/*` — React components unchanged
+- `src/renderer/src/stores/*` — Zustand stores unchanged
+
+**New (additive):**
+- `src/main/server/api-server.ts` — HTTP + WebSocket server (lazy-loaded)
+- `src/main/server/routes.ts` — REST routes calling shared handler functions
+- `src/main/server/ws-handler.ts` — WebSocket terminal multiplexing + events
+- `src/main/server/auth.ts` — Token validation middleware
+- `src/main/server/scrollback.ts` — Ring buffer for terminal reconnection
+- `src/main/ipc/shared-handlers.ts` — Handler logic extracted from `handlers.ts`
+- `src/renderer/src/api/remote-client.ts` — `fetch`/`WebSocket` API adapter
+- `src/renderer/src/api/client.ts` — Environment detection + client selection
+
+**Refactored (minimal):**
+- `src/main/ipc/handlers.ts` — Handler bodies extracted to `shared-handlers.ts`;
+  IPC registrations remain, now calling the shared functions (same behavior)
+
+### Coupling Points Between Current IPC and New HTTP/WS
 
 | Layer | Current Transport | What Needs to Change |
 |---|---|---|
@@ -36,50 +132,87 @@ sidebar, terminal I/O, session management.
 | **Native dialogs** (`dialog.showOpenDialog`) | Electron-only API | Replace with path-input text field for remote clients |
 | **Window controls** (minimize/maximize/close) | Electron `BrowserWindow` | N/A for remote — only applies to local Electron shell |
 
-### Proposed Architecture
+### Detailed Architecture
 
 ```
-┌──────────────────────────┐     ┌──────────────────────────────┐
-│  Sorcerer Host (Desktop) │     │  Remote Client               │
-│                          │     │  (Browser / Android / etc.)   │
-│  ┌────────────────────┐  │     │                              │
-│  │ PTYService         │  │     │  React App (same renderer    │
-│  │ DatabaseService    │  │     │  code, minus Electron APIs)  │
-│  │ WorktreeService    │  │     │                              │
-│  │ FileWatcherService │  │     │  Connects via:               │
-│  └────────┬───────────┘  │     │  - WebSocket (terminal I/O)  │
-│           │              │     │  - HTTP/REST (CRUD ops)       │
-│  ┌────────▼───────────┐  │     │  - WebSocket (push events)   │
-│  │ API Server         │  │     └──────────────┬───────────────┘
-│  │ (Express/Fastify   │◄─┼─── network ───────┘
-│  │  + ws)             │  │
-│  └────────────────────┘  │
-│                          │
-│  Electron window (local  │
-│  client, still works     │
-│  via same API or IPC)    │
-└──────────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│  Sorcerer Host (Electron Desktop App)                        │
+│                                                              │
+│  ┌──────────────────────────────────────────────────────┐    │
+│  │ Service Layer (always running)                        │    │
+│  │  PTYService · DatabaseService · WorktreeService       │    │
+│  │  FileWatcherService                                   │    │
+│  └────────────────┬──────────────────┬───────────────────┘    │
+│                   │                  │                        │
+│         ┌─────────▼──────┐  ┌────────▼──────────────┐        │
+│         │ IPC Handlers   │  │ API Server (opt-in)   │        │
+│         │ (always active)│  │ HTTP + WebSocket      │        │
+│         │                │  │ Lazy-loaded on toggle  │        │
+│         └────────┬───────┘  └────────┬──────────────┘        │
+│                  │                   │                        │
+│  ┌───────────────▼───┐               │                       │
+│  │ Electron Renderer  │               │                       │
+│  │ (local React UI)   │               │                       │
+│  │ Connected via IPC   │               │                       │
+│  └────────────────────┘               │                       │
+└───────────────────────────────────────┼───────────────────────┘
+                                        │ network (LAN/localhost)
+                              ┌─────────▼─────────────┐
+                              │ Browser Client(s)      │
+                              │ Same React UI          │
+                              │ Connected via HTTP/WS  │
+                              │ (phone, tablet, laptop)│
+                              └────────────────────────┘
 ```
+
+Key: both clients consume the same service layer. The Electron renderer uses IPC
+(always). The browser client uses HTTP/WS (only when remote access is enabled).
+They are fully independent — enabling or disabling one has no effect on the other.
 
 ### Implementation Breakdown
 
-#### 1. Extract an API Server from the IPC Handlers
+#### 1. Extract Shared Handler Logic + Build API Server
 
-**File affected:** `src/main/ipc/handlers.ts` (671 lines)
+**Files affected:** `src/main/ipc/handlers.ts` (671 lines) — refactored, not replaced
 
-The existing `registerIPC()` function is already cleanly organized as
-request-response handlers over IPC. The refactor:
+The existing `registerIPC()` function is cleanly organized as request-response
+handlers over IPC. The refactor:
 
+- Extract handler **bodies** into `src/main/ipc/shared-handlers.ts` as plain
+  async functions (no IPC dependency). Example:
+  ```ts
+  // shared-handlers.ts
+  export async function listProjects(db: DatabaseService) {
+    return db.listProjects()
+  }
+  ```
+- `handlers.ts` keeps all `ipcMain.handle(...)` registrations but delegates
+  to the shared functions. **Behavior is identical** — this is a mechanical
+  extract-method refactoring.
 - Create `src/main/server/api-server.ts` — an Express or Fastify HTTP server
-  running on a configurable port (e.g. `7437`).
-- Each `ipcMain.handle('project:list', ...)` becomes a corresponding
-  `GET /api/projects` route that calls the same service methods.
-- The handler functions themselves don't change — they already take
-  `(event, ...args)` and return data. Extract the logic into plain functions,
-  then call them from both IPC handlers and HTTP routes.
+  that is **lazy-loaded** only when remote access is toggled on. It calls the
+  same shared functions.
+- Each `ipcMain.handle('project:list', ...)` has a corresponding
+  `GET /api/projects` route. ~30 operations map 1:1.
 
-**Effort:** The IPC handler file has ~30 distinct operations. Each one maps
-1:1 to a REST endpoint. This is mechanical refactoring.
+**The IPC path never changes behavior.** Even if the API server has a bug or
+crashes, the desktop app continues working via IPC as it always has.
+
+**Lifecycle management in `src/main/index.ts`:**
+```ts
+let apiServer: ApiServer | null = null
+
+// Called when user toggles Remote Access in Settings
+ipcMain.handle('remote:enable', async (_, config) => {
+  if (apiServer) apiServer.stop()
+  apiServer = new ApiServer(services, config)
+  await apiServer.start()
+})
+
+ipcMain.handle('remote:disable', async () => {
+  if (apiServer) { apiServer.stop(); apiServer = null }
+})
+```
 
 **Estimated scope:** ~400-500 lines of new server code, ~200 lines refactoring
 existing handlers into shared functions.
@@ -127,22 +260,34 @@ Since this is a personal tool ("just me"), a lightweight approach:
 
 **Estimated scope:** ~100 lines (middleware + token management).
 
-#### 5. Renderer Abstraction Layer
+#### 5. Renderer Abstraction Layer (Transport Swap)
 
-**Files affected:** `src/preload/index.ts`, renderer stores
+**Files affected:** `src/preload/index.ts` (unchanged), renderer stores (minimal)
 
 The renderer currently calls `window.sorcerer.*` (the Electron context bridge).
-For remote clients, this API needs a network-backed implementation:
+**This does not change.** For browser clients, we add an alternative implementation
+of the same API interface:
 
-- Create `src/renderer/src/api/remote-client.ts` that implements the same
-  `SorcererAPI` interface but uses `fetch()` for CRUD and `WebSocket` for
-  terminal/events.
-- Create `src/renderer/src/api/electron-client.ts` that wraps the existing
-  `window.sorcerer` (trivial, already exists).
-- At startup, detect environment: if `window.sorcerer` exists, use Electron
-  client; otherwise, use remote client.
+- Create `src/renderer/src/api/remote-client.ts` — implements `SorcererAPI`
+  using `fetch()` for CRUD and `WebSocket` for terminal/events.
+- Create `src/renderer/src/api/client.ts` — environment detection:
+  ```ts
+  // If running inside Electron, window.sorcerer exists via context bridge.
+  // If running in a browser, it doesn't — use the network client instead.
+  export const api: SorcererAPI = window.sorcerer
+    ?? createRemoteClient(location.origin)
+  ```
+- All Zustand stores and React components import `api` from this file instead
+  of referencing `window.sorcerer` directly. This is a find-and-replace
+  change — the call signatures are identical.
 
-**Estimated scope:** ~300 lines for the remote client implementation.
+**The preload script is untouched.** The Electron context bridge continues to
+define `window.sorcerer` exactly as it does today. The only difference is that
+stores import an abstraction that resolves to `window.sorcerer` in Electron and
+to the fetch/WS client in browsers.
+
+**Estimated scope:** ~300 lines for the remote client implementation, ~50 lines
+for the import changes across stores.
 
 #### 6. Handle Electron-Only APIs
 
@@ -157,26 +302,34 @@ For remote clients, this API needs a network-backed implementation:
 
 ### Total Scope for Remote Capability
 
-| Component | New/Changed Lines (est.) |
-|---|---|
-| API server (HTTP + WebSocket) | ~500 |
-| Terminal WebSocket transport | ~200 |
-| File watcher broadcast | ~50 |
-| Auth middleware | ~100 |
-| Remote client API adapter | ~300 |
-| Handler refactoring (extract shared logic) | ~200 |
-| Electron-API conditionals in UI | ~100 |
-| **Total** | **~1,450 lines** |
+| Component | New/Changed Lines (est.) | Touches Existing Code? |
+|---|---|---|
+| API server (HTTP + WebSocket) | ~500 | No (new files) |
+| Terminal WebSocket transport | ~200 | No (new files) |
+| File watcher broadcast | ~50 | Minor (add broadcast alongside existing send) |
+| Auth middleware | ~100 | No (new file) |
+| Remote client API adapter | ~300 | No (new file) |
+| Handler refactoring (extract shared logic) | ~200 | Yes (extract-method, same behavior) |
+| Store import abstraction (`api` vs `window.sorcerer`) | ~50 | Yes (find-and-replace, same behavior) |
+| Settings UI: Remote Access panel | ~100 | Yes (add section to SettingsDialog) |
+| Electron-API conditionals in UI | ~100 | Minor (hide window controls in browser) |
+| **Total** | **~1,600 lines** | |
+
+**Of the ~1,600 lines, ~1,150 are new files** that don't touch existing code at all.
+The remaining ~450 lines are mechanical refactoring (extract method, import swaps)
+that preserve existing behavior.
 
 ### Risk Assessment
 
 | Risk | Severity | Mitigation |
 |---|---|---|
+| Remote feature breaks desktop app | **None** | IPC path is independent; API server is lazy-loaded, can be disabled |
 | Terminal latency over network | Medium | WebSocket is low-latency; buffer/debounce output if needed |
 | PTY resize synchronization | Low | Send resize events over WS; client reports actual dimensions |
 | Data consistency (two clients modifying state) | Low | Single-user app; SQLite serializes writes |
-| Security (exposing PTY over network) | Medium | Token auth; bind to LAN only by default; warn on 0.0.0.0 |
+| Security (exposing PTY over network) | Medium | Token auth; bind to `127.0.0.1` by default; warn on `0.0.0.0` |
 | xterm.js state divergence (reconnection) | Medium | On reconnect, replay terminal scrollback buffer or use screen dump |
+| Performance overhead when remote is disabled | **None** | Server code is lazy-loaded; zero cost when feature is off |
 
 ### Terminal Reconnection Strategy
 
@@ -288,14 +441,16 @@ renderer.
 
 ## Part 3: Combined Roadmap
 
-### Phase 1 — API Server & Remote Web Client
+### Phase 1 — API Server & Remote Web Client (Opt-In Feature)
 - Extract service logic from IPC handlers into shared functions
-- Stand up HTTP + WebSocket server in main process
+- Build lazy-loaded HTTP + WebSocket server (only started when enabled)
+- Add Remote Access section to Settings dialog (enable/disable toggle, port, bind address, token)
 - Build remote API client (`fetch` + `WebSocket` implementation of `SorcererAPI`)
 - Add environment detection in renderer (Electron vs. browser)
 - Add token-based auth
 - Add terminal scrollback buffer for reconnection
-- **Deliverable:** Open `http://host:7437` in any browser and use Sorcerer
+- **Deliverable:** Toggle on Remote Access in Settings → open `http://host:7437` in any browser
+- **When disabled:** Zero overhead, no open ports, desktop app unchanged
 
 ### Phase 2 — Mobile-Ready Web Client
 - Responsive CSS: sidebar → drawer on narrow viewports
@@ -360,14 +515,20 @@ No new dependencies — just static files (manifest.json, service-worker.js)
 
 ## Summary
 
-| Effort | Scope | Depends On |
-|---|---|---|
-| **Remote capability** | ~1,450 lines new/refactored code | Nothing (standalone) |
-| **Android PWA** | ~600 lines on top of remote | Remote capability |
-| **Android native (Kotlin)** | ~2,200 lines, separate project | Remote capability |
+| Effort | Scope | Desktop Impact | Depends On |
+|---|---|---|---|
+| **Remote capability** | ~1,600 lines (~1,150 new files) | None when disabled; Settings toggle when enabled | Nothing (standalone) |
+| **Android PWA** | ~600 lines on top of remote | None | Remote capability |
+| **Android native (Kotlin)** | ~2,200 lines, separate project | None | Remote capability |
 
 The architecture is well-suited for this evolution. The existing IPC contract
 (`src/preload/index.ts`) is essentially already an API specification — it just
 needs a network transport underneath it. The renderer code is pure React with
 Zustand stores and has no direct Electron imports, so it can run in a browser
 with minimal changes.
+
+**The desktop app is and remains the primary target.** Remote access is a
+modular feature that adds a second access path without modifying the first.
+When disabled, it has zero runtime cost — no server process, no open ports,
+no code loaded. When enabled, it runs a sidecar HTTP/WebSocket server that
+the user controls entirely via Settings.
