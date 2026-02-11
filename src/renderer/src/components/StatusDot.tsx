@@ -1,14 +1,5 @@
 import { Tooltip } from './Tooltip'
 
-const statusClass: Record<string, string> = {
-  active: 'status-dot status-dot--active',
-  idle: 'status-dot status-dot--idle',
-  archived: 'status-dot status-dot--archived',
-  waiting: 'status-dot status-dot--waiting',
-  starting: 'status-dot status-dot--starting',
-  deleted: 'status-dot status-dot--archived'
-}
-
 const statusLabel: Record<string, string> = {
   active: 'Active',
   idle: 'Idle',
@@ -18,10 +9,31 @@ const statusLabel: Record<string, string> = {
   deleted: 'Deleted'
 }
 
+function signalClass(status: string): string {
+  switch (status) {
+    case 'active':
+    case 'idle':
+    case 'waiting':
+    case 'starting':
+    case 'archived':
+      return status
+    case 'deleted':
+      return 'archived'
+    default:
+      return 'idle'
+  }
+}
+
 export function StatusDot({ status }: { status: string }) {
+  const variant = signalClass(status)
+  const needsRing = variant === 'active'
+
   return (
     <Tooltip label={statusLabel[status] || status}>
-      <span className={statusClass[status] || 'status-dot status-dot--idle'} />
+      <span className={`signal signal--${variant}`}>
+        <span className="signal-core" />
+        {needsRing && <span className="signal-ring" />}
+      </span>
     </Tooltip>
   )
 }

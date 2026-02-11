@@ -336,6 +336,14 @@ export class WorktreeService {
         return { merged: false, error: `The ${defaultBranch} branch has uncommitted changes` }
       }
 
+      // Pull latest from remote so local main is up to date
+      try {
+        await git.raw(['fetch', 'origin', defaultBranch])
+        await git.raw(['merge', '--ff-only', `origin/${defaultBranch}`])
+      } catch {
+        // No remote, or local main has diverged — still safe to proceed with local merge
+      }
+
       // Check there are actually commits to land
       const log = await git.raw(['log', `${defaultBranch}..${branch}`, '--oneline']).catch(() => '')
       if (!log.trim()) {
@@ -355,6 +363,14 @@ export class WorktreeService {
       // Commit the squash merge
       const message = `Land "${sessionName}"\n\nSquash-merged from branch ${branch}`
       await git.commit(message)
+
+      // Push main back to remote
+      try {
+        await git.raw(['push', 'origin', defaultBranch])
+      } catch {
+        // Push failed — landed locally but not synced to remote
+        console.log('[squashMergeToMain] Push to remote failed — landed locally only')
+      }
 
       return { merged: true }
     } catch (err: any) {

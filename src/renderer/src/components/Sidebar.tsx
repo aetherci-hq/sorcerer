@@ -4,8 +4,9 @@ import { SearchBar } from './SearchBar'
 import { AgentTree } from './AgentTree'
 import { ProjectTree } from './ProjectTree'
 import { SidebarFooter } from './SidebarFooter'
+import { StatusDot } from './StatusDot'
 import { Tooltip } from './Tooltip'
-import { PanelLeftCloseIcon, PanelLeftOpenIcon, BotIcon } from './icons'
+import { PanelLeftCloseIcon, PanelLeftOpenIcon, BotIcon, TerminalIcon, ShellPromptIcon } from './icons'
 import { useUIStore } from '../stores/useUIStore'
 import { useProjectStore } from '../stores/useProjectStore'
 import { useSessionStore } from '../stores/useSessionStore'
@@ -123,18 +124,14 @@ function CollapsedTree() {
       {/* Agents */}
       {agents.length > 0 && (
         <div className="collapsed-project-group">
-          <Tooltip label="Agents" position="right">
-            <div className="collapsed-project-label">
-              <BotIcon style={{ width: 10, height: 10, opacity: 0.5 }} />
-            </div>
-          </Tooltip>
           {agents.map((a) => (
             <Tooltip key={a.id} label={a.name} position="right">
               <button
                 className={`collapsed-session-btn ${a.id === activeSessionId ? 'collapsed-session-btn--active' : ''}`}
                 onClick={() => setActiveSession(a.id)}
               >
-                <span className={`status-dot status-dot--${a.status}`} />
+                <BotIcon className="collapsed-btn-icon" />
+                <StatusDot status={a.status} />
               </button>
             </Tooltip>
           ))}
@@ -143,18 +140,20 @@ function CollapsedTree() {
       {/* Projects */}
       {projects.map((p) => {
         const projectSessions = sessions.filter((s) => s.project_id === p.id && s.status !== 'deleted' && s.status !== 'archived')
+        if (projectSessions.length === 0) return null
         return (
           <div key={p.id} className="collapsed-project-group">
-            <Tooltip label={p.name} position="right">
-              <div className="collapsed-project-label" />
-            </Tooltip>
             {projectSessions.map((s) => (
               <Tooltip key={s.id} label={s.name} position="right">
                 <button
                   className={`collapsed-session-btn ${s.id === activeSessionId ? 'collapsed-session-btn--active' : ''}`}
                   onClick={() => setActiveSession(s.id)}
                 >
-                  <span className={`status-dot status-dot--${s.status}`} />
+                  {s.type === 'quick-terminal'
+                    ? <ShellPromptIcon className="collapsed-btn-icon" />
+                    : <TerminalIcon className="collapsed-btn-icon" />
+                  }
+                  <StatusDot status={s.status} />
                 </button>
               </Tooltip>
             ))}
