@@ -72,6 +72,52 @@ export function registerIPC(
     return dbService.addProject(id, name, projectPath)
   })
 
+  // ── Workspace orphan detection ─────────────────────────────
+
+  ipcMain.handle('workspace:scan-orphans', () => {
+    const root = worktreeService.getWorkspacesRoot()
+    if (!fs.existsSync(root)) return []
+
+    const projects = dbService.listProjects()
+    const knownNames = new Set(projects.map((p: any) => path.basename(p.path)))
+
+    // Load dismissed list
+    const dismissedRaw = dbService.getSetting('dismissedWorkspaces')
+    const dismissed = new Set<string>(dismissedRaw ? JSON.parse(dismissedRaw) : [])
+
+    const entries = fs.readdirSync(root, { withFileTypes: true })
+    const orphans: { dirName: string; sessionCount: number; fullPath: string }[] = []
+
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue
+      if (knownNames.has(entry.name)) continue
+      if (dismissed.has(entry.name)) continue
+
+      const dirPath = path.join(root, entry.name)
+      // Count child directories (sessions)
+      let sessionCount = 0
+      try {
+        const children = fs.readdirSync(dirPath, { withFileTypes: true })
+        sessionCount = children.filter((c) => c.isDirectory()).length
+      } catch { /* skip unreadable */ }
+
+      if (sessionCount > 0) {
+        orphans.push({ dirName: entry.name, sessionCount, fullPath: dirPath })
+      }
+    }
+
+    return orphans
+  })
+
+  ipcMain.handle('workspace:dismiss-orphan', (_event, dirName: string) => {
+    const raw = dbService.getSetting('dismissedWorkspaces')
+    const list: string[] = raw ? JSON.parse(raw) : []
+    if (!list.includes(dirName)) {
+      list.push(dirName)
+    }
+    dbService.setSetting('dismissedWorkspaces', JSON.stringify(list))
+  })
+
   ipcMain.handle('project:update', (_event, id: string, updates: any) => {
     return dbService.updateProject(id, updates)
   })

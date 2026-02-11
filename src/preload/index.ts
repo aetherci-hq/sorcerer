@@ -84,6 +84,11 @@ const api = {
     }
   },
 
+  workspace: {
+    scanOrphans: () => ipcRenderer.invoke('workspace:scan-orphans'),
+    dismissOrphan: (dirName: string) => ipcRenderer.invoke('workspace:dismiss-orphan', dirName)
+  },
+
   settings: {
     get: (key: string) => ipcRenderer.invoke('settings:get', key),
     set: (key: string, value: string) => ipcRenderer.invoke('settings:set', key, value)

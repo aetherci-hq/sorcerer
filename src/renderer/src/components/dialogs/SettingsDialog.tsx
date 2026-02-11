@@ -331,6 +331,18 @@ function GeneralTab() {
           Reset
         </button>
       </SettingRow>
+      <SettingRow label="Reset dismissed workspaces" description="Re-show orphaned workspace banners you previously dismissed">
+        <button
+          className="settings-action-btn"
+          type="button"
+          onClick={async () => {
+            await window.sorcerer.settings.set('dismissedWorkspaces', '[]')
+            addToast('Dismissed workspaces cleared — banner will re-scan on next load', 'success')
+          }}
+        >
+          Reset
+        </button>
+      </SettingRow>
       <SettingRow label="Clear all data" description="Remove all projects, sessions, and settings">
         <button
           className="settings-action-btn settings-action-btn--danger"

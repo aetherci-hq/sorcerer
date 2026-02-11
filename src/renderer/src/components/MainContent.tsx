@@ -4,6 +4,7 @@ import { useProjectStore } from '../stores/useProjectStore'
 import { useAgentStore } from '../stores/useAgentStore'
 import { useUIStore, findLeafBySession } from '../stores/useUIStore'
 import { useTeamStore } from '../stores/useTeamStore'
+import { OrphanWorkspaceBanner } from './OrphanWorkspaceBanner'
 import { GitBranchIcon, TerminalIcon, ClockIcon, UserIcon, BotIcon } from './icons'
 import { StatusDot } from './StatusDot'
 import { Tooltip } from './Tooltip'
@@ -379,6 +380,8 @@ export function MainContent() {
           ) : null}
         </div>
       </div>
+
+      <OrphanWorkspaceBanner />
 
       {/* Terminal area */}
       {splitRoot ? (
