@@ -19,6 +19,23 @@ function sessionEnv(sessionId: string): Record<string, string> {
   }
 }
 
+/** Write an agent.json manifest into the agent's scratch directory. */
+function writeAgentManifest(
+  agentId: string,
+  data: { name: string; description?: string; system_prompt?: string; mcp_config?: string; created_at?: number }
+): void {
+  const dir = path.join(os.homedir(), '.sorcerer', 'agents', agentId)
+  fs.mkdirSync(dir, { recursive: true })
+  const manifest = {
+    name: data.name,
+    description: data.description || '',
+    system_prompt: data.system_prompt || '',
+    mcp_config: data.mcp_config || '',
+    created_at: data.created_at || Math.floor(Date.now() / 1000)
+  }
+  fs.writeFileSync(path.join(dir, 'agent.json'), JSON.stringify(manifest, null, 2), 'utf8')
+}
+
 export function registerIPC(
   ptyService: PTYService,
   dbService: DatabaseService,
@@ -118,6 +135,55 @@ export function registerIPC(
     dbService.setSetting('dismissedWorkspaces', JSON.stringify(list))
   })
 
+  // ── Agent orphan detection ──────────────────────────────────
+
+  ipcMain.handle('workspace:scan-orphan-agents', () => {
+    const agentsRoot = path.join(os.homedir(), '.sorcerer', 'agents')
+    if (!fs.existsSync(agentsRoot)) return []
+
+    const knownAgents = dbService.listAgents()
+    const knownIds = new Set(knownAgents.map((a: any) => a.id))
+
+    const dismissedRaw = dbService.getSetting('dismissedAgents')
+    const dismissed = new Set<string>(dismissedRaw ? JSON.parse(dismissedRaw) : [])
+
+    const entries = fs.readdirSync(agentsRoot, { withFileTypes: true })
+    const orphans: { dirName: string; agentName: string; fullPath: string; hasManifest: boolean; manifest?: any }[] = []
+
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue
+      if (knownIds.has(entry.name)) continue
+      if (dismissed.has(entry.name)) continue
+
+      const dirPath = path.join(agentsRoot, entry.name)
+      const manifestPath = path.join(dirPath, 'agent.json')
+      let hasManifest = false
+      let manifest: any = null
+      let agentName = entry.name
+
+      if (fs.existsSync(manifestPath)) {
+        try {
+          manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'))
+          hasManifest = true
+          if (manifest.name) agentName = manifest.name
+        } catch { /* ignore corrupt manifest */ }
+      }
+
+      orphans.push({ dirName: entry.name, agentName, fullPath: dirPath, hasManifest, manifest })
+    }
+
+    return orphans
+  })
+
+  ipcMain.handle('workspace:dismiss-orphan-agent', (_event, dirName: string) => {
+    const raw = dbService.getSetting('dismissedAgents')
+    const list: string[] = raw ? JSON.parse(raw) : []
+    if (!list.includes(dirName)) {
+      list.push(dirName)
+    }
+    dbService.setSetting('dismissedAgents', JSON.stringify(list))
+  })
+
   ipcMain.handle('project:update', (_event, id: string, updates: any) => {
     return dbService.updateProject(id, updates)
   })
@@ -138,7 +204,7 @@ export function registerIPC(
     const dbSessions = dbService.listSessions(projectId)
     const dbPaths = new Set(dbSessions.map((s: any) => s.worktree_path))
 
-    // Scan filesystem for valid worktree directories
+    // Scan filesystem for worktree directories
     let created = 0
     const entries = fs.readdirSync(workspacesDir, { withFileTypes: true })
     for (const entry of entries) {
@@ -146,18 +212,30 @@ export function registerIPC(
       const dirPath = path.join(workspacesDir, entry.name)
       if (dbPaths.has(dirPath)) continue // already registered
 
-      // Verify it's a valid git worktree (has .git file or directory)
-      const gitPath = path.join(dirPath, '.git')
-      if (!fs.existsSync(gitPath)) continue
+      // Try to get branch from git; fall back to .git file content or dir name
+      let branch: string | null = null
 
-      // Get branch name from worktree
-      const git = simpleGit(dirPath)
-      let branch: string
-      try {
-        branch = (await git.revparse(['--abbrev-ref', 'HEAD'])).trim()
-      } catch {
-        continue // skip broken worktrees
+      // 1. Try live git revparse (works for healthy worktrees)
+      const gitPath = path.join(dirPath, '.git')
+      if (fs.existsSync(gitPath)) {
+        try {
+          const git = simpleGit(dirPath)
+          branch = (await git.revparse(['--abbrev-ref', 'HEAD'])).trim()
+        } catch { /* worktree may be broken */ }
+
+        // 2. Parse the .git file for branch hint (worktree .git files contain
+        //    "gitdir: ../../.git/worktrees/<branch-name>")
+        if (!branch) {
+          try {
+            const gitContent = fs.readFileSync(gitPath, 'utf8').trim()
+            const match = gitContent.match(/worktrees\/(.+)$/)
+            if (match) branch = match[1]
+          } catch { /* ignore */ }
+        }
       }
+
+      // 3. Fall back to directory name (Sorcerer names worktree dirs after the session/branch)
+      if (!branch) branch = entry.name
 
       const id = uuidv4()
       dbService.addSession({
@@ -649,11 +727,24 @@ export function registerIPC(
     // Create scratch directory for this agent
     const cwd = path.join(os.homedir(), '.sorcerer', 'agents', id)
     fs.mkdirSync(cwd, { recursive: true })
-    return dbService.addAgent({ id, ...data })
+    const agent = dbService.addAgent({ id, ...data })
+    writeAgentManifest(id, data)
+    return agent
   })
 
   ipcMain.handle('agent:update', (_event, id: string, updates: any) => {
-    return dbService.updateAgent(id, updates)
+    const agent = dbService.updateAgent(id, updates)
+    // Keep manifest in sync when metadata changes
+    if (agent && (updates.name || updates.description || updates.system_prompt || updates.mcp_config)) {
+      writeAgentManifest(id, {
+        name: agent.name as string,
+        description: agent.description as string,
+        system_prompt: agent.system_prompt as string,
+        mcp_config: agent.mcp_config as string,
+        created_at: agent.created_at as number
+      })
+    }
+    return agent
   })
 
   ipcMain.handle('agent:remove', (_event, id: string) => {

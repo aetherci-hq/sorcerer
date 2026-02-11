@@ -86,7 +86,9 @@ const api = {
 
   workspace: {
     scanOrphans: () => ipcRenderer.invoke('workspace:scan-orphans'),
-    dismissOrphan: (dirName: string) => ipcRenderer.invoke('workspace:dismiss-orphan', dirName)
+    dismissOrphan: (dirName: string) => ipcRenderer.invoke('workspace:dismiss-orphan', dirName),
+    scanOrphanAgents: () => ipcRenderer.invoke('workspace:scan-orphan-agents'),
+    dismissOrphanAgent: (dirName: string) => ipcRenderer.invoke('workspace:dismiss-orphan-agent', dirName)
   },
 
   settings: {
