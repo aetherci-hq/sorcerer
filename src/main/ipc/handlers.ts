@@ -771,4 +771,40 @@ export function registerIPC(
       ptyService.setCustomShell(value || undefined)
     }
   })
+
+  // ── System info ─────────────────────────────────────────────
+
+  ipcMain.handle('system:userInfo', () => {
+    const info = os.userInfo()
+    return {
+      username: info.username,
+      homedir: info.homedir
+    }
+  })
+
+  ipcMain.handle('system:accountPicture', () => {
+    // Windows: read account picture path from registry
+    if (process.platform !== 'win32') return null
+    try {
+      const { execSync } = require('child_process')
+      const regPath = 'HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\AccountPicture\\Users'
+      const sidOutput = execSync(`reg query "${regPath}" /f * /k`, { encoding: 'utf8' })
+      // Find the SID subkey for the current user
+      const sidMatch = sidOutput.match(new RegExp(`${regPath.replace(/\\/g, '\\\\')}\\\\(S-[\\d-]+)`, 'i'))
+      if (!sidMatch) return null
+      const sid = sidMatch[1]
+      // Query the Image96 value (good size for avatars)
+      const imgOutput = execSync(`reg query "${regPath}\\${sid}" /v Image96`, { encoding: 'utf8' })
+      const pathMatch = imgOutput.match(/Image96\s+REG_SZ\s+(.+)/i)
+      if (!pathMatch) return null
+      const imgPath = pathMatch[1].trim()
+      if (!fs.existsSync(imgPath)) return null
+      // Read and return as data URL
+      const buf = fs.readFileSync(imgPath)
+      const ext = path.extname(imgPath).slice(1) || 'jpg'
+      return `data:image/${ext};base64,${buf.toString('base64')}`
+    } catch {
+      return null
+    }
+  })
 }

@@ -89,6 +89,11 @@ const api = {
     set: (key: string, value: string) => ipcRenderer.invoke('settings:set', key, value)
   },
 
+  system: {
+    userInfo: () => ipcRenderer.invoke('system:userInfo'),
+    accountPicture: () => ipcRenderer.invoke('system:accountPicture')
+  },
+
   window: {
     minimize: () => ipcRenderer.send('window:minimize'),
     maximize: () => ipcRenderer.send('window:maximize'),
