@@ -2,12 +2,14 @@ import React, { useState, useRef, useEffect } from 'react'
 import { useUIStore } from '../../stores/useUIStore'
 import { useToastStore } from '../../stores/useToastStore'
 import {
-  TerminalIcon, GitBranchIcon, SettingsIcon
+  TerminalIcon, GitBranchIcon, SettingsIcon, UserIcon
 } from '../icons'
+import { gravatarUrl } from '../SidebarFooter'
 
-type SettingsTab = 'sessions' | 'git' | 'general'
+type SettingsTab = 'profile' | 'sessions' | 'git' | 'general'
 
 const TABS: { id: SettingsTab; label: string; icon: React.ReactNode }[] = [
+  { id: 'profile', label: 'Profile', icon: <UserIcon /> },
   { id: 'sessions', label: 'Sessions', icon: <TerminalIcon /> },
   { id: 'git', label: 'Git', icon: <GitBranchIcon /> },
   { id: 'general', label: 'General', icon: <SettingsIcon /> }
@@ -67,6 +69,109 @@ function useSetting(key: string, fallback: string) {
     window.sorcerer.settings.set(key, v)
   }
   return [value, save] as const
+}
+
+function ProfileTab() {
+  const { addToast } = useToastStore()
+  const [displayName, setDisplayName] = useSetting('display_name', '')
+  const [email, setEmail] = useSetting('gravatar_email', '')
+  const [osUsername, setOsUsername] = useState('')
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null)
+  const [avatarSource, setAvatarSource] = useState<'gravatar' | 'system' | 'initial'>('initial')
+  const [systemPicture, setSystemPicture] = useState<string | null>(null)
+
+  // Load OS username and system picture on mount
+  useEffect(() => {
+    window.sorcerer.system.userInfo().then((info: { username: string }) => {
+      setOsUsername(info.username.charAt(0).toUpperCase() + info.username.slice(1))
+    })
+    window.sorcerer.system.accountPicture().then((pic: string | null) => {
+      if (pic) setSystemPicture(pic)
+    })
+  }, [])
+
+  // Resolve avatar preview whenever email or system picture changes
+  useEffect(() => {
+    if (email) {
+      const url = gravatarUrl(email, 128)
+      const img = new Image()
+      img.onload = () => {
+        setAvatarPreview(url)
+        setAvatarSource('gravatar')
+      }
+      img.onerror = () => {
+        if (systemPicture) {
+          setAvatarPreview(systemPicture)
+          setAvatarSource('system')
+        } else {
+          setAvatarPreview(null)
+          setAvatarSource('initial')
+        }
+      }
+      img.src = url
+    } else if (systemPicture) {
+      setAvatarPreview(systemPicture)
+      setAvatarSource('system')
+    } else {
+      setAvatarPreview(null)
+      setAvatarSource('initial')
+    }
+  }, [email, systemPicture])
+
+  const resolvedName = displayName || osUsername
+  const initial = resolvedName.charAt(0).toUpperCase()
+
+  const handleSave = () => {
+    // Notify SidebarFooter to re-fetch
+    window.dispatchEvent(new CustomEvent('sorcerer:profile-updated'))
+    addToast('Profile updated', 'success')
+  }
+
+  return (
+    <>
+      <SectionTitle>Avatar</SectionTitle>
+      <div className="profile-avatar-section">
+        <div className="profile-avatar-preview">
+          {avatarPreview ? (
+            <img className="profile-avatar-img" src={avatarPreview} alt={resolvedName} />
+          ) : (
+            <div className="profile-avatar-initial">{initial}</div>
+          )}
+        </div>
+        <div className="profile-avatar-info">
+          <span className="profile-avatar-source">
+            {avatarSource === 'gravatar' && 'Loaded from Gravatar'}
+            {avatarSource === 'system' && 'Windows account picture'}
+            {avatarSource === 'initial' && 'Using initial (no image found)'}
+          </span>
+          <span className="profile-avatar-hint">
+            Set an email below to use your Gravatar, or your Windows account picture will be used automatically.
+          </span>
+        </div>
+      </div>
+
+      <SectionTitle>Identity</SectionTitle>
+      <SettingRow label="Display name" description="Shown in the sidebar footer. Leave empty to use your system username.">
+        <input
+          className="settings-input"
+          value={displayName}
+          onChange={(e) => setDisplayName(e.target.value)}
+          onBlur={handleSave}
+          placeholder={osUsername}
+        />
+      </SettingRow>
+      <SettingRow label="Email" description="Used to fetch your Gravatar profile picture.">
+        <input
+          className="settings-input"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          onBlur={handleSave}
+          placeholder="you@example.com"
+          type="email"
+        />
+      </SettingRow>
+    </>
+  )
 }
 
 function SessionsTab() {
@@ -243,6 +348,7 @@ function GeneralTab() {
 }
 
 const TAB_CONTENT: Record<SettingsTab, () => React.JSX.Element> = {
+  profile: ProfileTab,
   sessions: SessionsTab,
   git: GitTab,
   general: GeneralTab
@@ -251,7 +357,7 @@ const TAB_CONTENT: Record<SettingsTab, () => React.JSX.Element> = {
 export function SettingsDialog() {
   const { activeDialog, dialogClosing, closeDialog } = useUIStore()
   const overlayRef = useRef<HTMLDivElement>(null)
-  const [activeTab, setActiveTab] = useState<SettingsTab>('sessions')
+  const [activeTab, setActiveTab] = useState<SettingsTab>('profile')
 
   const open = activeDialog === 'settings'
 

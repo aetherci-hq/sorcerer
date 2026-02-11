@@ -208,6 +208,7 @@ export class DatabaseService {
   }
 
   updateSession(id: string, updates: Partial<{
+    name: string
     status: string
     pid: number | null
     team_name: string | null

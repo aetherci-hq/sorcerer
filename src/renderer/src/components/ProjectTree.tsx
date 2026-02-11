@@ -57,8 +57,11 @@ function SessionItem({
 }) {
   const { setActiveSession } = useSessionStore()
   const { expandedSessions, toggleSession, openContextMenu, renamingId, setRenamingId, splitRoot } = useUIStore()
+  const { projects } = useProjectStore()
   const { teams, tasksByTeam } = useTeamStore()
   const isExpanded = expandedSessions.has(session.id)
+  const project = projects.find((p) => p.id === projectId)
+  const isMainRepo = project && session.worktree_path === project.path
   const itemRef = useRef<HTMLDivElement>(null)
 
   // Team members and tasks for this session
@@ -102,8 +105,11 @@ function SessionItem({
     }
   }, [isActive])
 
-  const commitRename = () => {
-    // Rename not supported via IPC yet — just close rename mode
+  const commitRename = async () => {
+    const trimmed = renameValue.trim()
+    if (trimmed && trimmed !== session.name) {
+      await useSessionStore.getState().renameSession(session.id, trimmed)
+    }
     setIsRenaming(false)
   }
 
@@ -185,6 +191,9 @@ function SessionItem({
             />
           ) : (
             <span className="tree-label" onDoubleClick={handleDoubleClick}>{session.name}</span>
+          )}
+          {isMainRepo && !isRenaming && (
+            <span className="tree-hint">direct</span>
           )}
         </div>
         {!isRenaming && (

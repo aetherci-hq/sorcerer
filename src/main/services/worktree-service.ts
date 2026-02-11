@@ -2,6 +2,68 @@ import simpleGit, { SimpleGit } from 'simple-git'
 import path from 'path'
 import os from 'os'
 import fs from 'fs'
+import { execSync } from 'child_process'
+
+/**
+ * Safely remove a directory that may contain Windows reserved filenames (nul, con, aux, etc).
+ * Node.js tooling (npm, esbuild, etc.) sometimes creates files named 'nul' on Windows, which
+ * are treated as device names and cannot be deleted through normal filesystem APIs.
+ *
+ * Safety: This function ONLY operates on paths under ~/.sorcerer/workspaces/ and rejects
+ * any path that doesn't meet that constraint. The shell commands used (rd, del) are
+ * standard Windows builtins that work identically to fs.rmSync — the only difference is
+ * they handle reserved filenames that Node.js cannot.
+ */
+function forceRemoveDir(dirPath: string): void {
+  if (!fs.existsSync(dirPath)) return
+
+  // Safety: only allow removal under the workspaces root
+  const workspacesRoot = path.join(os.homedir(), '.sorcerer', 'workspaces')
+  const resolved = path.resolve(dirPath)
+  if (!resolved.startsWith(path.resolve(workspacesRoot) + path.sep)) {
+    throw new Error(`forceRemoveDir refused: path is not under workspaces root: ${resolved}`)
+  }
+
+  if (process.platform === 'win32') {
+    // First, clean any reserved filenames (nul, con, aux, etc.) that block normal deletion
+    cleanReservedFiles(resolved)
+    // Now try standard removal — should work after reserved files are gone
+    try {
+      fs.rmSync(resolved, { recursive: true, force: true })
+      return
+    } catch { /* ignore — directory may already be gone */ }
+  } else {
+    fs.rmSync(dirPath, { recursive: true, force: true })
+  }
+}
+
+/**
+ * Walk a directory and delete any Windows reserved filenames using the \\?\ extended-length
+ * path prefix, which bypasses Win32 reserved name restrictions. Only targets known reserved
+ * device names (nul, con, prn, aux, com0-9, lpt0-9) — all other files are left untouched.
+ */
+function cleanReservedFiles(dirPath: string): void {
+  const reserved = /^(nul|con|prn|aux|com[0-9]|lpt[0-9])(\..+)?$/i
+  try {
+    const entries = fs.readdirSync(dirPath, { withFileTypes: true })
+    for (const entry of entries) {
+      const fullPath = path.join(dirPath, entry.name)
+      if (entry.isDirectory()) {
+        cleanReservedFiles(fullPath)
+      } else if (reserved.test(entry.name)) {
+        try {
+          // \\?\ prefix tells Windows to skip reserved name interpretation
+          fs.unlinkSync(`\\\\?\\${fullPath}`)
+        } catch {
+          // Last resort: use cmd.exe del which can also handle these
+          try {
+            execSync(`cmd.exe /c del /f /q "\\\\?\\${fullPath}"`, { stdio: 'ignore', windowsHide: true })
+          } catch { /* best effort */ }
+        }
+      }
+    }
+  } catch { /* directory may already be gone */ }
+}
 
 export class WorktreeService {
   private workspacesRoot: string
@@ -55,7 +117,7 @@ export class WorktreeService {
       try {
         await git.raw(['worktree', 'remove', worktreePath, '--force'])
       } catch {
-        fs.rmSync(worktreePath, { recursive: true, force: true })
+        forceRemoveDir(worktreePath)
       }
     }
 
@@ -87,8 +149,15 @@ export class WorktreeService {
     this.validateWorktreePath(worktreePath)
     const git: SimpleGit = simpleGit(projectPath)
 
-    // Remove the worktree
-    await git.raw(['worktree', 'remove', worktreePath, '--force'])
+    // Remove the worktree — fall back to force removal if git can't clean up
+    // (e.g. Windows reserved filenames like 'nul' created by Node.js tooling)
+    try {
+      await git.raw(['worktree', 'remove', worktreePath, '--force'])
+    } catch {
+      forceRemoveDir(worktreePath)
+      // Prune the now-missing worktree reference from git
+      try { await git.raw(['worktree', 'prune']) } catch { /* ignore */ }
+    }
 
     // Delete the branch if provided
     if (branch) {

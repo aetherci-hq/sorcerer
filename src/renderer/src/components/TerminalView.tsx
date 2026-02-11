@@ -249,7 +249,7 @@ export function TerminalView({ sessionId, isFocused }: TerminalViewProps) {
   const sendDictation = () => {
     const text = dictationValue.trim()
     if (!text) return
-    window.sorcerer.terminal.write(sessionId, text + '\r')
+    window.sorcerer.terminal.write(sessionId, text)
     closeDictation()
   }
 
@@ -274,7 +274,7 @@ export function TerminalView({ sessionId, isFocused }: TerminalViewProps) {
               autoComplete="off"
             />
             <div className="dictation-hint">
-              <kbd>Enter</kbd> send <kbd>Esc</kbd> cancel
+              <kbd>Enter</kbd> type <kbd>Esc</kbd> cancel
             </div>
           </div>
         </div>
