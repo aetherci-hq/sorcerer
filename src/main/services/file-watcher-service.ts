@@ -54,12 +54,18 @@ export class FileWatcherService {
   private claudeDir: string
   private debounceTimers: Map<string, NodeJS.Timeout> = new Map()
   private autoLinkTimer: NodeJS.Timeout | null = null
+  private eventListener: ((event: string, data: any) => void) | null = null
 
   constructor(mainWindow: BrowserWindow, dbService: DatabaseService) {
     this.mainWindow = mainWindow
     this.dbService = dbService
     this.claudeDir = path.join(os.homedir(), '.claude')
     this.startWatching()
+  }
+
+  /** Register a listener for all file watcher events (used by API server) */
+  onEvent(listener: (event: string, data: any) => void): void {
+    this.eventListener = listener
   }
 
   private startWatching(): void {
@@ -145,6 +151,7 @@ export class FileWatcherService {
       if (this.mainWindow && !this.mainWindow.isDestroyed()) {
         this.mainWindow.webContents.send(`filewatcher:${channel}`, data)
       }
+      this.eventListener?.(channel, data)
       this.debounceTimers.delete(key)
     }, 500))
   }
@@ -223,6 +230,7 @@ export class FileWatcherService {
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
       this.mainWindow.webContents.send('filewatcher:session-linked', { sessionId, teamName })
     }
+    this.eventListener?.('session-linked', { sessionId, teamName })
   }
 
   /**

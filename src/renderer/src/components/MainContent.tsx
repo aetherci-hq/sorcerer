@@ -1,4 +1,5 @@
 import { useCallback, useRef, useEffect } from 'react'
+import { getApi } from '../api/client'
 import { useSessionStore } from '../stores/useSessionStore'
 import { useProjectStore } from '../stores/useProjectStore'
 import { useAgentStore } from '../stores/useAgentStore'
@@ -241,7 +242,7 @@ function SplitNodeView({ node }: { node: SplitNode }) {
                 onClick={async (e) => {
                   e.stopPropagation()
                   setFocusedPanel(node.id)
-                  const qt = await window.sorcerer.agent.createQuickTerminal(agent.id)
+                  const qt = await getApi().agent.createQuickTerminal(agent.id)
                   if (qt) {
                     addLocalSession(qt as any)
                     splitRight(qt.id)
@@ -416,7 +417,7 @@ export function MainContent() {
                   title="Open Quick Terminal"
                   onClick={async () => {
                     const originalId = activeAgent.id
-                    const qt = await window.sorcerer.agent.createQuickTerminal(activeAgent.id)
+                    const qt = await getApi().agent.createQuickTerminal(activeAgent.id)
                     if (qt) {
                       addLocalSession(qt as any)
                       // Restore so splitRight puts original in left panel

@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { getApi } from './api/client'
 import { Sidebar } from './components/Sidebar'
 import { MainContent } from './components/MainContent'
 import { ContextMenu } from './components/ContextMenu'
@@ -52,7 +53,7 @@ export function App() {
     })
 
     // Subscribe to file watcher for team/task updates
-    const unsub = window.sorcerer.teams.onUpdate((data: any) => {
+    const unsub = getApi().teams.onUpdate((data: any) => {
       if (data.type === 'teams') {
         loadTeams()
       } else if (data.type === 'tasks' && data.teamName) {
@@ -61,7 +62,7 @@ export function App() {
     })
 
     // Subscribe to session-team auto-linking
-    const unsubLink = window.sorcerer.teams.onSessionLinked((data: { sessionId: string; teamName: string | null }) => {
+    const unsubLink = getApi().teams.onSessionLinked((data: { sessionId: string; teamName: string | null }) => {
       useSessionStore.getState().updateSessionInStore(data.sessionId, { team_name: data.teamName })
       // Auto-expand the session in the sidebar when a team is linked
       if (data.teamName) {

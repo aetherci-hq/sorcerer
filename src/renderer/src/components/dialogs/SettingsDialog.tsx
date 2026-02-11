@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react'
+import { getApi } from '../../api/client'
 import { useUIStore } from '../../stores/useUIStore'
 import { useToastStore } from '../../stores/useToastStore'
 import {
@@ -60,13 +61,13 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
 function useSetting(key: string, fallback: string) {
   const [value, setValue] = useState(fallback)
   useEffect(() => {
-    window.sorcerer.settings.get(key).then((v: string | undefined) => {
+    getApi().settings.get(key).then((v: string | undefined) => {
       if (v !== undefined) setValue(v)
     })
   }, [key])
   const save = (v: string) => {
     setValue(v)
-    window.sorcerer.settings.set(key, v)
+    getApi().settings.set(key, v)
   }
   return [value, save] as const
 }
@@ -82,10 +83,10 @@ function ProfileTab() {
 
   // Load OS username and system picture on mount
   useEffect(() => {
-    window.sorcerer.system.userInfo().then((info: { username: string }) => {
+    getApi().system.userInfo().then((info: { username: string }) => {
       setOsUsername(info.username.charAt(0).toUpperCase() + info.username.slice(1))
     })
-    window.sorcerer.system.accountPicture().then((pic: string | null) => {
+    getApi().system.accountPicture().then((pic: string | null) => {
       if (pic) setSystemPicture(pic)
     })
   }, [])
@@ -198,7 +199,7 @@ function SessionsTab() {
             className="settings-browse-btn"
             type="button"
             onClick={async () => {
-              const result = await window.sorcerer.project.add()
+              const result = await getApi().project.add()
               if (result) {
                 setShell(result.path)
                 addToast('Shell setting saved', 'success')
@@ -294,7 +295,7 @@ function GitTab() {
             readOnly
           />
           <button className="settings-browse-btn" type="button" onClick={async () => {
-            const result = await window.sorcerer.project.add()
+            const result = await getApi().project.add()
             if (result) setWorktreeBase(result.path)
           }}>Browse</button>
         </div>

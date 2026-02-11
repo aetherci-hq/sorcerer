@@ -11,6 +11,8 @@ export class PTYService {
   private sessions: Map<string, PTYSession> = new Map()
   private mainWindow: BrowserWindow
   private customShell: string | undefined
+  private outputListener: ((sessionId: string, data: string) => void) | null = null
+  private exitListener: ((sessionId: string, exitCode: number) => void) | null = null
 
   constructor(mainWindow: BrowserWindow) {
     this.mainWindow = mainWindow
@@ -18,6 +20,16 @@ export class PTYService {
 
   setCustomShell(shell: string | undefined): void {
     this.customShell = shell
+  }
+
+  /** Register a listener for all PTY output (used by API server for WebSocket broadcast) */
+  onOutput(listener: (sessionId: string, data: string) => void): void {
+    this.outputListener = listener
+  }
+
+  /** Register a listener for all PTY exits */
+  onExit(listener: (sessionId: string, exitCode: number) => void): void {
+    this.exitListener = listener
   }
 
   /**
@@ -65,12 +77,14 @@ export class PTYService {
       if (this.mainWindow && !this.mainWindow.isDestroyed()) {
         this.mainWindow.webContents.send(`terminal:data:${sessionId}`, data)
       }
+      this.outputListener?.(sessionId, data)
     })
 
     ptyProcess.onExit(({ exitCode }) => {
       if (this.mainWindow && !this.mainWindow.isDestroyed()) {
         this.mainWindow.webContents.send(`terminal:exit:${sessionId}`, exitCode)
       }
+      this.exitListener?.(sessionId, exitCode)
       this.sessions.delete(sessionId)
     })
   }

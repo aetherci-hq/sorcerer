@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import type { TeamConfig, TaskData } from '../types'
+import { getApi } from '../api/client'
 
 interface TeamState {
   teams: TeamConfig[]
@@ -19,7 +20,7 @@ export const useTeamStore = create<TeamState>((set, get) => ({
   loadTeams: async () => {
     set({ loading: true })
     try {
-      const teams = await window.sorcerer.teams.list()
+      const teams = await getApi().teams.list()
       set({ teams, loading: false })
       // Eager-load tasks for each team
       for (const team of teams) {
@@ -33,7 +34,7 @@ export const useTeamStore = create<TeamState>((set, get) => ({
 
   loadTasks: async (teamName) => {
     try {
-      const tasks = await window.sorcerer.teams.getTasks(teamName)
+      const tasks = await getApi().teams.getTasks(teamName)
       set((state) => ({
         tasksByTeam: { ...state.tasksByTeam, [teamName]: tasks }
       }))

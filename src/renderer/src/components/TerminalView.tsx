@@ -1,6 +1,7 @@
 import { useEffect, useRef, useCallback, useState } from 'react'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
+import { getApi } from '../api/client'
 import { useSessionStore } from '../stores/useSessionStore'
 import { useAgentStore } from '../stores/useAgentStore'
 import '@xterm/xterm/css/xterm.css'
@@ -15,7 +16,7 @@ const terminalCache = new Map<string, { terminal: Terminal; fitAddon: FitAddon; 
 
 // Module-level font size — loaded once from settings, kept in sync via custom event
 let terminalFontSize = 13
-window.sorcerer.settings.get('terminalFontSize').then((v: string | undefined) => {
+getApi().settings.get('terminalFontSize').then((v: string | undefined) => {
   const size = v ? Number(v) : 13
   if (!size || size === terminalFontSize) return
   terminalFontSize = size
@@ -23,7 +24,7 @@ window.sorcerer.settings.get('terminalFontSize').then((v: string | undefined) =>
     cached.terminal.options.fontSize = size
     try {
       cached.fitAddon.fit()
-      window.sorcerer.terminal.resize(sid, cached.terminal.cols, cached.terminal.rows)
+      getApi().terminal.resize(sid, cached.terminal.cols, cached.terminal.rows)
     } catch { /* ignore fit errors */ }
   }
 })
@@ -36,7 +37,7 @@ window.addEventListener('sorcerer:fontSizeChange', (e: Event) => {
     cached.terminal.options.fontSize = size
     try {
       cached.fitAddon.fit()
-      window.sorcerer.terminal.resize(sid, cached.terminal.cols, cached.terminal.rows)
+      getApi().terminal.resize(sid, cached.terminal.cols, cached.terminal.rows)
     } catch { /* ignore fit errors */ }
   }
 })
@@ -131,15 +132,15 @@ export function TerminalView({ sessionId, isFocused }: TerminalViewProps) {
 
       // Forward keyboard input to PTY
       terminal.onData((data) => {
-        window.sorcerer.terminal.write(sessionId, data)
+        getApi().terminal.write(sessionId, data)
       })
 
       // Listen for PTY output
-      const unsubData = window.sorcerer.terminal.onData(sessionId, (data: string) => {
+      const unsubData = getApi().terminal.onData(sessionId, (data: string) => {
         terminal.write(data)
       })
 
-      const unsubExit = window.sorcerer.terminal.onExit(sessionId, (exitCode: number) => {
+      const unsubExit = getApi().terminal.onExit(sessionId, (exitCode: number) => {
         terminal.writeln(`\r\n\x1b[90m[Process exited with code ${exitCode}]\x1b[0m`)
         setExited(true)
         // Update whichever store owns this ID
@@ -174,7 +175,7 @@ export function TerminalView({ sessionId, isFocused }: TerminalViewProps) {
     requestAnimationFrame(() => {
       try {
         fitAddon.fit()
-        window.sorcerer.terminal.resize(sessionId, terminal.cols, terminal.rows)
+        getApi().terminal.resize(sessionId, terminal.cols, terminal.rows)
       } catch {
         // Ignore fit errors during transitions
       }
@@ -183,7 +184,7 @@ export function TerminalView({ sessionId, isFocused }: TerminalViewProps) {
     const resizeObserver = new ResizeObserver(() => {
       try {
         fitAddon.fit()
-        window.sorcerer.terminal.resize(sessionId, terminal.cols, terminal.rows)
+        getApi().terminal.resize(sessionId, terminal.cols, terminal.rows)
       } catch {
         // Ignore
       }
@@ -249,7 +250,7 @@ export function TerminalView({ sessionId, isFocused }: TerminalViewProps) {
   const sendDictation = () => {
     const text = dictationValue.trim()
     if (!text) return
-    window.sorcerer.terminal.write(sessionId, text)
+    getApi().terminal.write(sessionId, text)
     closeDictation()
   }
 

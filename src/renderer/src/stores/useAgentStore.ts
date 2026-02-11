@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import type { Agent } from '../types'
 import { useUIStore, clearSessionFromTree } from './useUIStore'
+import { getApi } from '../api/client'
 
 interface AgentState {
   agents: Agent[]
@@ -25,7 +26,7 @@ export const useAgentStore = create<AgentState>((set) => ({
   loadAgents: async () => {
     set({ loading: true })
     try {
-      const agents = await window.sorcerer.agent.list()
+      const agents = await getApi().agent.list()
       set({ agents, loading: false })
     } catch (err) {
       console.error('[agent-store] loadAgents failed:', err)
@@ -35,7 +36,7 @@ export const useAgentStore = create<AgentState>((set) => ({
 
   addAgent: async (data) => {
     try {
-      const agent = await window.sorcerer.agent.add(data)
+      const agent = await getApi().agent.add(data)
       if (!agent) return null
       set((state) => ({ agents: [agent, ...state.agents] }))
       return agent.id
@@ -47,7 +48,7 @@ export const useAgentStore = create<AgentState>((set) => ({
 
   updateAgent: async (id, updates) => {
     try {
-      await window.sorcerer.agent.update(id, updates)
+      await getApi().agent.update(id, updates)
       set((state) => ({
         agents: state.agents.map((a) => a.id === id ? { ...a, ...updates } : a)
       }))
@@ -58,7 +59,7 @@ export const useAgentStore = create<AgentState>((set) => ({
 
   removeAgent: async (id) => {
     try {
-      await window.sorcerer.agent.remove(id)
+      await getApi().agent.remove(id)
 
       // Clear from split panels
       const { splitRoot } = useUIStore.getState()
@@ -74,7 +75,7 @@ export const useAgentStore = create<AgentState>((set) => ({
 
   startAgent: async (id) => {
     try {
-      const agent = await window.sorcerer.agent.start(id)
+      const agent = await getApi().agent.start(id)
       if (agent) {
         set((state) => ({
           agents: state.agents.map((a) => a.id === id ? agent : a)
@@ -87,7 +88,7 @@ export const useAgentStore = create<AgentState>((set) => ({
 
   resumeAgent: async (id) => {
     try {
-      const agent = await window.sorcerer.agent.resume(id)
+      const agent = await getApi().agent.resume(id)
       if (agent) {
         set((state) => ({
           agents: state.agents.map((a) => a.id === id ? agent : a)
@@ -100,7 +101,7 @@ export const useAgentStore = create<AgentState>((set) => ({
 
   restartAgent: async (id) => {
     try {
-      const agent = await window.sorcerer.agent.restart(id)
+      const agent = await getApi().agent.restart(id)
       if (agent) {
         set((state) => ({
           agents: state.agents.map((a) => a.id === id ? agent : a)
@@ -113,7 +114,7 @@ export const useAgentStore = create<AgentState>((set) => ({
 
   killAgent: async (id) => {
     try {
-      await window.sorcerer.agent.kill(id)
+      await getApi().agent.kill(id)
       set((state) => ({
         agents: state.agents.map((a) =>
           a.id === id ? { ...a, status: 'idle' as const, pid: null } : a
@@ -126,7 +127,7 @@ export const useAgentStore = create<AgentState>((set) => ({
 
   renameAgent: async (id, name) => {
     try {
-      await window.sorcerer.agent.update(id, { name })
+      await getApi().agent.update(id, { name })
       set((state) => ({
         agents: state.agents.map((a) => a.id === id ? { ...a, name } : a)
       }))

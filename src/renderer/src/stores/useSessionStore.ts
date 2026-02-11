@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import type { Session } from '../types'
 import { useUIStore, findLeaf, findLeafBySession, clearSessionFromTree } from './useUIStore'
+import { getApi } from '../api/client'
 
 interface SessionState {
   sessions: Session[]
@@ -32,7 +33,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   loadSessions: async (projectId?: string) => {
     set({ loading: true })
     try {
-      const sessions = await window.sorcerer.session.list(projectId)
+      const sessions = await getApi().session.list(projectId)
       set({ sessions, loading: false })
     } catch (err) {
       console.error('[session-store] loadSessions failed:', err)
@@ -42,7 +43,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
 
   createSession: async (projectId, name, useMainRepo?) => {
     try {
-      const session = await window.sorcerer.session.create(projectId, name, useMainRepo)
+      const session = await getApi().session.create(projectId, name, useMainRepo)
       if (!session) return null
       set((state) => ({
         sessions: [session, ...state.sessions]
@@ -57,7 +58,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
 
   createQuickTerminal: async (sourceSessionId) => {
     try {
-      const session = await window.sorcerer.session.createQuickTerminal(sourceSessionId)
+      const session = await getApi().session.createQuickTerminal(sourceSessionId)
       if (!session) return null
       set((state) => ({
         sessions: [session, ...state.sessions],
@@ -72,7 +73,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
 
   killSession: async (sessionId) => {
     try {
-      await window.sorcerer.session.kill(sessionId)
+      await getApi().session.kill(sessionId)
       set((state) => ({
         sessions: state.sessions.map((s) =>
           s.id === sessionId ? { ...s, status: 'idle' as const, pid: null } : s
@@ -85,7 +86,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
 
   archiveSession: async (sessionId) => {
     try {
-      await window.sorcerer.session.archive(sessionId)
+      await getApi().session.archive(sessionId)
       set((state) => ({
         sessions: state.sessions.map((s) =>
           s.id === sessionId ? { ...s, status: 'archived' as const, pid: null } : s
@@ -98,7 +99,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
 
   deleteSession: async (sessionId) => {
     try {
-      await window.sorcerer.session.delete(sessionId)
+      await getApi().session.delete(sessionId)
 
       // Clear deleted session from split panels
       const { splitRoot } = useUIStore.getState()
@@ -117,7 +118,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
 
   restartSession: async (sessionId) => {
     try {
-      const session = await window.sorcerer.session.restart(sessionId)
+      const session = await getApi().session.restart(sessionId)
       if (session) {
         set((state) => ({
           sessions: state.sessions.map((s) => s.id === sessionId ? session : s)
@@ -130,7 +131,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
 
   resumeSession: async (sessionId) => {
     try {
-      const session = await window.sorcerer.session.resume(sessionId)
+      const session = await getApi().session.resume(sessionId)
       if (session) {
         set((state) => ({
           sessions: state.sessions.map((s) => s.id === sessionId ? session : s)
@@ -143,7 +144,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
 
   restoreSession: async (sessionId) => {
     try {
-      const session = await window.sorcerer.session.restore(sessionId)
+      const session = await getApi().session.restore(sessionId)
       if (session) {
         set((state) => ({
           sessions: state.sessions.map((s) => s.id === sessionId ? session : s)
@@ -155,7 +156,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   },
 
   landOnMain: async (sessionId) => {
-    const result = await window.sorcerer.session.landOnMain(sessionId)
+    const result = await getApi().session.landOnMain(sessionId)
     if (!result.landed) {
       throw new Error(result.error || 'Landing failed')
     }
@@ -174,7 +175,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
 
   pushBranch: async (sessionId) => {
     try {
-      return await window.sorcerer.session.pushBranch(sessionId)
+      return await getApi().session.pushBranch(sessionId)
     } catch (err) {
       console.error('[session-store] pushBranch failed:', err)
       return { pushed: false, error: String(err) }
@@ -210,7 +211,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
 
   renameSession: async (sessionId, name) => {
     try {
-      await window.sorcerer.session.rename(sessionId, name)
+      await getApi().session.rename(sessionId, name)
       set((state) => ({
         sessions: state.sessions.map((s) =>
           s.id === sessionId ? { ...s, name } : s
