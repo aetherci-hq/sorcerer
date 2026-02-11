@@ -29,7 +29,8 @@
     },
     "mac": {
       "target": ["dmg"],
-      "icon": "build/icon.icns"
+      "icon": "build/icon.icns",
+      "identity": null
     },
     "linux": {
       "target": ["AppImage"],

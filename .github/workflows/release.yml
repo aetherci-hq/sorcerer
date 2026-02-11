@@ -1,0 +1,87 @@
+name: Release
+
+on:
+  push:
+    tags: [v*]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            build_script: build:win
+            artifact_glob: dist/*.exe
+          - os: macos-latest
+            build_script: build:mac
+            artifact_glob: dist/*.dmg
+          - os: ubuntu-latest
+            build_script: build:linux
+            artifact_glob: dist/*.AppImage
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install Linux build tools
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y build-essential python3
+
+      - name: Install libfuse2 (AppImage packaging)
+        if: runner.os == 'Linux'
+        run: sudo apt-get install -y libfuse2
+
+      - name: Generate macOS icon
+        if: runner.os == 'macOS'
+        run: |
+          mkdir -p build/icon.iconset
+          for size in 16 32 128 256 512; do
+            sips -z $size $size build/icon-1024.png --out build/icon.iconset/icon_${size}x${size}.png
+            double=$((size * 2))
+            sips -z $double $double build/icon-1024.png --out build/icon.iconset/icon_${size}x${size}@2x.png
+          done
+          iconutil -c icns build/icon.iconset -o build/icon.icns
+
+      - run: npm ci
+
+      - name: Rebuild native modules for Electron
+        run: npm run rebuild
+
+      - name: Build
+        run: npm run ${{ matrix.build_script }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ runner.os }}
+          path: ${{ matrix.artifact_glob }}
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Create draft release
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          generate_release_notes: true
+          files: artifacts/*
