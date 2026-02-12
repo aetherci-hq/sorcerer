@@ -44,18 +44,80 @@ function TeammateItem({ member, tasks, staggerClass }: { member: TeamMember; tas
   )
 }
 
+function ChildQTItem({
+  session,
+  isActive,
+}: {
+  session: Session
+  isActive: boolean
+}) {
+  const { setActiveSession } = useSessionStore()
+  const { openContextMenu, splitRoot } = useUIStore()
+  const itemRef = useRef<HTMLDivElement>(null)
+
+  const splitIds = splitRoot ? getAllSessionIds(splitRoot) : []
+  const isInSplit = !isActive && splitIds.includes(session.id)
+
+  const handleContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    openContextMenu({ x: e.clientX, y: e.clientY, type: 'session', targetId: session.id })
+  }
+
+  const handleMoreClick = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+    openContextMenu({ x: rect.right, y: rect.bottom, type: 'session', targetId: session.id })
+  }
+
+  const handleDragStart = (e: React.DragEvent) => {
+    e.dataTransfer.setData('application/json', JSON.stringify({
+      type: 'session', id: session.id, projectId: session.project_id
+    }))
+    e.dataTransfer.effectAllowed = 'move'
+    requestAnimationFrame(() => {
+      itemRef.current?.classList.add('tree-item--dragging')
+    })
+  }
+
+  const handleDragEnd = () => {
+    itemRef.current?.classList.remove('tree-item--dragging')
+  }
+
+  return (
+    <div
+      ref={itemRef}
+      className={`tree-item tree-item--child-qt ${isActive ? 'tree-item--active' : ''} ${isInSplit ? 'tree-item--split' : ''}`}
+      onClick={() => setActiveSession(session.id)}
+      onContextMenu={handleContextMenu}
+      draggable
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
+    >
+      <ShellPromptIcon className="tree-icon tree-icon--quick-terminal" />
+      <span className="tree-label">{session.name}</span>
+      <button className="tree-item-actions" onClick={handleMoreClick}>
+        <MoreHorizontalIcon />
+      </button>
+      <StatusDot status={session.status} />
+    </div>
+  )
+}
+
 function SessionItem({
   session,
+  childQTs,
   isActive,
   staggerClass,
   projectId,
 }: {
   session: Session
+  childQTs: Session[]
   isActive: boolean
   staggerClass?: string
   projectId: string
 }) {
-  const { setActiveSession } = useSessionStore()
+  const { setActiveSession, activeSessionId } = useSessionStore()
   const { expandedSessions, toggleSession, openContextMenu, renamingId, setRenamingId, splitRoot } = useUIStore()
   const { projects } = useProjectStore()
   const { teams, tasksByTeam } = useTeamStore()
@@ -67,6 +129,7 @@ function SessionItem({
   // Team members and tasks for this session
   const team = session.team_name ? teams.find((t) => t.name === session.team_name) : undefined
   const hasTeammates = (team?.members.length ?? 0) > 0
+  const hasChildren = childQTs.length > 0 || hasTeammates
   const tasks = session.team_name ? (tasksByTeam[session.team_name] || []) : []
   const totalTaskCount = tasks.length
   const completedTaskCount = tasks.filter((t) => t.status === 'completed').length
@@ -168,7 +231,7 @@ function SessionItem({
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
       >
-        {hasTeammates && (
+        {hasChildren && (
           <ChevronIcon
             className={`tree-chevron ${isExpanded ? 'tree-chevron--open' : ''}`}
             onClick={(e) => {
@@ -209,10 +272,17 @@ function SessionItem({
         )}
       </div>
 
-      {hasTeammates && team && (
+      {hasChildren && (
         <div className={`tree-children-wrapper ${isExpanded ? 'tree-children-wrapper--open' : ''}`}>
           <div className="tree-children">
-            {team.members.map((member, i) => (
+            {childQTs.map((qt) => (
+              <ChildQTItem
+                key={qt.id}
+                session={qt}
+                isActive={qt.id === activeSessionId}
+              />
+            ))}
+            {hasTeammates && team && team.members.map((member, i) => (
               <TeammateItem
                 key={member.name}
                 member={member}
@@ -240,7 +310,16 @@ function ProjectItem({ project, staggerClass, projectIndex }: { project: Project
 
   // Get sessions for this project (non-deleted, non-archived go first)
   const projectSessions = sessions.filter((s) => s.project_id === project.id && s.status !== 'deleted')
-  const activeSessions = projectSessions.filter((s) => s.status !== 'archived')
+  // Split into top-level (no parent) and child QTs (have parent_session_id)
+  const topLevelActive = projectSessions.filter((s) => s.status !== 'archived' && !s.parent_session_id)
+  const childQTMap = new Map<string, Session[]>()
+  for (const s of projectSessions) {
+    if (s.parent_session_id && s.status !== 'archived') {
+      const children = childQTMap.get(s.parent_session_id) || []
+      children.push(s)
+      childQTMap.set(s.parent_session_id, children)
+    }
+  }
   const archivedSessions = projectSessions.filter((s) => s.status === 'archived')
 
   // Inline rename state
@@ -334,10 +413,11 @@ function ProjectItem({ project, staggerClass, projectIndex }: { project: Project
 
       <div className={`tree-children-wrapper ${isExpanded ? 'tree-children-wrapper--open' : ''}`}>
         <div className="tree-children">
-          {activeSessions.map((session, i) => (
+          {topLevelActive.map((session, i) => (
             <SessionItem
               key={session.id}
               session={session}
+              childQTs={childQTMap.get(session.id) || []}
               isActive={session.id === activeSessionId}
               staggerClass={`stagger-${Math.min(i + 6, 10)}`}
               projectId={project.id}
@@ -352,6 +432,7 @@ function ProjectItem({ project, staggerClass, projectIndex }: { project: Project
                 <SessionItem
                   key={session.id}
                   session={session}
+                  childQTs={[]}
                   isActive={session.id === activeSessionId}
                   staggerClass={`stagger-${Math.min(i + 8, 10)}`}
                   projectId={project.id}

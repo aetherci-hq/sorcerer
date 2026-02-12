@@ -159,6 +159,14 @@ export function ContextMenu() {
   } else if (contextMenu.type === 'project') {
     items = [
       { label: 'New Session', icon: <PlusIcon className={iconClass} />, shortcut: 'Ctrl+N', action: () => openDialog('new-session', contextMenu.targetId) },
+      { label: 'Open Quick Terminal', icon: <TerminalIcon className={iconClass} />, action: async () => {
+        const newSession = await window.sorcerer.session.createProjectQuickTerminal(contextMenu.targetId)
+        if (newSession) {
+          await useSessionStore.getState().loadSessions()
+          splitRight(newSession.id)
+          useSessionStore.getState().setActiveSession(newSession.id)
+        }
+      }},
       { type: 'separator' },
       { label: 'Rename', icon: <EditIcon className={iconClass} />, shortcut: 'F2', action: () => setRenamingId(contextMenu.targetId) },
       { label: 'Copy Project Path', icon: <CopyIcon className={iconClass} />, action: () => copyToClipboard(findProjectPath(contextMenu.targetId), 'Path') },
