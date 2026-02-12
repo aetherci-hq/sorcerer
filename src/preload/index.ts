@@ -102,6 +102,15 @@ const api = {
     accountPicture: () => ipcRenderer.invoke('system:accountPicture')
   },
 
+  remote: {
+    status: () => ipcRenderer.invoke('remote:status'),
+    enable: () => ipcRenderer.invoke('remote:enable'),
+    disable: () => ipcRenderer.invoke('remote:disable'),
+    regenerateToken: () => ipcRenderer.invoke('remote:regenerate-token'),
+    updateConfig: (config: { port?: number; bindAddress?: string }) =>
+      ipcRenderer.invoke('remote:update-config', config)
+  },
+
   window: {
     minimize: () => ipcRenderer.send('window:minimize'),
     maximize: () => ipcRenderer.send('window:maximize'),

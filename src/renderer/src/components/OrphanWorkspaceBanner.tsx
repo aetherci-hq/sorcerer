@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { getApi } from '../api/client'
 import { useProjectStore } from '../stores/useProjectStore'
 import { useSessionStore } from '../stores/useSessionStore'
 import { useAgentStore } from '../stores/useAgentStore'
@@ -35,8 +36,8 @@ export function OrphanWorkspaceBanner() {
 
   useEffect(() => {
     Promise.all([
-      window.sorcerer.workspace.scanOrphans(),
-      window.sorcerer.workspace.scanOrphanAgents()
+      getApi().workspace.scanOrphans(),
+      getApi().workspace.scanOrphanAgents()
     ]).then(([workspaces, agents]: [OrphanWorkspace[], OrphanAgent[]]) => {
       setOrphans(workspaces)
       setOrphanAgents(agents)
@@ -50,7 +51,7 @@ export function OrphanWorkspaceBanner() {
   const handleLink = async (orphan: OrphanWorkspace) => {
     setLinking(orphan.dirName)
     try {
-      const project = await window.sorcerer.project.add()
+      const project = await getApi().project.add()
       if (!project) {
         setLinking(null)
         return
@@ -65,7 +66,7 @@ export function OrphanWorkspaceBanner() {
       }
 
       // Sync worktrees to recover sessions
-      const result = await window.sorcerer.project.syncWorktrees(project.id)
+      const result = await getApi().project.syncWorktrees(project.id)
       await loadProjects()
       await loadSessions()
 
@@ -79,7 +80,7 @@ export function OrphanWorkspaceBanner() {
   }
 
   const handleDismiss = async (dirName: string) => {
-    await window.sorcerer.workspace.dismissOrphan(dirName)
+    await getApi().workspace.dismissOrphan(dirName)
     setOrphans((prev) => prev.filter((o) => o.dirName !== dirName))
   }
 
@@ -95,7 +96,7 @@ export function OrphanWorkspaceBanner() {
             mcp_config: orphan.manifest.mcp_config
           }
         : { id: orphan.dirName, name: orphan.agentName }
-      await window.sorcerer.agent.add(data)
+      await getApi().agent.add(data)
       await loadAgents()
       setOrphanAgents((prev) => prev.filter((o) => o.dirName !== orphan.dirName))
       addToast(`Re-imported agent "${orphan.agentName}"`, 'success')
@@ -107,14 +108,14 @@ export function OrphanWorkspaceBanner() {
   }
 
   const handleDismissAgent = async (dirName: string) => {
-    await window.sorcerer.workspace.dismissOrphanAgent(dirName)
+    await getApi().workspace.dismissOrphanAgent(dirName)
     setOrphanAgents((prev) => prev.filter((o) => o.dirName !== dirName))
   }
 
   const handleDismissAll = async () => {
     await Promise.all([
-      ...orphans.map((o) => window.sorcerer.workspace.dismissOrphan(o.dirName)),
-      ...orphanAgents.map((o) => window.sorcerer.workspace.dismissOrphanAgent(o.dirName))
+      ...orphans.map((o) => getApi().workspace.dismissOrphan(o.dirName)),
+      ...orphanAgents.map((o) => getApi().workspace.dismissOrphanAgent(o.dirName))
     ])
     setOrphans([])
     setOrphanAgents([])

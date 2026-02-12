@@ -3,8 +3,30 @@ import ReactDOM from 'react-dom/client'
 import { App } from './App'
 import './styles/index.css'
 
-ReactDOM.createRoot(document.getElementById('root')!).render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>
-)
+async function boot() {
+  // In a browser (no Electron preload), initialise the remote API client
+  // using the token from the URL query string (?token=...).
+  if (!window.sorcerer) {
+    const params = new URLSearchParams(window.location.search)
+    const token = params.get('token')
+    if (!token) {
+      document.getElementById('root')!.innerHTML =
+        '<div style="padding:2rem;font-family:system-ui;color:#ccc">' +
+        '<h2>Remote Access</h2>' +
+        '<p>Append <code>?token=YOUR_TOKEN</code> to the URL to connect.</p>' +
+        '</div>'
+      return
+    }
+    const baseUrl = window.location.origin
+    const { initRemoteClient } = await import('./api/client')
+    await initRemoteClient(baseUrl, token)
+  }
+
+  ReactDOM.createRoot(document.getElementById('root')!).render(
+    <React.StrictMode>
+      <App />
+    </React.StrictMode>
+  )
+}
+
+boot()

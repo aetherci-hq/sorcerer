@@ -1,4 +1,5 @@
 import { useEffect, useRef, type ReactNode } from 'react'
+import { getApi } from '../api/client'
 import { useUIStore, findLeafBySession } from '../stores/useUIStore'
 import { useProjectStore } from '../stores/useProjectStore'
 import { useSessionStore } from '../stores/useSessionStore'
@@ -139,7 +140,7 @@ export function ContextMenu() {
       { label: 'Split Right', icon: <SplitHorizontalIcon className={iconClass} />, action: () => splitRight(contextMenu.targetId) },
       { label: 'Split Down', icon: <SplitVerticalIcon className={iconClass} />, action: () => splitDown(contextMenu.targetId) },
       { label: 'Open Quick Terminal', icon: <TerminalIcon className={iconClass} />, action: async () => {
-        const qt = await window.sorcerer.agent.createQuickTerminal(contextMenu.targetId)
+        const qt = await getApi().agent.createQuickTerminal(contextMenu.targetId)
         if (qt) {
           useSessionStore.getState().addLocalSession(qt as any)
           splitRight(qt.id)
@@ -171,7 +172,7 @@ export function ContextMenu() {
       { label: 'Rename', icon: <EditIcon className={iconClass} />, shortcut: 'F2', action: () => setRenamingId(contextMenu.targetId) },
       { label: 'Copy Project Path', icon: <CopyIcon className={iconClass} />, action: () => copyToClipboard(findProjectPath(contextMenu.targetId), 'Path') },
       { label: 'Sync Worktrees', icon: <RefreshIcon className={iconClass} />, action: async () => {
-        const result = await window.sorcerer.project.syncWorktrees(contextMenu.targetId)
+        const result = await getApi().project.syncWorktrees(contextMenu.targetId)
         await useSessionStore.getState().loadSessions()
         if (result.created === 0 && result.removed === 0) {
           addToast('All worktrees in sync', 'info')
@@ -252,7 +253,7 @@ export function ContextMenu() {
       }},
       { label: 'Open Remote', icon: <ExternalLinkIcon className={iconClass} />, action: async () => {
         try {
-          const result = await window.sorcerer.session.openRemote(contextMenu.targetId)
+          const result = await getApi().session.openRemote(contextMenu.targetId)
           if (!result.opened) {
             addToast(result.error || 'No remote URL found', 'error')
           }

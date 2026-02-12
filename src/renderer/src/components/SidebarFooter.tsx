@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { getApi } from '../api/client'
 import { SettingsIcon } from './icons'
 import { StatusDot } from './StatusDot'
 import { useSessionStore } from '../stores/useSessionStore'
@@ -65,29 +66,29 @@ export function useUserProfile() {
 
   useEffect(() => {
     async function load() {
-      const custom = await window.sorcerer.settings.get('display_name')
+      const custom = await getApi().settings.get('display_name')
       if (custom) {
         setDisplayName(custom)
         setInitial(custom.charAt(0).toUpperCase())
       } else {
-        const info = await window.sorcerer.system.userInfo()
+        const info = await getApi().system.userInfo()
         const formatted = info.username.charAt(0).toUpperCase() + info.username.slice(1)
         setDisplayName(formatted)
         setInitial(formatted.charAt(0))
       }
 
-      const email = await window.sorcerer.settings.get('gravatar_email')
+      const email = await getApi().settings.get('gravatar_email')
       if (email) {
         const url = gravatarUrl(email, 96)
         const img = new Image()
         img.onload = () => setAvatarSrc(url)
         img.onerror = async () => {
-          const sysPic = await window.sorcerer.system.accountPicture()
+          const sysPic = await getApi().system.accountPicture()
           if (sysPic) setAvatarSrc(sysPic)
         }
         img.src = url
       } else {
-        const sysPic = await window.sorcerer.system.accountPicture()
+        const sysPic = await getApi().system.accountPicture()
         if (sysPic) setAvatarSrc(sysPic)
       }
     }

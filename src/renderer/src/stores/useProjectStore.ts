@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import type { Project } from '../types'
+import { getApi } from '../api/client'
 
 interface ProjectState {
   projects: Project[]
@@ -22,7 +23,7 @@ export const useProjectStore = create<ProjectState>((set) => ({
   loadProjects: async () => {
     set({ loading: true })
     try {
-      const projects = await window.sorcerer.project.list()
+      const projects = await getApi().project.list()
       set({ projects, loading: false })
     } catch (err) {
       console.error('[project-store] loadProjects failed:', err)
@@ -32,7 +33,7 @@ export const useProjectStore = create<ProjectState>((set) => ({
 
   addProject: async () => {
     try {
-      const project = await window.sorcerer.project.add()
+      const project = await getApi().project.add()
       if (!project) return null
       set((state) => ({ projects: [project, ...state.projects] }))
       return project
@@ -44,7 +45,7 @@ export const useProjectStore = create<ProjectState>((set) => ({
 
   addProjectByPath: async (path: string, name?: string) => {
     try {
-      const project = await window.sorcerer.project.addPath(path, name)
+      const project = await getApi().project.addPath(path, name)
       if (!project) return null
       set((state) => ({ projects: [project, ...state.projects] }))
       return project
@@ -56,7 +57,7 @@ export const useProjectStore = create<ProjectState>((set) => ({
 
   removeProject: async (id: string) => {
     try {
-      await window.sorcerer.project.remove(id)
+      await getApi().project.remove(id)
       set((state) => ({
         projects: state.projects.filter((p) => p.id !== id),
         activeProjectId: state.activeProjectId === id ? null : state.activeProjectId
@@ -68,7 +69,7 @@ export const useProjectStore = create<ProjectState>((set) => ({
 
   updateProject: async (id, updates) => {
     try {
-      await window.sorcerer.project.update(id, updates)
+      await getApi().project.update(id, updates)
       set((state) => ({
         projects: state.projects.map((p) =>
           p.id === id ? { ...p, ...updates } : p
