@@ -284,7 +284,8 @@ export function createQuickTerminal(
     name,
     branch: source.branch as string,
     worktree_path: source.worktree_path as string,
-    type: 'quick-terminal'
+    type: 'quick-terminal',
+    parent_session_id: sourceSessionId
   })
 
   // Spawn plain shell (no command = default shell)
