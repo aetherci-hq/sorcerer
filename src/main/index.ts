@@ -86,6 +86,12 @@ async function createWindow(): Promise<void> {
     dbService.updateSession(s.id, { status: 'idle', pid: null })
   }
 
+  // Same for agents — their PTY processes also die on app exit
+  const staleAgents = dbService.listAgents().filter((a: any) => a.status === 'active')
+  for (const a of staleAgents) {
+    dbService.updateAgent(a.id, { status: 'idle', pid: null })
+  }
+
   // Crash recovery: auto-commit orphaned worktrees
   try {
     const allProjects = dbService.listProjects()
