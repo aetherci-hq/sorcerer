@@ -14,20 +14,25 @@ interface TerminalViewProps {
 // Cache terminal instances so they survive React re-renders
 const terminalCache = new Map<string, { terminal: Terminal; fitAddon: FitAddon; attached: boolean; _ipcCleanup?: () => void }>()
 
-// Module-level font size — loaded once from settings, kept in sync via custom event
+// Module-level font size — loaded lazily on first terminal mount, kept in sync via custom event
 let terminalFontSize = 13
-getApi().settings.get('terminalFontSize').then((v: string | undefined) => {
-  const size = v ? Number(v) : 13
-  if (!size || size === terminalFontSize) return
-  terminalFontSize = size
-  for (const [sid, cached] of terminalCache) {
-    cached.terminal.options.fontSize = size
-    try {
-      cached.fitAddon.fit()
-      getApi().terminal.resize(sid, cached.terminal.cols, cached.terminal.rows)
-    } catch { /* ignore fit errors */ }
-  }
-})
+let fontSizeLoaded = false
+function ensureFontSizeLoaded() {
+  if (fontSizeLoaded) return
+  fontSizeLoaded = true
+  getApi().settings.get('terminalFontSize').then((v: string | undefined) => {
+    const size = v ? Number(v) : 13
+    if (!size || size === terminalFontSize) return
+    terminalFontSize = size
+    for (const [sid, cached] of terminalCache) {
+      cached.terminal.options.fontSize = size
+      try {
+        cached.fitAddon.fit()
+        getApi().terminal.resize(sid, cached.terminal.cols, cached.terminal.rows)
+      } catch { /* ignore fit errors */ }
+    }
+  })
+}
 
 window.addEventListener('sorcerer:fontSizeChange', (e: Event) => {
   const size = (e as CustomEvent).detail as number
@@ -66,6 +71,7 @@ export function TerminalView({ sessionId, isFocused }: TerminalViewProps) {
 
   const attach = useCallback(() => {
     if (!containerRef.current) return
+    ensureFontSizeLoaded()
 
     let cached = terminalCache.get(sessionId)
     if (!cached) {

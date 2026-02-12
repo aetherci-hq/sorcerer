@@ -185,8 +185,12 @@ export class ApiServer {
       return
     }
 
-    // Static file serving for the renderer bundle
-    this.serveStatic(url.pathname, res)
+    // Serve renderer — proxy to Vite dev server or serve static files
+    if (process.env.ELECTRON_RENDERER_URL) {
+      this.proxyToVite(req, res)
+    } else {
+      this.serveStatic(url.pathname, res)
+    }
   }
 
   // ── RPC dispatch ──────────────────────────────────────────
@@ -284,6 +288,28 @@ export class ApiServer {
       req.on('end', () => resolve(Buffer.concat(chunks).toString()))
       req.on('error', reject)
     })
+  }
+
+  // ── Dev proxy to Vite ────────────────────────────────────
+
+  private proxyToVite(
+    req: http.IncomingMessage,
+    res: http.ServerResponse
+  ): void {
+    const viteUrl = new URL(req.url || '/', process.env.ELECTRON_RENDERER_URL!)
+    const proxyReq = http.request(
+      viteUrl,
+      { method: req.method, headers: req.headers },
+      (proxyRes) => {
+        res.writeHead(proxyRes.statusCode ?? 502, proxyRes.headers)
+        proxyRes.pipe(res)
+      }
+    )
+    proxyReq.on('error', () => {
+      res.writeHead(502)
+      res.end('Vite dev server unavailable')
+    })
+    req.pipe(proxyReq)
   }
 
   // ── Static file serving ───────────────────────────────────
