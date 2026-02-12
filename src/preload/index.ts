@@ -27,6 +27,7 @@ const api = {
     openRemote: (sessionId: string) => ipcRenderer.invoke('session:open-remote', sessionId),
     restore: (sessionId: string) => ipcRenderer.invoke('session:restore', sessionId),
     createQuickTerminal: (sourceSessionId: string) => ipcRenderer.invoke('session:create-quick-terminal', sourceSessionId),
+    createProjectQuickTerminal: (projectId: string) => ipcRenderer.invoke('session:create-project-quick-terminal', projectId),
     rename: (sessionId: string, name: string) => ipcRenderer.invoke('session:rename', sessionId, name),
     landOnMain: (sessionId: string) => ipcRenderer.invoke('session:land-on-main', sessionId)
   },

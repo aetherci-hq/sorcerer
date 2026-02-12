@@ -2,16 +2,58 @@ import { useEffect, useRef, useState } from 'react'
 import { useAgentStore } from '../stores/useAgentStore'
 import { useSessionStore } from '../stores/useSessionStore'
 import { useUIStore, getAllSessionIds } from '../stores/useUIStore'
-import { BotIcon, ChevronIcon, MoreHorizontalIcon, PlusIcon } from './icons'
+import { BotIcon, ChevronIcon, MoreHorizontalIcon, PlusIcon, ShellPromptIcon } from './icons'
 import { StatusDot } from './StatusDot'
-import type { Agent } from '../types'
+import type { Agent, Session } from '../types'
+
+function AgentQTItem({ session, isActive }: { session: Session; isActive: boolean }) {
+  const { setActiveSession } = useSessionStore()
+  const { openContextMenu, splitRoot } = useUIStore()
+  const itemRef = useRef<HTMLDivElement>(null)
+
+  const splitIds = splitRoot ? getAllSessionIds(splitRoot) : []
+  const isInSplit = !isActive && splitIds.includes(session.id)
+
+  const handleContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    openContextMenu({ x: e.clientX, y: e.clientY, type: 'session', targetId: session.id })
+  }
+
+  const handleMoreClick = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+    openContextMenu({ x: rect.right, y: rect.bottom, type: 'session', targetId: session.id })
+  }
+
+  return (
+    <div
+      ref={itemRef}
+      className={`tree-item tree-item--child-qt ${isActive ? 'tree-item--active' : ''} ${isInSplit ? 'tree-item--split' : ''}`}
+      onClick={() => setActiveSession(session.id)}
+      onContextMenu={handleContextMenu}
+    >
+      <ShellPromptIcon className="tree-icon tree-icon--quick-terminal" />
+      <span className="tree-label">{session.name}</span>
+      <button className="tree-item-actions" onClick={handleMoreClick}>
+        <MoreHorizontalIcon />
+      </button>
+      <StatusDot status={session.status} />
+    </div>
+  )
+}
 
 function AgentItem({ agent, staggerClass }: { agent: Agent; staggerClass?: string }) {
-  const { setActiveSession, activeSessionId } = useSessionStore()
-  const { openContextMenu, renamingId, setRenamingId, splitRoot } = useUIStore()
+  const { setActiveSession, activeSessionId, sessions } = useSessionStore()
+  const { openContextMenu, renamingId, setRenamingId, splitRoot, expandedSessions, toggleSession } = useUIStore()
   const { renameAgent } = useAgentStore()
   const isActive = activeSessionId === agent.id
   const itemRef = useRef<HTMLDivElement>(null)
+
+  // Agent quick terminals
+  const agentQTs = sessions.filter((s) => s.agentId === agent.id && s.type === 'quick-terminal')
+  const hasChildren = agentQTs.length > 0
+  const isExpanded = expandedSessions.has(agent.id)
 
   // Is this agent in the split view but not the focused one?
   const splitIds = splitRoot ? getAllSessionIds(splitRoot) : []
@@ -109,6 +151,15 @@ function AgentItem({ agent, staggerClass }: { agent: Agent; staggerClass?: strin
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
       >
+        {hasChildren && (
+          <ChevronIcon
+            className={`tree-chevron ${isExpanded ? 'tree-chevron--open' : ''}`}
+            onClick={(e) => {
+              e.stopPropagation()
+              toggleSession(agent.id)
+            }}
+          />
+        )}
         <BotIcon className="tree-icon tree-icon--agent" />
         <div className="tree-label-group">
           {isRenaming ? (
@@ -139,6 +190,20 @@ function AgentItem({ agent, staggerClass }: { agent: Agent; staggerClass?: strin
           </>
         )}
       </div>
+
+      {hasChildren && (
+        <div className={`tree-children-wrapper ${isExpanded ? 'tree-children-wrapper--open' : ''}`}>
+          <div className="tree-children">
+            {agentQTs.map((qt) => (
+              <AgentQTItem
+                key={qt.id}
+                session={qt}
+                isActive={qt.id === activeSessionId}
+              />
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

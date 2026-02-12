@@ -243,6 +243,48 @@ export function registerIPC(
     return createQuickTerminal(services, sourceSessionId)
   })
 
+  ipcMain.handle('session:create-project-quick-terminal', async (_event, projectId: string) => {
+    const project = dbService.getProject(projectId)
+    if (!project) throw new Error('Project not found')
+
+    // Generate unique name
+    const projectSessions = dbService.listSessions(projectId)
+    const terminalNames = projectSessions
+      .filter((s: any) => s.type === 'quick-terminal' && s.status !== 'deleted')
+      .map((s: any) => s.name as string)
+    let name = 'Terminal'
+    if (terminalNames.includes(name)) {
+      let n = 2
+      while (terminalNames.includes(`Terminal (${n})`)) n++
+      name = `Terminal (${n})`
+    }
+
+    // Get current branch
+    let branch = 'main'
+    try {
+      branch = (await simpleGit(project.path as string).revparse(['--abbrev-ref', 'HEAD'])).trim()
+    } catch { /* fallback to main */ }
+
+    const id = uuidv4()
+    const session = dbService.addSession({
+      id,
+      project_id: projectId,
+      name,
+      branch,
+      worktree_path: project.path as string,
+      type: 'quick-terminal'
+    })
+
+    // Spawn plain shell in project root
+    ptyService.spawn(id, project.path as string)
+    const pid = ptyService.getPid(id)
+    if (pid) {
+      dbService.updateSession(id, { pid })
+    }
+
+    return session
+  })
+
   ipcMain.handle('session:rename', (_event, sessionId: string, newName: string) => {
     return renameSession(services, sessionId, newName)
   })
