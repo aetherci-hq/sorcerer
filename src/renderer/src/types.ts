@@ -64,6 +64,17 @@ export interface Agent {
   created_at: number
 }
 
+// ── Quick Notes ────────────────────────────────────────────────────
+
+export interface QuickNote {
+  id: string
+  parent_id: string
+  parent_type: 'session' | 'agent'
+  content: string
+  created_at: number
+  updated_at: number
+}
+
 // ── Split view — recursive binary tree ────────────────────────────
 
 export type SplitLeaf = { type: 'leaf'; id: string; sessionId: string | null }

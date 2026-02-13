@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { useProjectStore } from '../stores/useProjectStore'
 import { useSessionStore } from '../stores/useSessionStore'
-import { useUIStore, getAllSessionIds } from '../stores/useUIStore'
+import { useUIStore, getAllSessionIds, findLeafBySession } from '../stores/useUIStore'
 import { useTeamStore } from '../stores/useTeamStore'
-import { ChevronIcon, FolderIcon, TerminalIcon, ShellPromptIcon, UserIcon, MoreHorizontalIcon } from './icons'
+import { ChevronIcon, FolderIcon, TerminalIcon, ShellPromptIcon, UserIcon, MoreHorizontalIcon, NotesIcon } from './icons'
+import { useQuickNotesStore } from '../stores/useQuickNotesStore'
 import { StatusDot } from './StatusDot'
 import { EmptyState } from './EmptyState'
 import type { Project, Session, TeamMember, TaskData } from '../types'
@@ -104,6 +105,61 @@ function ChildQTItem({
   )
 }
 
+function ChildNotesItem({
+  parentId,
+  parentType,
+}: {
+  parentId: string
+  parentType: 'session' | 'agent'
+}) {
+  const { splitRight, setFocusedPanel, splitRoot, openContextMenu } = useUIStore()
+  const notePanelId = `quicknotes:${parentType}:${parentId}`
+
+  const handleContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    openContextMenu({ x: e.clientX, y: e.clientY, type: 'quicknotes', targetId: notePanelId })
+  }
+
+  const handleMoreClick = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+    openContextMenu({ x: rect.right, y: rect.bottom, type: 'quicknotes', targetId: notePanelId })
+  }
+
+  const handleClick = () => {
+    // Focus the existing panel if already open in split view
+    if (splitRoot) {
+      const leaf = findLeafBySession(splitRoot, notePanelId)
+      if (leaf) {
+        setFocusedPanel(leaf.id)
+        return
+      }
+    }
+    // Otherwise open it
+    splitRight(notePanelId)
+    const { splitRoot: root } = useUIStore.getState()
+    if (root) {
+      const leaf = findLeafBySession(root, notePanelId)
+      if (leaf) setFocusedPanel(leaf.id)
+    }
+  }
+
+  return (
+    <div
+      className="tree-item tree-item--child-qt"
+      onClick={handleClick}
+      onContextMenu={handleContextMenu}
+    >
+      <NotesIcon className="tree-icon tree-icon--quick-terminal" />
+      <span className="tree-label">Notes</span>
+      <button className="tree-item-actions" onClick={handleMoreClick}>
+        <MoreHorizontalIcon />
+      </button>
+    </div>
+  )
+}
+
 function SessionItem({
   session,
   childQTs,
@@ -126,10 +182,13 @@ function SessionItem({
   const isMainRepo = project && session.worktree_path === project.path
   const itemRef = useRef<HTMLDivElement>(null)
 
+  // Quick notes panel open?
+  const hasNotesPanel = useQuickNotesStore((s) => s.openNotePanels.has(session.id))
+
   // Team members and tasks for this session
   const team = session.team_name ? teams.find((t) => t.name === session.team_name) : undefined
   const hasTeammates = (team?.members.length ?? 0) > 0
-  const hasChildren = childQTs.length > 0 || hasTeammates
+  const hasChildren = childQTs.length > 0 || hasTeammates || hasNotesPanel
   const tasks = session.team_name ? (tasksByTeam[session.team_name] || []) : []
   const totalTaskCount = tasks.length
   const completedTaskCount = tasks.filter((t) => t.status === 'completed').length
@@ -275,6 +334,9 @@ function SessionItem({
       {hasChildren && (
         <div className={`tree-children-wrapper ${isExpanded ? 'tree-children-wrapper--open' : ''}`}>
           <div className="tree-children">
+            {hasNotesPanel && (
+              <ChildNotesItem parentId={session.id} parentType="session" />
+            )}
             {childQTs.map((qt) => (
               <ChildQTItem
                 key={qt.id}
@@ -290,10 +352,15 @@ function SessionItem({
                 staggerClass={`stagger-${Math.min(i + 7, 10)}`}
               />
             ))}
-            {pendingTaskCount > 0 && (
-              <div className="tree-team-summary">
-                {completedTaskCount}/{totalTaskCount} tasks done
-              </div>
+            {tasks.length > 0 && (
+              <>
+                <div className="tree-team-summary">
+                  {completedTaskCount}/{totalTaskCount} tasks done
+                </div>
+                {tasks.map((task) => (
+                  <TaskItem key={task.id} task={task} />
+                ))}
+              </>
             )}
           </div>
         </div>

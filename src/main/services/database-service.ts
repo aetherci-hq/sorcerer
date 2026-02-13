@@ -90,6 +90,17 @@ export class DatabaseService {
       );
     `)
 
+    this.db.run(`
+      CREATE TABLE IF NOT EXISTS quick_notes (
+        id TEXT PRIMARY KEY,
+        parent_id TEXT NOT NULL,
+        parent_type TEXT NOT NULL,
+        content TEXT DEFAULT '',
+        created_at INTEGER NOT NULL DEFAULT (strftime('%s','now')),
+        updated_at INTEGER NOT NULL DEFAULT (strftime('%s','now'))
+      );
+    `)
+
     // Add type column to sessions (idempotent migration)
     try {
       this.db.run(`ALTER TABLE sessions ADD COLUMN type TEXT NOT NULL DEFAULT 'session'`)
@@ -326,6 +337,32 @@ export class DatabaseService {
   setSetting(key: string, value: string): void {
     if (!this.db) return
     this.db.run('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', [key, value])
+    this.save()
+  }
+
+  // Quick Notes operations
+  getQuickNote(parentId: string, parentType: string): any | undefined {
+    if (!this.db) return undefined
+    const stmt = this.db.prepare('SELECT * FROM quick_notes WHERE parent_id = ? AND parent_type = ?')
+    stmt.bind([parentId, parentType])
+    const result = stmt.step() ? stmt.getAsObject() : undefined
+    stmt.free()
+    return result
+  }
+
+  saveQuickNote(id: string, parentId: string, parentType: string, content: string): void {
+    if (!this.db) return
+    this.db.run(
+      `INSERT OR REPLACE INTO quick_notes (id, parent_id, parent_type, content, updated_at)
+       VALUES (?, ?, ?, ?, strftime('%s','now'))`,
+      [id, parentId, parentType, content]
+    )
+    this.save()
+  }
+
+  deleteQuickNote(parentId: string, parentType: string): void {
+    if (!this.db) return
+    this.db.run('DELETE FROM quick_notes WHERE parent_id = ? AND parent_type = ?', [parentId, parentType])
     this.save()
   }
 

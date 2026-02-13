@@ -121,6 +121,14 @@ export class WorktreeService {
       }
     }
 
+    // Ensure HEAD is valid (empty repos have no commits, so HEAD is unresolvable)
+    try {
+      await git.raw(['rev-parse', '--verify', 'HEAD'])
+    } catch {
+      // No commits yet — create an initial empty commit so worktrees can branch from it
+      await git.raw(['commit', '--allow-empty', '-m', 'Initial commit'])
+    }
+
     // Create worktree with a new branch
     try {
       await git.raw(['worktree', 'add', '-b', branch, worktreePath])

@@ -47,7 +47,10 @@ import {
   getTeamInbox,
   getSetting,
   setSetting,
-  getUserInfo
+  getUserInfo,
+  loadQuickNote,
+  saveQuickNote,
+  deleteQuickNote
 } from './shared-handlers'
 
 let globalApiServer: any = null
@@ -418,6 +421,20 @@ export function registerIPC(
 
   ipcMain.handle('settings:set', (_event, key: string, value: string) => {
     return setSetting(services, key, value)
+  })
+
+  // ── Quick Notes ─────────────────────────────────────────────
+
+  ipcMain.handle('quick-notes:load', (_event, parentId: string, parentType: string) => {
+    return loadQuickNote(services, parentId, parentType)
+  })
+
+  ipcMain.handle('quick-notes:save', (_event, id: string, parentId: string, parentType: string, content: string) => {
+    return saveQuickNote(services, id, parentId, parentType, content)
+  })
+
+  ipcMain.handle('quick-notes:delete', (_event, parentId: string, parentType: string) => {
+    return deleteQuickNote(services, parentId, parentType)
   })
 
   // ── System info ─────────────────────────────────────────────

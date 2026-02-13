@@ -40,7 +40,10 @@ import {
   getTeamInbox,
   getSetting,
   setSetting,
-  getUserInfo
+  getUserInfo,
+  loadQuickNote,
+  saveQuickNote,
+  deleteQuickNote
 } from '../ipc/shared-handlers'
 import { ScrollbackBuffer } from './scrollback'
 import { WebSocketHandler } from './ws-handler'
@@ -246,6 +249,11 @@ export class ApiServer {
       'teams:list': () => listTeams(s),
       'teams:tasks': (teamName: string) => getTeamTasks(s, teamName),
       'teams:inbox': (teamName: string, agentName: string) => getTeamInbox(s, teamName, agentName),
+
+      // Quick Notes
+      'quick-notes:load': (parentId: string, parentType: string) => loadQuickNote(s, parentId, parentType),
+      'quick-notes:save': (id: string, parentId: string, parentType: string, content: string) => saveQuickNote(s, id, parentId, parentType, content),
+      'quick-notes:delete': (parentId: string, parentType: string) => deleteQuickNote(s, parentId, parentType),
 
       // Settings
       'settings:get': (key: string) => getSetting(s, key),

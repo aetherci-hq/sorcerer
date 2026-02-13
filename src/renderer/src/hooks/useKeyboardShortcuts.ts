@@ -1,6 +1,8 @@
 import { useEffect } from 'react'
 import { useUIStore } from '../stores/useUIStore'
 import { useSessionStore } from '../stores/useSessionStore'
+import { useAgentStore } from '../stores/useAgentStore'
+import { useQuickNotesStore } from '../stores/useQuickNotesStore'
 
 export function useKeyboardShortcuts() {
   const { openDialog, activeDialog } = useUIStore()
@@ -27,6 +29,15 @@ export function useKeyboardShortcuts() {
       if (e.ctrlKey && e.key === 'b') {
         e.preventDefault()
         useUIStore.getState().toggleSidebar()
+      }
+
+      // Ctrl+Shift+N — toggle Quick Notes overlay
+      if (e.ctrlKey && e.shiftKey && e.key === 'N') {
+        e.preventDefault()
+        const sessionId = useSessionStore.getState().activeSessionId
+        if (!sessionId) return
+        const isAgent = useAgentStore.getState().agents.some((a) => a.id === sessionId)
+        useQuickNotesStore.getState().toggleOverlay(sessionId, isAgent ? 'agent' : 'session')
       }
 
       // Ctrl+\ — split right
