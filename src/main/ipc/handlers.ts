@@ -78,7 +78,7 @@ export function registerIPC(
   ipcMain.handle('project:add', async () => {
     const result = await dialog.showOpenDialog({
       properties: ['openDirectory'],
-      title: 'Select a Git Repository'
+      title: 'Select a Project Folder'
     })
 
     if (result.canceled || result.filePaths.length === 0) {
@@ -87,12 +87,6 @@ export function registerIPC(
 
     const projectPath = result.filePaths[0]
     const name = path.basename(projectPath)
-
-    // Verify it's a git repo
-    const gitDir = path.join(projectPath, '.git')
-    if (!fs.existsSync(gitDir)) {
-      throw new Error('Not a git repository')
-    }
 
     // Check if project already exists
     const existing = dbService.listProjects().find((p: any) => p.path === projectPath)

@@ -41,9 +41,8 @@ export function addProjectByPath(
   customName?: string
 ): any {
   const name = customName || path.basename(projectPath)
-  const gitDir = path.join(projectPath, '.git')
-  if (!fs.existsSync(gitDir)) {
-    throw new Error('Selected directory is not a git repository')
+  if (!fs.existsSync(projectPath)) {
+    throw new Error('Directory does not exist')
   }
   const existing = db.listProjects().find((p: any) => p.path === projectPath)
   if (existing) return existing
@@ -199,12 +198,27 @@ export async function createSession(
   let worktreePath: string
   let branch: string
 
-  if (useMainRepo) {
-    // Work directly in the main repository — no worktree
+  // Detect whether this project has git with at least one commit
+  const hasGit = fs.existsSync(path.join(project.path as string, '.git'))
+  let hasCommits = false
+  if (hasGit) {
+    try {
+      await simpleGit(project.path as string).revparse(['HEAD'])
+      hasCommits = true
+    } catch { /* empty repo — no commits yet */ }
+  }
+
+  if (!hasGit || !hasCommits || useMainRepo) {
+    // Work directly in the project directory — no worktree
     worktreePath = project.path as string
-    branch = await simpleGit(project.path as string).revparse(['--abbrev-ref', 'HEAD'])
-    branch = branch.trim()
-    console.log('[session:create] Using main repo:', { worktreePath, branch })
+    if (hasCommits) {
+      try {
+        branch = (await simpleGit(project.path as string).revparse(['--abbrev-ref', 'HEAD'])).trim()
+      } catch { branch = 'main' }
+    } else {
+      branch = ''
+    }
+    console.log('[session:create] Using project dir:', { worktreePath, branch, hasGit, hasCommits })
   } else {
     // Create git worktree
     const result = await worktree.create(project.path, sessionName)
@@ -236,8 +250,8 @@ export async function createSession(
     db.updateSession(id, { pid })
   }
 
-  // Push branch to remote on creation (fire-and-forget) — skip for main repo sessions
-  if (!useMainRepo) {
+  // Push branch to remote on creation (fire-and-forget) — skip for main repo / non-git / empty repo sessions
+  if (hasCommits && !useMainRepo) {
     worktree.pushBranch(project.path, branch).then((r) => {
       if (r.pushed) console.log('[session:create] Branch pushed to remote')
       else console.log('[session:create] Push skipped:', r.error)

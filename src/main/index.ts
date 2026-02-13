@@ -1,5 +1,6 @@
 import { app, BrowserWindow, ipcMain, shell } from 'electron'
 import path from 'path'
+import fs from 'fs'
 import { PTYService } from './services/pty-service'
 import { DatabaseService } from './services/database-service'
 import { WorktreeService } from './services/worktree-service'
@@ -98,6 +99,10 @@ async function createWindow(): Promise<void> {
     const allSessions = dbService.listSessions()
     for (const project of allProjects) {
       try {
+        // Skip non-git projects — no worktrees to recover
+        const gitDir = path.join(project.path as string, '.git')
+        if (!fs.existsSync(gitDir)) continue
+
         const worktrees = await worktreeService.list(project.path)
         const root = worktreeService.getWorkspacesRoot()
 

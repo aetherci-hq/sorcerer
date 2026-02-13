@@ -31,15 +31,19 @@ export function AddProjectDialog() {
   }
 
   const handleBrowse = async () => {
-    const project = await addProject()
-    if (project) {
-      // If user browsed, the backend already added it with folder name.
-      // If they had a name override, update it.
-      if (nameOverride && nameOverride !== project.name) {
-        await useProjectStore.getState().updateProject(project.id, { name: nameOverride })
+    try {
+      const project = await addProject()
+      if (project) {
+        // If user browsed, the backend already added it with folder name.
+        // If they had a name override, update it.
+        if (nameOverride && nameOverride !== project.name) {
+          await useProjectStore.getState().updateProject(project.id, { name: nameOverride })
+        }
+        addToast(`Project "${nameOverride || project.name}" added`, 'success')
+        handleClose()
       }
-      addToast(`Project "${nameOverride || project.name}" added`, 'success')
-      handleClose()
+    } catch (err) {
+      addToast(`Failed: ${err}`, 'error')
     }
   }
 
