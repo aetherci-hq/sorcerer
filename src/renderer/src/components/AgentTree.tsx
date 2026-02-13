@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { useAgentStore } from '../stores/useAgentStore'
 import { useSessionStore } from '../stores/useSessionStore'
-import { useUIStore, getAllSessionIds } from '../stores/useUIStore'
-import { BotIcon, ChevronIcon, MoreHorizontalIcon, PlusIcon, ShellPromptIcon } from './icons'
+import { useUIStore, getAllSessionIds, findLeafBySession } from '../stores/useUIStore'
+import { BotIcon, ChevronIcon, MoreHorizontalIcon, PlusIcon, ShellPromptIcon, NotesIcon } from './icons'
+import { useQuickNotesStore } from '../stores/useQuickNotesStore'
 import { StatusDot } from './StatusDot'
 import type { Agent, Session } from '../types'
 
@@ -43,6 +44,53 @@ function AgentQTItem({ session, isActive }: { session: Session; isActive: boolea
   )
 }
 
+function AgentNotesItem({ agentId }: { agentId: string }) {
+  const { splitRight, setFocusedPanel, splitRoot, openContextMenu } = useUIStore()
+  const notePanelId = `quicknotes:agent:${agentId}`
+
+  const handleContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    openContextMenu({ x: e.clientX, y: e.clientY, type: 'quicknotes', targetId: notePanelId })
+  }
+
+  const handleMoreClick = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+    openContextMenu({ x: rect.right, y: rect.bottom, type: 'quicknotes', targetId: notePanelId })
+  }
+
+  const handleClick = () => {
+    if (splitRoot) {
+      const leaf = findLeafBySession(splitRoot, notePanelId)
+      if (leaf) {
+        setFocusedPanel(leaf.id)
+        return
+      }
+    }
+    splitRight(notePanelId)
+    const { splitRoot: root } = useUIStore.getState()
+    if (root) {
+      const leaf = findLeafBySession(root, notePanelId)
+      if (leaf) setFocusedPanel(leaf.id)
+    }
+  }
+
+  return (
+    <div
+      className="tree-item tree-item--child-qt"
+      onClick={handleClick}
+      onContextMenu={handleContextMenu}
+    >
+      <NotesIcon className="tree-icon tree-icon--quick-terminal" />
+      <span className="tree-label">Notes</span>
+      <button className="tree-item-actions" onClick={handleMoreClick}>
+        <MoreHorizontalIcon />
+      </button>
+    </div>
+  )
+}
+
 function AgentItem({ agent, staggerClass }: { agent: Agent; staggerClass?: string }) {
   const { setActiveSession, activeSessionId, sessions } = useSessionStore()
   const { openContextMenu, renamingId, setRenamingId, splitRoot, expandedSessions, toggleSession } = useUIStore()
@@ -52,7 +100,8 @@ function AgentItem({ agent, staggerClass }: { agent: Agent; staggerClass?: strin
 
   // Agent quick terminals
   const agentQTs = sessions.filter((s) => s.agentId === agent.id && s.type === 'quick-terminal')
-  const hasChildren = agentQTs.length > 0
+  const hasNotesPanel = useQuickNotesStore((s) => s.openNotePanels.has(agent.id))
+  const hasChildren = agentQTs.length > 0 || hasNotesPanel
   const isExpanded = expandedSessions.has(agent.id)
 
   // Is this agent in the split view but not the focused one?
@@ -194,6 +243,9 @@ function AgentItem({ agent, staggerClass }: { agent: Agent; staggerClass?: strin
       {hasChildren && (
         <div className={`tree-children-wrapper ${isExpanded ? 'tree-children-wrapper--open' : ''}`}>
           <div className="tree-children">
+            {hasNotesPanel && (
+              <AgentNotesItem agentId={agent.id} />
+            )}
             {agentQTs.map((qt) => (
               <AgentQTItem
                 key={qt.id}

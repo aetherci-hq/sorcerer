@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import type { Session } from '../types'
 import { useUIStore, findLeaf, findLeafBySession, clearSessionFromTree } from './useUIStore'
+import { useQuickNotesStore } from './useQuickNotesStore'
 import { getApi } from '../api/client'
 
 interface SessionState {
@@ -101,10 +102,20 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     try {
       await getApi().session.delete(sessionId)
 
+      // Clean up quick notes
+      getApi().quickNotes.delete(sessionId, 'session')
+      const qnState = useQuickNotesStore.getState()
+      if (qnState.overlayOpen && qnState.overlayParentId === sessionId) {
+        qnState.closeOverlay()
+      }
+      qnState.removeNotePanel(sessionId)
+
       // Clear deleted session from split panels
       const { splitRoot } = useUIStore.getState()
       if (splitRoot) {
-        useUIStore.setState({ splitRoot: clearSessionFromTree(splitRoot, sessionId) })
+        let root = clearSessionFromTree(splitRoot, sessionId)
+        root = clearSessionFromTree(root, `quicknotes:session:${sessionId}`)
+        useUIStore.setState({ splitRoot: root })
       }
 
       set((state) => ({

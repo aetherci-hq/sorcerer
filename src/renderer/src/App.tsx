@@ -12,6 +12,7 @@ import { ArchiveDialog } from './components/dialogs/ArchiveDialog'
 import { SettingsDialog } from './components/dialogs/SettingsDialog'
 import { AddAgentDialog } from './components/dialogs/AddAgentDialog'
 import { DeleteAgentDialog } from './components/dialogs/DeleteAgentDialog'
+import { QuickNotesOverlay } from './components/QuickNotesOverlay'
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts'
 import { useProjectStore } from './stores/useProjectStore'
 import { useSessionStore } from './stores/useSessionStore'
@@ -40,8 +41,10 @@ export function App() {
         useUIStore.setState({ expandedProjects: expanded })
       }
     })
-    // After sessions + teams load, auto-expand sessions that already have teams
-    Promise.all([loadSessions(), loadTeams()]).then(() => {
+    // Load sessions first, then teams (teams trigger auto-link which needs sessions in store)
+    loadSessions().then(() => {
+      return loadTeams()
+    }).then(() => {
       const sessions = useSessionStore.getState().sessions
       const { expandedSessions } = useUIStore.getState()
       const withTeams = sessions.filter((s) => s.team_name)
@@ -95,6 +98,7 @@ export function App() {
       <SettingsDialog />
       <AddAgentDialog />
       <DeleteAgentDialog />
+      <QuickNotesOverlay />
     </div>
   )
 }

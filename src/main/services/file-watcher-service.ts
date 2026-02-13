@@ -199,14 +199,23 @@ export class FileWatcherService {
 
         activeTeamNames.add(teamName)
 
-        // Find the lead member's cwd (first member, or the one named after the lead)
+        // Try direct link via leadSessionId first
+        if (config.leadSessionId) {
+          const directMatch = sessions.find((s: any) => s.id === config.leadSessionId)
+          if (directMatch && directMatch.team_name !== teamName) {
+            this.dbService.updateSession(directMatch.id, { team_name: teamName })
+            this.emitSessionLinked(directMatch.id, teamName)
+          }
+          if (directMatch) continue // Skip cwd matching if direct link found
+        }
+
+        // Fall back: match lead member's cwd to session worktree_path
         const leadMember = config.members.find(
           (m) => m.agentId === config.leadAgentId
         ) || config.members[0]
         const leadCwd = leadMember?.cwd
         if (!leadCwd) continue
 
-        // Find matching session
         const match = sessions.find(
           (s: any) => s.worktree_path && this.pathsMatch(s.worktree_path, leadCwd)
         )
@@ -277,8 +286,8 @@ export class FileWatcherService {
       }
     } catch { /* ignore */ }
 
-    // Run auto-link as side effect for startup recovery
-    this.debounceAutoLink()
+    // Run auto-link synchronously so the first listTeams() call links sessions immediately
+    this.autoLinkTeams()
 
     return teams
   }

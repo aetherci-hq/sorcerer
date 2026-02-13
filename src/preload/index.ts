@@ -92,6 +92,12 @@ const api = {
     dismissOrphanAgent: (dirName: string) => ipcRenderer.invoke('workspace:dismiss-orphan-agent', dirName)
   },
 
+  quickNotes: {
+    load: (parentId: string, parentType: string) => ipcRenderer.invoke('quick-notes:load', parentId, parentType),
+    save: (id: string, parentId: string, parentType: string, content: string) => ipcRenderer.invoke('quick-notes:save', id, parentId, parentType, content),
+    delete: (parentId: string, parentType: string) => ipcRenderer.invoke('quick-notes:delete', parentId, parentType),
+  },
+
   settings: {
     get: (key: string) => ipcRenderer.invoke('settings:get', key),
     set: (key: string, value: string) => ipcRenderer.invoke('settings:set', key, value)

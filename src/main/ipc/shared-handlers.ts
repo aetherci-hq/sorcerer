@@ -909,6 +909,34 @@ export function setSetting(
   }
 }
 
+// ── Quick Notes handlers ─────────────────────────────────────
+
+export function loadQuickNote(
+  { db }: HandlerServices,
+  parentId: string,
+  parentType: string
+): any | undefined {
+  return db.getQuickNote(parentId, parentType)
+}
+
+export function saveQuickNote(
+  { db }: HandlerServices,
+  id: string,
+  parentId: string,
+  parentType: string,
+  content: string
+): void {
+  db.saveQuickNote(id, parentId, parentType, content)
+}
+
+export function deleteQuickNote(
+  { db }: HandlerServices,
+  parentId: string,
+  parentType: string
+): void {
+  db.deleteQuickNote(parentId, parentType)
+}
+
 // ── System info handlers ────────────────────────────────────
 
 export function getUserInfo(): { username: string; homedir: string } {

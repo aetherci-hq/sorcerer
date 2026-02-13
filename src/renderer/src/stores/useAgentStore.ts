@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import type { Agent } from '../types'
 import { useUIStore, clearSessionFromTree } from './useUIStore'
+import { useQuickNotesStore } from './useQuickNotesStore'
 import { getApi } from '../api/client'
 
 interface AgentState {
@@ -61,10 +62,20 @@ export const useAgentStore = create<AgentState>((set) => ({
     try {
       await getApi().agent.remove(id)
 
+      // Clean up quick notes
+      getApi().quickNotes.delete(id, 'agent')
+      const qnState = useQuickNotesStore.getState()
+      if (qnState.overlayOpen && qnState.overlayParentId === id) {
+        qnState.closeOverlay()
+      }
+      qnState.removeNotePanel(id)
+
       // Clear from split panels
       const { splitRoot } = useUIStore.getState()
       if (splitRoot) {
-        useUIStore.setState({ splitRoot: clearSessionFromTree(splitRoot, id) })
+        let root = clearSessionFromTree(splitRoot, id)
+        root = clearSessionFromTree(root, `quicknotes:agent:${id}`)
+        useUIStore.setState({ splitRoot: root })
       }
 
       set((state) => ({ agents: state.agents.filter((a) => a.id !== id) }))

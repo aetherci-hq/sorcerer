@@ -8,7 +8,7 @@ type DialogType = 'new-session' | 'add-project' | 'delete-session' | 'archive-se
 interface ContextMenu {
   x: number
   y: number
-  type: 'project' | 'session' | 'agent'
+  type: 'project' | 'session' | 'agent' | 'quicknotes'
   targetId: string
 }
 

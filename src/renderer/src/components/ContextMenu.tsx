@@ -7,8 +7,9 @@ import { useAgentStore } from '../stores/useAgentStore'
 import { useToastStore } from '../stores/useToastStore'
 import {
   PlusIcon, CopyIcon, TrashIcon, SplitHorizontalIcon, SplitVerticalIcon,
-  RefreshIcon, UploadIcon, ExternalLinkIcon, ArchiveIcon, RotateCcwIcon, EditIcon, PlayIcon, StopIcon, TerminalIcon, MergeIcon
+  RefreshIcon, UploadIcon, ExternalLinkIcon, ArchiveIcon, RotateCcwIcon, EditIcon, PlayIcon, StopIcon, TerminalIcon, MergeIcon, NotesIcon
 } from './icons'
+import { useQuickNotesStore } from '../stores/useQuickNotesStore'
 
 type MenuItem =
   | { label: string; icon?: ReactNode; shortcut?: string; action: () => void; danger?: boolean }
@@ -116,6 +117,23 @@ export function ContextMenu() {
 
   const iconClass = 'context-menu-icon'
 
+  // Ensure a session/agent is expanded in the sidebar so its children are visible
+  const ensureExpanded = (id: string) => {
+    if (!useUIStore.getState().expandedSessions.has(id)) {
+      useUIStore.getState().toggleSession(id)
+    }
+  }
+
+  // Focus the panel containing a target session/agent before splitting,
+  // so the split happens relative to the right-clicked item
+  const focusTargetPanel = (targetId: string) => {
+    const { splitRoot: root, setFocusedPanel: focus } = useUIStore.getState()
+    if (root) {
+      const leaf = findLeafBySession(root, targetId)
+      if (leaf) focus(leaf.id)
+    }
+  }
+
   let items: MenuItem[]
 
   if (contextMenu.type === 'agent') {
@@ -137,12 +155,14 @@ export function ContextMenu() {
         }}
       ]),
       { type: 'separator' as const },
-      { label: 'Split Right', icon: <SplitHorizontalIcon className={iconClass} />, action: () => splitRight(contextMenu.targetId) },
-      { label: 'Split Down', icon: <SplitVerticalIcon className={iconClass} />, action: () => splitDown(contextMenu.targetId) },
+      { label: 'Split Right', icon: <SplitHorizontalIcon className={iconClass} />, action: () => { focusTargetPanel(contextMenu.targetId); splitRight(contextMenu.targetId) } },
+      { label: 'Split Down', icon: <SplitVerticalIcon className={iconClass} />, action: () => { focusTargetPanel(contextMenu.targetId); splitDown(contextMenu.targetId) } },
       { label: 'Open Quick Terminal', icon: <TerminalIcon className={iconClass} />, action: async () => {
         const qt = await getApi().agent.createQuickTerminal(contextMenu.targetId)
         if (qt) {
           useSessionStore.getState().addLocalSession(qt as any)
+          ensureExpanded(contextMenu.targetId)
+          focusTargetPanel(contextMenu.targetId)
           splitRight(qt.id)
           const { splitRoot: root, setFocusedPanel } = useUIStore.getState()
           if (root) {
@@ -150,6 +170,18 @@ export function ContextMenu() {
             if (leaf) setFocusedPanel(leaf.id)
           }
           useSessionStore.getState().setActiveSession(qt.id)
+        }
+      }},
+      { label: 'Open Quick Notes', icon: <NotesIcon className={iconClass} />, action: () => {
+        const notePanelId = `quicknotes:agent:${contextMenu.targetId}`
+        useQuickNotesStore.getState().addNotePanel(contextMenu.targetId)
+        ensureExpanded(contextMenu.targetId)
+        focusTargetPanel(contextMenu.targetId)
+        splitRight(notePanelId)
+        const { splitRoot: root, setFocusedPanel } = useUIStore.getState()
+        if (root) {
+          const leaf = findLeafBySession(root, notePanelId)
+          if (leaf) setFocusedPanel(leaf.id)
         }
       }},
       { type: 'separator' as const },
@@ -186,10 +218,42 @@ export function ContextMenu() {
       { type: 'separator' },
       { label: 'Remove Project', icon: <TrashIcon className={iconClass} />, danger: true, action: () => openDialog('delete-session', contextMenu.targetId) }
     ]
+  } else if (contextMenu.type === 'quicknotes') {
+    items = [
+      { label: 'Split Right', icon: <SplitHorizontalIcon className={iconClass} />, action: () => { focusTargetPanel(contextMenu.targetId); splitRight(contextMenu.targetId) } },
+      { label: 'Split Down', icon: <SplitVerticalIcon className={iconClass} />, action: () => { focusTargetPanel(contextMenu.targetId); splitDown(contextMenu.targetId) } },
+      { type: 'separator' as const },
+      { label: 'Close Panel', icon: <TrashIcon className={iconClass} />, danger: true, action: () => {
+        const parts = contextMenu.targetId.split(':')
+        if (parts.length === 3) {
+          useQuickNotesStore.getState().removeNotePanel(parts[2])
+        }
+        const { splitRoot: root } = useUIStore.getState()
+        if (root) {
+          const leaf = findLeafBySession(root, contextMenu.targetId)
+          if (leaf) useUIStore.getState().closePanel(leaf.id)
+        }
+      }}
+    ]
   } else if (isQuickTerminal) {
     items = [
-      { label: 'Split Right', icon: <SplitHorizontalIcon className={iconClass} />, action: () => splitRight(contextMenu.targetId) },
-      { label: 'Split Down', icon: <SplitVerticalIcon className={iconClass} />, action: () => splitDown(contextMenu.targetId) },
+      { label: 'Split Right', icon: <SplitHorizontalIcon className={iconClass} />, action: () => { focusTargetPanel(contextMenu.targetId); splitRight(contextMenu.targetId) } },
+      { label: 'Split Down', icon: <SplitVerticalIcon className={iconClass} />, action: () => { focusTargetPanel(contextMenu.targetId); splitDown(contextMenu.targetId) } },
+      ...(targetSession?.parent_session_id ? [
+        { label: 'Open Quick Notes', icon: <NotesIcon className={iconClass} />, action: () => {
+          const parentId = targetSession!.parent_session_id!
+          const notePanelId = `quicknotes:session:${parentId}`
+          useQuickNotesStore.getState().addNotePanel(parentId)
+          ensureExpanded(parentId)
+          focusTargetPanel(contextMenu.targetId)
+          splitRight(notePanelId)
+          const { splitRoot: root, setFocusedPanel } = useUIStore.getState()
+          if (root) {
+            const leaf = findLeafBySession(root, notePanelId)
+            if (leaf) setFocusedPanel(leaf.id)
+          }
+        }}
+      ] : []),
       { type: 'separator' },
       { label: 'Restart Shell', icon: <RefreshIcon className={iconClass} />, action: async () => {
         await restartSession(contextMenu.targetId)
@@ -214,11 +278,13 @@ export function ContextMenu() {
     ]
   } else {
     items = [
-      { label: 'Split Right', icon: <SplitHorizontalIcon className={iconClass} />, action: () => splitRight(contextMenu.targetId) },
-      { label: 'Split Down', icon: <SplitVerticalIcon className={iconClass} />, action: () => splitDown(contextMenu.targetId) },
+      { label: 'Split Right', icon: <SplitHorizontalIcon className={iconClass} />, action: () => { focusTargetPanel(contextMenu.targetId); splitRight(contextMenu.targetId) } },
+      { label: 'Split Down', icon: <SplitVerticalIcon className={iconClass} />, action: () => { focusTargetPanel(contextMenu.targetId); splitDown(contextMenu.targetId) } },
       { label: 'Open Quick Terminal', icon: <TerminalIcon className={iconClass} />, action: async () => {
         const newSession = await createQuickTerminal(contextMenu.targetId)
         if (newSession) {
+          ensureExpanded(contextMenu.targetId)
+          focusTargetPanel(contextMenu.targetId)
           splitRight(newSession.id)
           const { splitRoot: root, setFocusedPanel } = useUIStore.getState()
           if (root) {
@@ -226,6 +292,18 @@ export function ContextMenu() {
             if (leaf) setFocusedPanel(leaf.id)
           }
           useSessionStore.getState().setActiveSession(newSession.id)
+        }
+      }},
+      { label: 'Open Quick Notes', icon: <NotesIcon className={iconClass} />, action: () => {
+        const notePanelId = `quicknotes:session:${contextMenu.targetId}`
+        useQuickNotesStore.getState().addNotePanel(contextMenu.targetId)
+        ensureExpanded(contextMenu.targetId)
+        focusTargetPanel(contextMenu.targetId)
+        splitRight(notePanelId)
+        const { splitRoot: root, setFocusedPanel } = useUIStore.getState()
+        if (root) {
+          const leaf = findLeafBySession(root, notePanelId)
+          if (leaf) setFocusedPanel(leaf.id)
         }
       }},
       { type: 'separator' },
