@@ -2,26 +2,26 @@
    DESIGN TOKENS
    ============================ */
 :root {
-  /* Surface layers — deep to shallow */
-  --bg-root:       #111114;
-  --bg-sidebar:    #18181c;
-  --bg-titlebar:   #111114;
-  --bg-hover:      #232329;
-  --bg-active:     #2a2a32;
-  --bg-elevated:   #28282f;
+  /* Surface layers — deep to shallow (warm palette, see THEME-CHANGELOG.md to revert) */
+  --bg-root:       #0f0e0c;
+  --bg-sidebar:    #0b0a08;
+  --bg-titlebar:   #1a1714;
+  --bg-hover:      #231f19;
+  --bg-active:     #2a261e;
+  --bg-elevated:   #282420;
 
   /* Terminal — agent-driven (swap per coding agent) */
-  --terminal-bg:   #111114; /* Claude Code */
+  --terminal-bg:   #0f0e0c; /* Claude Code */
 
   /* Borders */
-  --border-subtle:  #2a2a32;
-  --border-medium:  #353540;
+  --border-subtle:  #2a261e;
+  --border-medium:  #3a342a;
 
   /* Text */
-  --text-primary:   #e8e6e3;
-  --text-secondary: #9b9a97;
-  --text-tertiary:  #6b6a68;
-  --text-muted:     #4a4a4f;
+  --text-primary:   #ede6d8;
+  --text-secondary: #a69e8e;
+  --text-tertiary:  #6b6355;
+  --text-muted:     #4a4540;
 
   /* Accent — warm amber */
   --accent:         #e2a445;
@@ -478,7 +478,7 @@ body {
 }
 
 .tree-item--active {
-  background: var(--bg-active);
+  background: var(--accent-glow-strong);
 }
 
 /* Non-focused split session — subtle secondary highlight */
@@ -503,7 +503,7 @@ body {
   left: 0;
   top: 4px;
   bottom: 4px;
-  width: 2px;
+  width: 3px;
   background: var(--accent);
   border-radius: 2px;
 }
@@ -548,9 +548,12 @@ body {
   transition: color 0.15s;
 }
 
-.tree-item:hover .tree-label,
-.tree-item--active .tree-label {
+.tree-item:hover .tree-label {
   color: var(--text-primary);
+}
+
+.tree-item--active .tree-label {
+  color: #f5efe4;
 }
 
 .tree-label-group {
@@ -1382,7 +1385,7 @@ body {
 }
 
 .collapsed-session-btn--active {
-  background: var(--bg-active);
+  background: var(--accent-glow-strong);
 }
 
 .collapsed-session-btn--active::before {
@@ -1391,7 +1394,7 @@ body {
   left: 0;
   top: 4px;
   bottom: 4px;
-  width: 2px;
+  width: 3px;
   background: var(--accent);
   border-radius: 2px;
 }
@@ -2340,7 +2343,7 @@ button:focus-visible,
 }
 
 .split-panel--focused .split-panel-titlebar {
-  background: var(--bg-active);
+  background: var(--accent-glow-strong);
 }
 
 .split-panel-titlebar {
