@@ -3218,6 +3218,28 @@ button:focus-visible,
   padding: 10px 12px;
 }
 
+.quick-notes-textarea {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-medium) transparent;
+}
+
+.quick-notes-textarea::-webkit-scrollbar {
+  width: 6px;
+}
+
+.quick-notes-textarea::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.quick-notes-textarea::-webkit-scrollbar-thumb {
+  background: var(--border-subtle);
+  border-radius: 3px;
+}
+
+.quick-notes-textarea::-webkit-scrollbar-thumb:hover {
+  background: var(--border-medium);
+}
+
 .quick-notes-textarea::placeholder {
   color: var(--text-muted);
 }
