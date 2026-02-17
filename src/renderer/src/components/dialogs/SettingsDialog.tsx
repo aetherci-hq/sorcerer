@@ -3,14 +3,16 @@ import { getApi, isElectron } from '../../api/client'
 import { useUIStore } from '../../stores/useUIStore'
 import { useToastStore } from '../../stores/useToastStore'
 import {
-  TerminalIcon, GitBranchIcon, SettingsIcon, UserIcon, WifiIcon, CopyIcon, RefreshIcon, EyeIcon, EyeOffIcon
+  TerminalIcon, GitBranchIcon, SettingsIcon, UserIcon, WifiIcon, CopyIcon, RefreshIcon, EyeIcon, EyeOffIcon, PaletteIcon
 } from '../icons'
+import { THEMES, getThemeById, applyTheme } from '../../themes'
 import { gravatarUrl } from '../SidebarFooter'
 
-type SettingsTab = 'profile' | 'sessions' | 'git' | 'remote' | 'general'
+type SettingsTab = 'profile' | 'appearance' | 'sessions' | 'git' | 'remote' | 'general'
 
 const TABS: { id: SettingsTab; label: string; icon: React.ReactNode }[] = [
   { id: 'profile', label: 'Profile', icon: <UserIcon /> },
+  { id: 'appearance', label: 'Appearance', icon: <PaletteIcon /> },
   { id: 'sessions', label: 'Sessions', icon: <TerminalIcon /> },
   { id: 'git', label: 'Git', icon: <GitBranchIcon /> },
   { id: 'remote', label: 'Remote', icon: <WifiIcon /> },
@@ -530,8 +532,45 @@ function GeneralTab() {
   )
 }
 
+function AppearanceTab() {
+  const [themeId, setThemeId] = useSetting('theme', 'default')
+  const themes = Object.values(THEMES)
+
+  const selectTheme = (id: string) => {
+    setThemeId(id)
+    applyTheme(getThemeById(id))
+  }
+
+  return (
+    <>
+      <SectionTitle>Theme</SectionTitle>
+      <div className="theme-selector">
+        {themes.map((theme) => (
+          <button
+            key={theme.id}
+            className={`theme-option ${themeId === theme.id ? 'theme-option--active' : ''}`}
+            onClick={() => selectTheme(theme.id)}
+            type="button"
+          >
+            <div className="theme-option-swatches">
+              <span className="theme-option-swatch" style={{ background: theme.colors['bg-root'] }} title="Background" />
+              <span className="theme-option-swatch" style={{ background: theme.colors['bg-sidebar'] }} title="Sidebar" />
+              <span className="theme-option-swatch" style={{ background: theme.colors['accent'] }} title="Accent" />
+              <span className="theme-option-swatch" style={{ background: theme.colors['text-primary'] }} title="Text" />
+            </div>
+            <div className="theme-option-info">
+              <span className="theme-option-name">{theme.name}</span>
+            </div>
+          </button>
+        ))}
+      </div>
+    </>
+  )
+}
+
 const TAB_CONTENT: Record<SettingsTab, () => React.JSX.Element> = {
   profile: ProfileTab,
+  appearance: AppearanceTab,
   sessions: SessionsTab,
   git: GitTab,
   remote: RemoteTab,

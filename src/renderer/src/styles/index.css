@@ -3248,3 +3248,65 @@ button:focus-visible,
   from { transform: translateX(100%); }
   to   { transform: translateX(0); }
 }
+
+/* ============================
+   THEME SELECTOR
+   ============================ */
+.theme-selector {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.theme-option {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 14px;
+  background: var(--bg-hover);
+  border: 1.5px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  text-align: left;
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 13px;
+}
+
+.theme-option:hover {
+  border-color: var(--border-medium);
+}
+
+.theme-option--active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent-glow-strong), 0 0 12px var(--accent-glow);
+}
+
+.theme-option-swatches {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.theme-option-swatch {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 1px solid var(--border-subtle);
+}
+
+.theme-option-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.theme-option-name {
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

@@ -4,6 +4,7 @@ import { FitAddon } from '@xterm/addon-fit'
 import { getApi } from '../api/client'
 import { useSessionStore } from '../stores/useSessionStore'
 import { useAgentStore } from '../stores/useAgentStore'
+import type { SorcererTheme } from '../themes'
 import '@xterm/xterm/css/xterm.css'
 
 interface TerminalViewProps {
@@ -47,6 +48,39 @@ window.addEventListener('sorcerer:fontSizeChange', (e: Event) => {
   }
 })
 
+// Live theme updates — mirrors the fontSizeChange listener above
+window.addEventListener('sorcerer:themeChange', (e: Event) => {
+  const theme = (e as CustomEvent<SorcererTheme>).detail
+  if (!theme) return
+  const termBg = theme.colors['terminal-bg']
+  for (const [, cached] of terminalCache) {
+    cached.terminal.options.theme = {
+      background: termBg,
+      foreground: theme.colors['text-primary'],
+      cursor: theme.colors['accent'],
+      cursorAccent: termBg,
+      selectionBackground: theme.terminal.selectionBackground,
+      selectionForeground: undefined,
+      black: termBg,
+      red: theme.terminal.red,
+      green: theme.terminal.green,
+      yellow: theme.terminal.yellow,
+      blue: theme.terminal.blue,
+      magenta: theme.terminal.magenta,
+      cyan: theme.terminal.cyan,
+      white: theme.colors['text-primary'],
+      brightBlack: theme.colors['text-tertiary'],
+      brightRed: theme.terminal.brightRed,
+      brightGreen: theme.terminal.brightGreen,
+      brightYellow: theme.terminal.brightYellow,
+      brightBlue: theme.terminal.brightBlue,
+      brightMagenta: theme.terminal.brightMagenta,
+      brightCyan: theme.terminal.brightCyan,
+      brightWhite: theme.terminal.brightWhite
+    }
+  }
+})
+
 export function TerminalView({ sessionId, isFocused }: TerminalViewProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const cleanupRef = useRef<(() => void) | null>(null)
@@ -75,9 +109,11 @@ export function TerminalView({ sessionId, isFocused }: TerminalViewProps) {
 
     let cached = terminalCache.get(sessionId)
     if (!cached) {
-      // Read the agent-driven terminal background from CSS custom property
-      const terminalBg = getComputedStyle(document.documentElement)
-        .getPropertyValue('--terminal-bg').trim() || '#111114'
+      // Read colors from CSS custom properties (set by applyTheme or :root defaults)
+      const cs = getComputedStyle(document.documentElement)
+      const cssVar = (name: string, fallback: string) =>
+        cs.getPropertyValue(name).trim() || fallback
+      const terminalBg = cssVar('--terminal-bg', '#0f0e0c')
 
       const terminal = new Terminal({
         cursorBlink: true,
@@ -85,8 +121,8 @@ export function TerminalView({ sessionId, isFocused }: TerminalViewProps) {
         fontFamily: "'JetBrains Mono', 'Cascadia Code', 'Consolas', monospace",
         theme: {
           background: terminalBg,
-          foreground: '#e8e6e3',
-          cursor: '#e2a445',
+          foreground: cssVar('--text-primary', '#ede6d8'),
+          cursor: cssVar('--accent', '#e2a445'),
           cursorAccent: terminalBg,
           selectionBackground: '#e2a44533',
           selectionForeground: undefined,
@@ -97,8 +133,8 @@ export function TerminalView({ sessionId, isFocused }: TerminalViewProps) {
           blue: '#5ba4e6',
           magenta: '#c084fc',
           cyan: '#22d3ee',
-          white: '#e8e6e3',
-          brightBlack: '#6b6a68',
+          white: cssVar('--text-primary', '#ede6d8'),
+          brightBlack: cssVar('--text-tertiary', '#6b6355'),
           brightRed: '#f87171',
           brightGreen: '#86efac',
           brightYellow: '#fde68a',

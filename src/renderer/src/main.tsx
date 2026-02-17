@@ -1,6 +1,7 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { App } from './App'
+import { getThemeById, applyTheme } from './themes'
 import './styles/index.css'
 
 async function boot() {
@@ -21,6 +22,11 @@ async function boot() {
     const { initRemoteClient } = await import('./api/client')
     await initRemoteClient(baseUrl, token)
   }
+
+  // Apply persisted theme before first render to avoid color flash
+  const { getApi } = await import('./api/client')
+  const themeId = await getApi().settings.get('theme')
+  if (themeId) applyTheme(getThemeById(themeId))
 
   ReactDOM.createRoot(document.getElementById('root')!).render(
     <React.StrictMode>
