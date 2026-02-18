@@ -26,6 +26,10 @@ Requires [Claude Code](https://docs.anthropic.com/en/docs/claude-code) CLI insta
 - **Remote access** — Built-in HTTP + WebSocket server with token auth for browser-based access
 - **Cross-platform** — Windows, macOS, and Linux
 
+## Permissions
+
+By default, Sorcerer runs Claude Code with `--dangerously-skip-permissions` to enable unattended multi-session workflows. This can be toggled per-session and per-agent at creation time. Review [Anthropic's documentation](https://docs.anthropic.com/en/docs/claude-code) to understand the implications.
+
 ## How it works
 
 Sorcerer wraps Claude Code CLI sessions in native pseudo-terminals (node-pty + xterm.js), manages git worktrees for branch isolation, and watches `~/.claude/teams/` to detect team activity. All session data is stored locally in SQLite.

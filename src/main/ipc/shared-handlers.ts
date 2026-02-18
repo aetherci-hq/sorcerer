@@ -188,7 +188,8 @@ export async function createSession(
   { db, pty, worktree }: HandlerServices,
   projectId: string,
   sessionName: string,
-  useMainRepo?: boolean
+  useMainRepo?: boolean,
+  bypassPermissions?: boolean
 ): Promise<any> {
   console.log('[session:create] Starting:', { projectId, sessionName, useMainRepo })
   const project = db.getProject(projectId)
@@ -229,19 +230,23 @@ export async function createSession(
 
   // Create session record
   const id = uuidv4()
+  const skipPerms = bypassPermissions !== false  // default true
   const session = db.addSession({
     id,
     project_id: projectId,
     name: sessionName,
     branch,
-    worktree_path: worktreePath
+    worktree_path: worktreePath,
+    bypass_permissions: skipPerms ? 1 : 0
   })
   console.log('[session:create] Session saved:', { id, status: session?.status })
 
   // Spawn Claude Code directly in the worktree — no shell prompt visible
+  const args: string[] = []
+  if (skipPerms) args.push('--dangerously-skip-permissions')
   pty.spawn(id, worktreePath, {
     command: 'claude',
-    args: ['--dangerously-skip-permissions'],
+    args,
     env: sessionEnv(id)
   })
   const pid = pty.getPid(id)
@@ -451,9 +456,11 @@ export async function restartSession(
     pty.spawn(sessionId, cwd)
   } else {
     // Re-spawn Claude Code directly in the worktree (fresh session)
+    const args: string[] = []
+    if (session.bypass_permissions !== 0) args.push('--dangerously-skip-permissions')
     pty.spawn(sessionId, cwd, {
       command: 'claude',
-      args: ['--dangerously-skip-permissions'],
+      args,
       env: sessionEnv(sessionId)
     })
   }
@@ -485,9 +492,11 @@ export async function resumeSession(
     pty.spawn(sessionId, cwd)
   } else {
     // Resume the most recent Claude Code conversation in this worktree
+    const args = ['--continue']
+    if (session.bypass_permissions !== 0) args.push('--dangerously-skip-permissions')
     pty.spawn(sessionId, cwd, {
       command: 'claude',
-      args: ['--continue', '--dangerously-skip-permissions'],
+      args,
       env: sessionEnv(sessionId)
     })
   }
@@ -666,13 +675,13 @@ function writeAgentManifest(
 
 export function addAgent(
   { db }: HandlerServices,
-  data: { id?: string; name: string; description?: string; system_prompt?: string; mcp_config?: string }
+  data: { id?: string; name: string; description?: string; system_prompt?: string; mcp_config?: string; bypass_permissions?: boolean }
 ): any {
   const id = data.id || uuidv4()
   // Create scratch directory for this agent
   const cwd = path.join(os.homedir(), '.sorcerer', 'agents', id)
   fs.mkdirSync(cwd, { recursive: true })
-  const agent = db.addAgent({ id, ...data })
+  const agent = db.addAgent({ id, ...data, bypass_permissions: (data.bypass_permissions !== false) ? 1 : 0 })
   writeAgentManifest(id, data)
   return agent
 }
@@ -730,7 +739,8 @@ export function startAgent(
   const cwd = path.join(os.homedir(), '.sorcerer', 'agents', agentId)
   fs.mkdirSync(cwd, { recursive: true })
 
-  const args = ['--dangerously-skip-permissions']
+  const args: string[] = []
+  if (agent.bypass_permissions !== 0) args.push('--dangerously-skip-permissions')
   if (agent.mcp_config) args.push('--mcp-config', agent.mcp_config as string)
   if (agent.system_prompt) args.push('--append-system-prompt', agent.system_prompt as string)
 
@@ -758,7 +768,8 @@ export function resumeAgent(
   const cwd = path.join(os.homedir(), '.sorcerer', 'agents', agentId)
   fs.mkdirSync(cwd, { recursive: true })
 
-  const args = ['--continue', '--dangerously-skip-permissions']
+  const args = ['--continue']
+  if (agent.bypass_permissions !== 0) args.push('--dangerously-skip-permissions')
   if (agent.mcp_config) args.push('--mcp-config', agent.mcp_config as string)
   if (agent.system_prompt) args.push('--append-system-prompt', agent.system_prompt as string)
 
@@ -786,7 +797,8 @@ export function restartAgent(
   const cwd = path.join(os.homedir(), '.sorcerer', 'agents', agentId)
   fs.mkdirSync(cwd, { recursive: true })
 
-  const args = ['--dangerously-skip-permissions']
+  const args: string[] = []
+  if (agent.bypass_permissions !== 0) args.push('--dangerously-skip-permissions')
   if (agent.mcp_config) args.push('--mcp-config', agent.mcp_config as string)
   if (agent.system_prompt) args.push('--append-system-prompt', agent.system_prompt as string)
 

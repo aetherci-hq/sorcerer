@@ -15,6 +15,7 @@ export function AddAgentDialog() {
   const [description, setDescription] = useState('')
   const [systemPrompt, setSystemPrompt] = useState('')
   const [mcpConfig, setMcpConfig] = useState('')
+  const [bypassPermissions, setBypassPermissions] = useState(true)
   const [showAdvanced, setShowAdvanced] = useState(false)
 
   const open = activeDialog === 'add-agent'
@@ -24,6 +25,7 @@ export function AddAgentDialog() {
     setDescription('')
     setSystemPrompt('')
     setMcpConfig('')
+    setBypassPermissions(true)
     setShowAdvanced(false)
     closeDialog()
   }
@@ -35,7 +37,8 @@ export function AddAgentDialog() {
       name: name.trim(),
       description: description.trim(),
       system_prompt: systemPrompt.trim(),
-      mcp_config: mcpConfig.trim()
+      mcp_config: mcpConfig.trim(),
+      bypass_permissions: bypassPermissions
     })
     if (id) {
       await startAgent(id)
@@ -67,6 +70,14 @@ export function AddAgentDialog() {
             onChange={(e) => setDescription(e.target.value)}
           />
         </DialogField>
+        <label className="dialog-checkbox">
+          <input
+            type="checkbox"
+            checked={bypassPermissions}
+            onChange={(e) => setBypassPermissions(e.target.checked)}
+          />
+          Auto-accept permissions
+        </label>
         <div className="dialog-hint">
           A standalone Claude Code session — not tied to any git repo.
         </div>

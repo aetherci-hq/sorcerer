@@ -106,6 +106,14 @@ export class DatabaseService {
       this.db.run(`ALTER TABLE sessions ADD COLUMN type TEXT NOT NULL DEFAULT 'session'`)
     } catch { /* column already exists */ }
 
+    // Add bypass_permissions column to sessions and agents (idempotent migration)
+    try {
+      this.db.run(`ALTER TABLE sessions ADD COLUMN bypass_permissions INTEGER NOT NULL DEFAULT 1`)
+    } catch { /* column already exists */ }
+    try {
+      this.db.run(`ALTER TABLE agents ADD COLUMN bypass_permissions INTEGER NOT NULL DEFAULT 1`)
+    } catch { /* column already exists */ }
+
     this.save()
   }
 
@@ -206,13 +214,15 @@ export class DatabaseService {
     type?: 'session' | 'quick-terminal'
     team_name?: string
     parent_session_id?: string
+    bypass_permissions?: number
   }): any {
     if (!this.db) throw new Error('Database not initialized')
     this.db.run(
-      `INSERT INTO sessions (id, project_id, name, branch, worktree_path, status, type, team_name, parent_session_id)
-       VALUES (?, ?, ?, ?, ?, 'active', ?, ?, ?)`,
+      `INSERT INTO sessions (id, project_id, name, branch, worktree_path, status, type, team_name, parent_session_id, bypass_permissions)
+       VALUES (?, ?, ?, ?, ?, 'active', ?, ?, ?, ?)`,
       [data.id, data.project_id, data.name, data.branch, data.worktree_path,
-       data.type || 'session', data.team_name || null, data.parent_session_id || null]
+       data.type || 'session', data.team_name || null, data.parent_session_id || null,
+       data.bypass_permissions ?? 1]
     )
     this.save()
     return this.getSession(data.id)
@@ -278,12 +288,14 @@ export class DatabaseService {
     description?: string
     system_prompt?: string
     mcp_config?: string
+    bypass_permissions?: number
   }): any {
     if (!this.db) throw new Error('Database not initialized')
     this.db.run(
-      `INSERT INTO agents (id, name, description, system_prompt, mcp_config)
-       VALUES (?, ?, ?, ?, ?)`,
-      [data.id, data.name, data.description || '', data.system_prompt || '', data.mcp_config || '']
+      `INSERT INTO agents (id, name, description, system_prompt, mcp_config, bypass_permissions)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [data.id, data.name, data.description || '', data.system_prompt || '', data.mcp_config || '',
+       data.bypass_permissions ?? 1]
     )
     this.save()
     return this.getAgent(data.id)

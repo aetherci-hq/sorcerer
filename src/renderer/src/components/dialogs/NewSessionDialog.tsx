@@ -13,6 +13,7 @@ export function NewSessionDialog() {
   const [name, setName] = useState('')
   const [projectId, setProjectId] = useState('')
   const [useMainRepo, setUseMainRepo] = useState(false)
+  const [bypassPermissions, setBypassPermissions] = useState(true)
 
   const open = activeDialog === 'new-session'
 
@@ -24,13 +25,14 @@ export function NewSessionDialog() {
     setName('')
     setProjectId('')
     setUseMainRepo(false)
+    setBypassPermissions(true)
     closeDialog()
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!name.trim() || !effectiveProjectId) return
-    const session = await createSession(effectiveProjectId, name.trim(), useMainRepo)
+    const session = await createSession(effectiveProjectId, name.trim(), useMainRepo, bypassPermissions)
     if (session) {
       addToast(`Session "${name.trim()}" created`, 'success')
     } else {
@@ -75,6 +77,14 @@ export function NewSessionDialog() {
             onChange={(e) => setUseMainRepo(e.target.checked)}
           />
           Work in main repository
+        </label>
+        <label className="dialog-checkbox">
+          <input
+            type="checkbox"
+            checked={bypassPermissions}
+            onChange={(e) => setBypassPermissions(e.target.checked)}
+          />
+          Auto-accept permissions
         </label>
         <div className="dialog-hint">
           {useMainRepo

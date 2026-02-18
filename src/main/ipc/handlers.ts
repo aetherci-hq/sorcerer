@@ -229,8 +229,8 @@ export function registerIPC(
     return listSessions(services, projectId)
   })
 
-  ipcMain.handle('session:create', async (_event, projectId: string, sessionName: string, useMainRepo?: boolean) => {
-    return createSession(services, projectId, sessionName, useMainRepo)
+  ipcMain.handle('session:create', async (_event, projectId: string, sessionName: string, useMainRepo?: boolean, bypassPermissions?: boolean) => {
+    return createSession(services, projectId, sessionName, useMainRepo, bypassPermissions)
   })
 
   ipcMain.handle('session:spawn-shell', (_event, sessionId: string, cwd: string) => {

@@ -13,7 +13,7 @@ const api = {
 
   session: {
     list: (projectId?: string) => ipcRenderer.invoke('session:list', projectId),
-    create: (projectId: string, name: string, useMainRepo?: boolean) => ipcRenderer.invoke('session:create', projectId, name, useMainRepo),
+    create: (projectId: string, name: string, useMainRepo?: boolean, bypassPermissions?: boolean) => ipcRenderer.invoke('session:create', projectId, name, useMainRepo, bypassPermissions),
     spawnShell: (sessionId: string, cwd: string) => ipcRenderer.invoke('session:spawn-shell', sessionId, cwd),
     kill: (sessionId: string) => ipcRenderer.invoke('session:kill', sessionId),
     archive: (sessionId: string) => ipcRenderer.invoke('session:archive', sessionId),
@@ -34,7 +34,7 @@ const api = {
 
   agent: {
     list: () => ipcRenderer.invoke('agent:list'),
-    add: (data: { id?: string; name: string; description?: string; system_prompt?: string; mcp_config?: string }) =>
+    add: (data: { id?: string; name: string; description?: string; system_prompt?: string; mcp_config?: string; bypass_permissions?: boolean }) =>
       ipcRenderer.invoke('agent:add', data),
     update: (id: string, updates: any) => ipcRenderer.invoke('agent:update', id, updates),
     remove: (id: string) => ipcRenderer.invoke('agent:remove', id),

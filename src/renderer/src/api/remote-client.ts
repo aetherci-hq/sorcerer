@@ -165,8 +165,8 @@ export function createRemoteClient(baseUrl: string, token: string): SorcererAPI 
 
     session: {
       list: (projectId?: string) => rpc('session:list', projectId),
-      create: (projectId: string, name: string, useMainRepo?: boolean) =>
-        rpc('session:create', projectId, name, useMainRepo),
+      create: (projectId: string, name: string, useMainRepo?: boolean, bypassPermissions?: boolean) =>
+        rpc('session:create', projectId, name, useMainRepo, bypassPermissions),
       spawnShell: (sessionId: string, cwd: string) => rpc('session:spawn-shell', sessionId, cwd),
       kill: (sessionId: string) => rpc('session:kill', sessionId),
       archive: (sessionId: string) => rpc('session:archive', sessionId),
@@ -186,7 +186,7 @@ export function createRemoteClient(baseUrl: string, token: string): SorcererAPI 
 
     agent: {
       list: () => rpc('agent:list'),
-      add: (data: { name: string; description?: string; system_prompt?: string; mcp_config?: string }) =>
+      add: (data: { name: string; description?: string; system_prompt?: string; mcp_config?: string; bypass_permissions?: boolean }) =>
         rpc('agent:add', data),
       update: (id: string, updates: any) => rpc('agent:update', id, updates),
       remove: (id: string) => rpc('agent:remove', id),
