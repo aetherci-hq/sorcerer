@@ -112,8 +112,15 @@ function ChildNotesItem({
   parentId: string
   parentType: 'session' | 'agent'
 }) {
-  const { splitRight, setFocusedPanel, splitRoot, openContextMenu } = useUIStore()
+  const { splitRight, setFocusedPanel, splitRoot, focusedPanelId, openContextMenu } = useUIStore()
   const notePanelId = `quicknotes:${parentType}:${parentId}`
+
+  // Determine active/split state
+  const splitIds = splitRoot ? getAllSessionIds(splitRoot) : []
+  const isInSplitView = splitIds.includes(notePanelId)
+  const focusedLeaf = splitRoot ? findLeafBySession(splitRoot, notePanelId) : null
+  const isActive = isInSplitView && focusedLeaf?.id === focusedPanelId
+  const isInSplit = isInSplitView && !isActive
 
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault()
@@ -147,7 +154,7 @@ function ChildNotesItem({
 
   return (
     <div
-      className="tree-item tree-item--child-qt"
+      className={`tree-item tree-item--child-qt ${isActive ? 'tree-item--active' : ''} ${isInSplit ? 'tree-item--split' : ''}`}
       onClick={handleClick}
       onContextMenu={handleContextMenu}
     >

@@ -96,6 +96,7 @@ const api = {
     load: (parentId: string, parentType: string) => ipcRenderer.invoke('quick-notes:load', parentId, parentType),
     save: (id: string, parentId: string, parentType: string, content: string) => ipcRenderer.invoke('quick-notes:save', id, parentId, parentType, content),
     delete: (parentId: string, parentType: string) => ipcRenderer.invoke('quick-notes:delete', parentId, parentType),
+    listParents: () => ipcRenderer.invoke('quick-notes:list-parents') as Promise<{ parent_id: string; parent_type: string }[]>,
   },
 
   settings: {

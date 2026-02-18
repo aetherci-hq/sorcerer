@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { getApi } from '../api/client'
 
 interface QuickNotesState {
   overlayOpen: boolean
@@ -11,6 +12,7 @@ interface QuickNotesState {
   toggleOverlay: (parentId: string, parentType: 'session' | 'agent') => void
   addNotePanel: (parentId: string) => void
   removeNotePanel: (parentId: string) => void
+  loadNotePanels: () => Promise<void>
 }
 
 export const useQuickNotesStore = create<QuickNotesState>((set, get) => ({
@@ -50,5 +52,11 @@ export const useQuickNotesStore = create<QuickNotesState>((set, get) => ({
       next.delete(parentId)
       return { openNotePanels: next }
     })
+  },
+
+  loadNotePanels: async () => {
+    const parents = await getApi().quickNotes.listParents()
+    const panelIds = new Set(parents.map((p) => p.parent_id))
+    set({ openNotePanels: panelIds })
   }
 }))

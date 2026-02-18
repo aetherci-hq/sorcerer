@@ -50,7 +50,8 @@ import {
   getUserInfo,
   loadQuickNote,
   saveQuickNote,
-  deleteQuickNote
+  deleteQuickNote,
+  listQuickNoteParents
 } from './shared-handlers'
 
 let globalApiServer: any = null
@@ -429,6 +430,10 @@ export function registerIPC(
 
   ipcMain.handle('quick-notes:delete', (_event, parentId: string, parentType: string) => {
     return deleteQuickNote(services, parentId, parentType)
+  })
+
+  ipcMain.handle('quick-notes:list-parents', () => {
+    return listQuickNoteParents(services)
   })
 
   // ── System info ─────────────────────────────────────────────

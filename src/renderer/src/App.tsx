@@ -18,6 +18,7 @@ import { useProjectStore } from './stores/useProjectStore'
 import { useSessionStore } from './stores/useSessionStore'
 import { useAgentStore } from './stores/useAgentStore'
 import { useTeamStore } from './stores/useTeamStore'
+import { useQuickNotesStore } from './stores/useQuickNotesStore'
 import { useUIStore } from './stores/useUIStore'
 
 export function App() {
@@ -31,6 +32,7 @@ export function App() {
 
     // Load all data on mount
     loadAgents()
+    useQuickNotesStore.getState().loadNotePanels()
     loadProjects().then(() => {
       // Auto-expand all projects on first load
       const projects = useProjectStore.getState().projects

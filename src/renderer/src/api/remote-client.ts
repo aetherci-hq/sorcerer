@@ -243,6 +243,7 @@ export function createRemoteClient(baseUrl: string, token: string): SorcererAPI 
       load: (parentId: string, parentType: string) => rpc('quick-notes:load', parentId, parentType),
       save: (id: string, parentId: string, parentType: string, content: string) => rpc('quick-notes:save', id, parentId, parentType, content),
       delete: (parentId: string, parentType: string) => rpc('quick-notes:delete', parentId, parentType),
+      listParents: () => rpc('quick-notes:list-parents') as Promise<{ parent_id: string; parent_type: string }[]>,
     },
 
     settings: {

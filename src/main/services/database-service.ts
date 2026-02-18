@@ -366,6 +366,18 @@ export class DatabaseService {
     this.save()
   }
 
+  listQuickNoteParents(): { parent_id: string; parent_type: string }[] {
+    if (!this.db) return []
+    const stmt = this.db.prepare("SELECT parent_id, parent_type FROM quick_notes WHERE content != ''")
+    const results: { parent_id: string; parent_type: string }[] = []
+    while (stmt.step()) {
+      const row = stmt.getAsObject() as { parent_id: string; parent_type: string }
+      results.push(row)
+    }
+    stmt.free()
+    return results
+  }
+
   close(): void {
     if (this.db) {
       this.save()

@@ -937,6 +937,12 @@ export function deleteQuickNote(
   db.deleteQuickNote(parentId, parentType)
 }
 
+export function listQuickNoteParents(
+  { db }: HandlerServices
+): { parent_id: string; parent_type: string }[] {
+  return db.listQuickNoteParents()
+}
+
 // ── System info handlers ────────────────────────────────────
 
 export function getUserInfo(): { username: string; homedir: string } {
