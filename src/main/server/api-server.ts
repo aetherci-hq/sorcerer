@@ -118,8 +118,12 @@ export class ApiServer {
       this.wsHandler?.broadcastFileWatcherEvent(event, data)
     })
 
-    await new Promise<void>((resolve) => {
-      this.httpServer!.listen(this.config.port, this.config.bindAddress, resolve)
+    await new Promise<void>((resolve, reject) => {
+      this.httpServer!.once('error', reject)
+      this.httpServer!.listen(this.config.port, this.config.bindAddress, () => {
+        this.httpServer!.removeListener('error', reject)
+        resolve()
+      })
     })
 
     console.log(`[api-server] Listening on ${this.config.bindAddress}:${this.config.port}`)
