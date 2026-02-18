@@ -21,6 +21,7 @@ Requires [Claude Code](https://docs.anthropic.com/en/docs/claude-code) CLI insta
 - **Standalone sessions** — Launch non-project Claude Code sessions for quick tasks
 - **Session recovery** — Resume previous sessions, detect orphaned worktrees, recover from crashes
 - **Quick Notes** — Per-session scratchpad that persists across restarts
+- **Remote access** — Built-in HTTP + WebSocket server with token auth for browser-based access
 - **Cross-platform** — Windows, macOS, and Linux
 
 ## How it works
