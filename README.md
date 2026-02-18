@@ -12,6 +12,8 @@ Grab the latest release for your platform:
 
 Requires [Claude Code](https://docs.anthropic.com/en/docs/claude-code) CLI installed and available on PATH.
 
+> **Windows note:** The installer is not yet code-signed. SmartScreen may show "Windows protected your PC" — click **More info** → **Run anyway** to proceed. macOS users may need to right-click → Open on first launch.
+
 ## Features
 
 - **Multi-session management** — Run multiple Claude Code sessions side-by-side with persistent terminals
