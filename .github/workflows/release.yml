@@ -65,7 +65,7 @@ jobs:
         run: npm run rebuild
 
       - name: Build
-        run: npm run ${{ matrix.build_script }}
+        run: npm run ${{ matrix.build_script }} -- --publish never
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
