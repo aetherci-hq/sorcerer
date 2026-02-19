@@ -155,6 +155,16 @@ body {
   gap: 9px;
 }
 
+/* macOS: offset sidebar titlebar to avoid traffic light buttons */
+[data-platform="darwin"] .titlebar {
+  padding-left: 72px;
+}
+
+/* macOS: no right padding needed on main titlebar (no Windows overlay) */
+[data-platform="darwin"] .main-titlebar {
+  padding-right: 16px;
+}
+
 .titlebar-logo {
   width: 18px;
   height: 18px;
@@ -1289,6 +1299,11 @@ body {
   justify-content: center;
   padding: 0;
   gap: 0;
+}
+
+/* macOS collapsed: hide logo since traffic lights occupy the space */
+[data-platform="darwin"] .sidebar--collapsed .titlebar-logo {
+  display: none;
 }
 
 /* ============================

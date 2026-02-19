@@ -106,7 +106,8 @@ const api = {
 
   system: {
     userInfo: () => ipcRenderer.invoke('system:userInfo'),
-    accountPicture: () => ipcRenderer.invoke('system:accountPicture')
+    accountPicture: () => ipcRenderer.invoke('system:accountPicture'),
+    platform: process.platform
   },
 
   remote: {

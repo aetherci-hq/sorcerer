@@ -253,7 +253,8 @@ export function createRemoteClient(baseUrl: string, token: string): SorcererAPI 
 
     system: {
       userInfo: () => rpc('system:userInfo'),
-      accountPicture: async () => null
+      accountPicture: async () => null,
+      platform: 'unknown' as string
     },
 
     remote: {

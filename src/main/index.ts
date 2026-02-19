@@ -1,11 +1,25 @@
 import { app, BrowserWindow, ipcMain, shell } from 'electron'
 import path from 'path'
 import fs from 'fs'
+import { execSync } from 'child_process'
 import { PTYService } from './services/pty-service'
 import { DatabaseService } from './services/database-service'
 import { WorktreeService } from './services/worktree-service'
 import { FileWatcherService } from './services/file-watcher-service'
 import { registerIPC } from './ipc/handlers'
+
+// On macOS/Linux, Electron doesn't inherit the user's shell PATH.
+// Fix process.env.PATH so spawned processes (e.g. 'claude') can be found.
+if (process.platform !== 'win32') {
+  try {
+    const userShell = process.env.SHELL || '/bin/bash'
+    const shellPath = execSync(`${userShell} -ilc 'echo -n $PATH'`, {
+      encoding: 'utf8',
+      timeout: 5000
+    })
+    if (shellPath) process.env.PATH = shellPath
+  } catch { /* keep existing PATH */ }
+}
 
 let mainWindow: BrowserWindow | null = null
 let ptyService: PTYService
@@ -58,11 +72,15 @@ async function createWindow(): Promise<void> {
     minHeight: 600,
     frame: false,
     titleBarStyle: 'hidden',
-    titleBarOverlay: {
-      color: '#111114',
-      symbolColor: '#9b9a97',
-      height: 36
-    },
+    ...(process.platform === 'darwin'
+      ? { trafficLightPosition: { x: 12, y: 10 } }
+      : {
+          titleBarOverlay: {
+            color: '#111114',
+            symbolColor: '#9b9a97',
+            height: 36
+          }
+        }),
     backgroundColor: '#111114',
     webPreferences: {
       preload: path.join(__dirname, '../preload/index.js'),

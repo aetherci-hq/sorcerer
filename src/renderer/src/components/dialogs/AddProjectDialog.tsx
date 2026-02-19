@@ -49,7 +49,10 @@ export function AddProjectDialog() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!path.trim()) return
+    if (!path.trim()) {
+      addToast('Please enter a project path', 'error')
+      return
+    }
     try {
       const project = await addProjectByPath(path.trim(), effectiveName || undefined)
       if (project) {

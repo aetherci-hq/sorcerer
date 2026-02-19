@@ -31,7 +31,14 @@ export function NewSessionDialog() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!name.trim() || !effectiveProjectId) return
+    if (!effectiveProjectId) {
+      addToast('Please select a project', 'error')
+      return
+    }
+    if (!name.trim()) {
+      addToast('Please enter a session name', 'error')
+      return
+    }
     const session = await createSession(effectiveProjectId, name.trim(), useMainRepo, bypassPermissions)
     if (session) {
       addToast(`Session "${name.trim()}" created`, 'success')

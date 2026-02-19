@@ -25,6 +25,10 @@ export function App() {
   useKeyboardShortcuts()
 
   useEffect(() => {
+    // Set platform class on <html> for OS-specific CSS (e.g. macOS traffic lights)
+    const platform = getApi().system.platform
+    if (platform) document.documentElement.dataset.platform = platform
+
     const { loadProjects } = useProjectStore.getState()
     const { loadSessions } = useSessionStore.getState()
     const { loadAgents } = useAgentStore.getState()
