@@ -377,9 +377,10 @@ function RemoteTab() {
     addToast('Token copied to clipboard', 'success')
   }
 
+  const accessUrl = `http://${bindAddress === '0.0.0.0' ? 'localhost' : bindAddress}:${port}`
+
   const handleCopyUrl = () => {
-    const url = `http://${bindAddress === '0.0.0.0' ? 'localhost' : bindAddress}:${port}`
-    navigator.clipboard.writeText(url)
+    navigator.clipboard.writeText(accessUrl)
     addToast('URL copied to clipboard', 'success')
   }
 
@@ -391,19 +392,27 @@ function RemoteTab() {
     <>
       <SectionTitle>Server</SectionTitle>
 
-      {running && (
-        <div className="settings-status-banner settings-status-banner--running">
-          <span className="settings-status-dot" />
-          <span>Remote access is running on <strong>{bindAddress}:{port}</strong></span>
-          <button className="settings-copy-inline-btn" type="button" onClick={handleCopyUrl}>
-            <CopyIcon style={{ width: 12, height: 12 }} />
-          </button>
-        </div>
-      )}
-
       <SettingRow label="Enable remote access" description="Start an HTTP API server for browser-based access">
         <Toggle checked={running} onChange={handleToggle} />
       </SettingRow>
+
+      {running && (
+        <div className="settings-remote-preview">
+          <div className="settings-remote-preview-header">
+            <span className="settings-status-dot" />
+            <span>Server running</span>
+          </div>
+          <div className="settings-remote-preview-url-row">
+            <code className="settings-remote-preview-url">{accessUrl}</code>
+            <button className="settings-copy-inline-btn" type="button" onClick={handleCopyUrl} title="Copy URL">
+              <CopyIcon style={{ width: 13, height: 13 }} />
+            </button>
+          </div>
+          <span className="settings-remote-preview-hint">
+            Open this URL in any browser on your network to access Sorcerer remotely.
+          </span>
+        </div>
+      )}
 
       <SectionTitle>Configuration</SectionTitle>
       <SettingRow label="Port" description="Port the API server listens on">

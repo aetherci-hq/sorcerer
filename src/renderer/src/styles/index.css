@@ -2802,6 +2802,76 @@ button:focus-visible,
   border-color: rgba(226, 85, 85, 0.4);
 }
 
+/* ── Remote tab ──────────────────────────────────────────────── */
+
+.settings-remote-preview {
+  margin: 4px 0 12px;
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: var(--bg-hover);
+  border: 1px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.settings-remote-preview-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.settings-status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #34d399;
+  box-shadow: 0 0 6px rgba(52, 211, 153, 0.5);
+  flex-shrink: 0;
+}
+
+.settings-remote-preview-url-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.settings-remote-preview-url {
+  font-family: 'Consolas', 'Menlo', monospace;
+  font-size: 14px;
+  color: var(--accent);
+  letter-spacing: 0.01em;
+  user-select: all;
+}
+
+.settings-copy-inline-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 5px;
+  border: none;
+  background: transparent;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.settings-copy-inline-btn:hover {
+  background: var(--bg-active);
+  color: var(--text-primary);
+}
+
+.settings-remote-preview-hint {
+  font-size: 11.5px;
+  color: var(--text-tertiary);
+  line-height: 1.4;
+}
+
 /* ── Profile tab ─────────────────────────────────────────────── */
 
 .profile-avatar-section {
