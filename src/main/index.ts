@@ -7,6 +7,7 @@ import { DatabaseService } from './services/database-service'
 import { WorktreeService } from './services/worktree-service'
 import { FileWatcherService } from './services/file-watcher-service'
 import { registerIPC } from './ipc/handlers'
+import { syncWorktrees } from './ipc/shared-handlers'
 
 // On macOS/Linux, Electron doesn't inherit the user's shell PATH.
 // Fix process.env.PATH so spawned processes (e.g. 'claude') can be found.
@@ -147,6 +148,25 @@ async function createWindow(): Promise<void> {
     }
   } catch (err) {
     console.error('[crash-recovery] Failed:', err)
+  }
+
+  // Recover orphaned worktree directories that lack DB session records
+  // (e.g. session was deleted from DB but worktree dir still exists on disk)
+  try {
+    const services = { db: dbService, pty: ptyService, worktree: worktreeService, fileWatcher: fileWatcherService }
+    const allProjects = dbService.listProjects()
+    for (const project of allProjects) {
+      try {
+        const result = await syncWorktrees(services, project.id)
+        if (result.created > 0 || result.removed > 0) {
+          console.log(`[startup-sync] ${project.name}: recovered ${result.created}, cleaned ${result.removed}`)
+        }
+      } catch (err) {
+        console.log('[startup-sync] Failed for project:', project.name, err)
+      }
+    }
+  } catch (err) {
+    console.error('[startup-sync] Failed:', err)
   }
 
   // One-time cleanup: clear mock team_name values from sessions
