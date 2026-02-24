@@ -107,7 +107,8 @@ export async function syncWorktrees(
       project_id: projectId,
       name: entry.name,
       branch,
-      worktree_path: dirPath
+      worktree_path: dirPath,
+      status: 'idle'
     })
     created++
   }
