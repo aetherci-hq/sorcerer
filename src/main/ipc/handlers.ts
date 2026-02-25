@@ -51,7 +51,9 @@ import {
   loadQuickNote,
   saveQuickNote,
   deleteQuickNote,
-  listQuickNoteParents
+  listQuickNoteParents,
+  setSessionRemoteControl,
+  setAgentRemoteControl
 } from './shared-handlers'
 
 let globalApiServer: any = null
@@ -229,8 +231,8 @@ export function registerIPC(
     return listSessions(services, projectId)
   })
 
-  ipcMain.handle('session:create', async (_event, projectId: string, sessionName: string, useMainRepo?: boolean, bypassPermissions?: boolean) => {
-    return createSession(services, projectId, sessionName, useMainRepo, bypassPermissions)
+  ipcMain.handle('session:create', async (_event, projectId: string, sessionName: string, useMainRepo?: boolean, bypassPermissions?: boolean, remoteControl?: boolean) => {
+    return createSession(services, projectId, sessionName, useMainRepo, bypassPermissions, remoteControl)
   })
 
   ipcMain.handle('session:spawn-shell', (_event, sessionId: string, cwd: string) => {
@@ -346,6 +348,10 @@ export function registerIPC(
     return restoreSession(services, sessionId)
   })
 
+  ipcMain.handle('session:set-remote-control', (_event, sessionId: string, enabled: boolean) => {
+    return setSessionRemoteControl(services, sessionId, enabled)
+  })
+
   // ── Agent operations ───────────────────────────────────────
 
   ipcMain.handle('agent:list', () => {
@@ -382,6 +388,10 @@ export function registerIPC(
 
   ipcMain.handle('agent:kill', (_event, agentId: string) => {
     return killAgent(services, agentId)
+  })
+
+  ipcMain.handle('agent:set-remote-control', (_event, agentId: string, enabled: boolean) => {
+    return setAgentRemoteControl(services, agentId, enabled)
   })
 
   // ── Terminal I/O ────────────────────────────────────────────

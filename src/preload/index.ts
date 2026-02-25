@@ -13,7 +13,7 @@ const api = {
 
   session: {
     list: (projectId?: string) => ipcRenderer.invoke('session:list', projectId),
-    create: (projectId: string, name: string, useMainRepo?: boolean, bypassPermissions?: boolean) => ipcRenderer.invoke('session:create', projectId, name, useMainRepo, bypassPermissions),
+    create: (projectId: string, name: string, useMainRepo?: boolean, bypassPermissions?: boolean, remoteControl?: boolean) => ipcRenderer.invoke('session:create', projectId, name, useMainRepo, bypassPermissions, remoteControl),
     spawnShell: (sessionId: string, cwd: string) => ipcRenderer.invoke('session:spawn-shell', sessionId, cwd),
     kill: (sessionId: string) => ipcRenderer.invoke('session:kill', sessionId),
     archive: (sessionId: string) => ipcRenderer.invoke('session:archive', sessionId),
@@ -29,12 +29,13 @@ const api = {
     createQuickTerminal: (sourceSessionId: string) => ipcRenderer.invoke('session:create-quick-terminal', sourceSessionId),
     createProjectQuickTerminal: (projectId: string) => ipcRenderer.invoke('session:create-project-quick-terminal', projectId),
     rename: (sessionId: string, name: string) => ipcRenderer.invoke('session:rename', sessionId, name),
-    landOnMain: (sessionId: string) => ipcRenderer.invoke('session:land-on-main', sessionId)
+    landOnMain: (sessionId: string) => ipcRenderer.invoke('session:land-on-main', sessionId),
+    setRemoteControl: (sessionId: string, enabled: boolean) => ipcRenderer.invoke('session:set-remote-control', sessionId, enabled)
   },
 
   agent: {
     list: () => ipcRenderer.invoke('agent:list'),
-    add: (data: { id?: string; name: string; description?: string; system_prompt?: string; mcp_config?: string; bypass_permissions?: boolean }) =>
+    add: (data: { id?: string; name: string; description?: string; system_prompt?: string; mcp_config?: string; bypass_permissions?: boolean; remote_control?: boolean }) =>
       ipcRenderer.invoke('agent:add', data),
     update: (id: string, updates: any) => ipcRenderer.invoke('agent:update', id, updates),
     remove: (id: string) => ipcRenderer.invoke('agent:remove', id),
@@ -43,6 +44,7 @@ const api = {
     restart: (id: string) => ipcRenderer.invoke('agent:restart', id),
     kill: (id: string) => ipcRenderer.invoke('agent:kill', id),
     createQuickTerminal: (agentId: string) => ipcRenderer.invoke('agent:create-quick-terminal', agentId),
+    setRemoteControl: (agentId: string, enabled: boolean) => ipcRenderer.invoke('agent:set-remote-control', agentId, enabled),
   },
 
   terminal: {

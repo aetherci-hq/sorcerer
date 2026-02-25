@@ -43,7 +43,9 @@ import {
   getUserInfo,
   loadQuickNote,
   saveQuickNote,
-  deleteQuickNote
+  deleteQuickNote,
+  setSessionRemoteControl,
+  setAgentRemoteControl
 } from '../ipc/shared-handlers'
 import { ScrollbackBuffer } from './scrollback'
 import { WebSocketHandler } from './ws-handler'
@@ -216,8 +218,8 @@ export class ApiServer {
 
       // Session
       'session:list': (projectId?: string) => listSessions(s, projectId),
-      'session:create': (projectId: string, name: string, useMainRepo?: boolean) =>
-        createSession(s, projectId, name, useMainRepo),
+      'session:create': (projectId: string, name: string, useMainRepo?: boolean, bypassPermissions?: boolean, remoteControl?: boolean) =>
+        createSession(s, projectId, name, useMainRepo, bypassPermissions, remoteControl),
       'session:spawn-shell': (sessionId: string, cwd: string) => spawnShell(s, sessionId, cwd),
       'session:create-quick-terminal': (sourceId: string) => createQuickTerminal(s, sourceId),
       'session:rename': (sessionId: string, name: string) => renameSession(s, sessionId, name),
@@ -233,6 +235,8 @@ export class ApiServer {
       'session:git-status': (sessionId: string) => getSessionGitStatus(s, sessionId),
       'session:land-on-main': (sessionId: string) => landOnMain(s, sessionId),
       'session:restore': (sessionId: string) => restoreSession(s, sessionId),
+      'session:set-remote-control': (sessionId: string, enabled: boolean) =>
+        setSessionRemoteControl(s, sessionId, enabled),
       'session:open-remote': (_sessionId: string) => {
         // Remote clients should navigate via browser — no shell.openExternal available
         return { opened: false, error: 'Use browser navigation for remote clients' }
@@ -247,6 +251,8 @@ export class ApiServer {
       'agent:resume': (id: string) => resumeAgent(s, id),
       'agent:restart': (id: string) => restartAgent(s, id),
       'agent:kill': (id: string) => killAgent(s, id),
+      'agent:set-remote-control': (agentId: string, enabled: boolean) =>
+        setAgentRemoteControl(s, agentId, enabled),
       'agent:create-quick-terminal': (agentId: string) => createAgentQuickTerminal(s, agentId),
 
       // Teams

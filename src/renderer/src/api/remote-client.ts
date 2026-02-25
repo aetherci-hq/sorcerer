@@ -165,8 +165,8 @@ export function createRemoteClient(baseUrl: string, token: string): SorcererAPI 
 
     session: {
       list: (projectId?: string) => rpc('session:list', projectId),
-      create: (projectId: string, name: string, useMainRepo?: boolean, bypassPermissions?: boolean) =>
-        rpc('session:create', projectId, name, useMainRepo, bypassPermissions),
+      create: (projectId: string, name: string, useMainRepo?: boolean, bypassPermissions?: boolean, remoteControl?: boolean) =>
+        rpc('session:create', projectId, name, useMainRepo, bypassPermissions, remoteControl),
       spawnShell: (sessionId: string, cwd: string) => rpc('session:spawn-shell', sessionId, cwd),
       kill: (sessionId: string) => rpc('session:kill', sessionId),
       archive: (sessionId: string) => rpc('session:archive', sessionId),
@@ -181,12 +181,13 @@ export function createRemoteClient(baseUrl: string, token: string): SorcererAPI 
       restore: (sessionId: string) => rpc('session:restore', sessionId),
       createQuickTerminal: (sourceSessionId: string) => rpc('session:create-quick-terminal', sourceSessionId),
       rename: (sessionId: string, name: string) => rpc('session:rename', sessionId, name),
-      landOnMain: (sessionId: string) => rpc('session:land-on-main', sessionId)
+      landOnMain: (sessionId: string) => rpc('session:land-on-main', sessionId),
+      setRemoteControl: (sessionId: string, enabled: boolean) => rpc('session:set-remote-control', sessionId, enabled)
     },
 
     agent: {
       list: () => rpc('agent:list'),
-      add: (data: { name: string; description?: string; system_prompt?: string; mcp_config?: string; bypass_permissions?: boolean }) =>
+      add: (data: { name: string; description?: string; system_prompt?: string; mcp_config?: string; bypass_permissions?: boolean; remote_control?: boolean }) =>
         rpc('agent:add', data),
       update: (id: string, updates: any) => rpc('agent:update', id, updates),
       remove: (id: string) => rpc('agent:remove', id),
@@ -194,7 +195,8 @@ export function createRemoteClient(baseUrl: string, token: string): SorcererAPI 
       resume: (id: string) => rpc('agent:resume', id),
       restart: (id: string) => rpc('agent:restart', id),
       kill: (id: string) => rpc('agent:kill', id),
-      createQuickTerminal: (agentId: string) => rpc('agent:create-quick-terminal', agentId)
+      createQuickTerminal: (agentId: string) => rpc('agent:create-quick-terminal', agentId),
+      setRemoteControl: (agentId: string, enabled: boolean) => rpc('agent:set-remote-control', agentId, enabled)
     },
 
     terminal: {

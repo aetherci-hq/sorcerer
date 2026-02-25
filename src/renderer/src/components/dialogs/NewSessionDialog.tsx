@@ -14,6 +14,7 @@ export function NewSessionDialog() {
   const [projectId, setProjectId] = useState('')
   const [useMainRepo, setUseMainRepo] = useState(false)
   const [bypassPermissions, setBypassPermissions] = useState(true)
+  const [remoteControl, setRemoteControl] = useState(false)
 
   const open = activeDialog === 'new-session'
 
@@ -26,6 +27,7 @@ export function NewSessionDialog() {
     setProjectId('')
     setUseMainRepo(false)
     setBypassPermissions(true)
+    setRemoteControl(false)
     closeDialog()
   }
 
@@ -39,7 +41,7 @@ export function NewSessionDialog() {
       addToast('Please enter a session name', 'error')
       return
     }
-    const session = await createSession(effectiveProjectId, name.trim(), useMainRepo, bypassPermissions)
+    const session = await createSession(effectiveProjectId, name.trim(), useMainRepo, bypassPermissions, remoteControl)
     if (session) {
       addToast(`Session "${name.trim()}" created`, 'success')
     } else {
@@ -92,6 +94,14 @@ export function NewSessionDialog() {
             onChange={(e) => setBypassPermissions(e.target.checked)}
           />
           Auto-accept permissions
+        </label>
+        <label className="dialog-checkbox">
+          <input
+            type="checkbox"
+            checked={remoteControl}
+            onChange={(e) => setRemoteControl(e.target.checked)}
+          />
+          Enable Remote Control
         </label>
         <div className="dialog-hint">
           {useMainRepo

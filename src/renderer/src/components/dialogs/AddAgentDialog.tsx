@@ -16,6 +16,7 @@ export function AddAgentDialog() {
   const [systemPrompt, setSystemPrompt] = useState('')
   const [mcpConfig, setMcpConfig] = useState('')
   const [bypassPermissions, setBypassPermissions] = useState(true)
+  const [remoteControl, setRemoteControl] = useState(false)
   const [showAdvanced, setShowAdvanced] = useState(false)
 
   const open = activeDialog === 'add-agent'
@@ -26,6 +27,7 @@ export function AddAgentDialog() {
     setSystemPrompt('')
     setMcpConfig('')
     setBypassPermissions(true)
+    setRemoteControl(false)
     setShowAdvanced(false)
     closeDialog()
   }
@@ -38,7 +40,8 @@ export function AddAgentDialog() {
       description: description.trim(),
       system_prompt: systemPrompt.trim(),
       mcp_config: mcpConfig.trim(),
-      bypass_permissions: bypassPermissions
+      bypass_permissions: bypassPermissions,
+      remote_control: remoteControl
     })
     if (id) {
       await startAgent(id)
@@ -77,6 +80,14 @@ export function AddAgentDialog() {
             onChange={(e) => setBypassPermissions(e.target.checked)}
           />
           Auto-accept permissions
+        </label>
+        <label className="dialog-checkbox">
+          <input
+            type="checkbox"
+            checked={remoteControl}
+            onChange={(e) => setRemoteControl(e.target.checked)}
+          />
+          Enable Remote Control
         </label>
         <div className="dialog-hint">
           A standalone Claude Code session — not tied to any git repo.

@@ -7,7 +7,7 @@ import { useAgentStore } from '../stores/useAgentStore'
 import { useToastStore } from '../stores/useToastStore'
 import {
   PlusIcon, CopyIcon, TrashIcon, SplitHorizontalIcon, SplitVerticalIcon,
-  RefreshIcon, UploadIcon, ExternalLinkIcon, ArchiveIcon, RotateCcwIcon, EditIcon, PlayIcon, StopIcon, TerminalIcon, MergeIcon, NotesIcon
+  RefreshIcon, UploadIcon, ExternalLinkIcon, ArchiveIcon, RotateCcwIcon, EditIcon, PlayIcon, StopIcon, TerminalIcon, MergeIcon, NotesIcon, SmartphoneIcon
 } from './icons'
 import { useQuickNotesStore } from '../stores/useQuickNotesStore'
 
@@ -138,6 +138,7 @@ export function ContextMenu() {
 
   if (contextMenu.type === 'agent') {
     const isRunning = targetAgent?.status === 'active'
+    const agentRcEnabled = targetAgent?.remote_control === 1
     items = [
       ...(isRunning ? [
         { label: 'Stop Agent', icon: <StopIcon className={iconClass} />, action: async () => {
@@ -154,6 +155,14 @@ export function ContextMenu() {
           addToast('New agent session started', 'info')
         }}
       ]),
+      { label: agentRcEnabled ? 'Disable Remote Control' : 'Enable Remote Control',
+        icon: <SmartphoneIcon className={iconClass} />,
+        action: async () => {
+          await getApi().agent.setRemoteControl(contextMenu.targetId, !agentRcEnabled)
+          useAgentStore.getState().updateAgentInStore(contextMenu.targetId, { remote_control: agentRcEnabled ? 0 : 1 })
+          addToast(agentRcEnabled ? 'Remote Control disabled for future sessions' : 'Remote Control enabled — check terminal for connection URL', 'success')
+        }
+      },
       { type: 'separator' as const },
       { label: 'Split Right', icon: <SplitHorizontalIcon className={iconClass} />, action: () => { focusTargetPanel(contextMenu.targetId); splitRight(contextMenu.targetId) } },
       { label: 'Split Down', icon: <SplitVerticalIcon className={iconClass} />, action: () => { focusTargetPanel(contextMenu.targetId); splitDown(contextMenu.targetId) } },
@@ -316,6 +325,15 @@ export function ContextMenu() {
         await restartSession(contextMenu.targetId)
         addToast('New session started', 'info')
       }},
+      { label: targetSession?.remote_control ? 'Disable Remote Control' : 'Enable Remote Control',
+        icon: <SmartphoneIcon className={iconClass} />,
+        action: async () => {
+          const enabling = !targetSession?.remote_control
+          await getApi().session.setRemoteControl(contextMenu.targetId, enabling)
+          useSessionStore.getState().updateSessionInStore(contextMenu.targetId, { remote_control: enabling ? 1 : 0 })
+          addToast(enabling ? 'Remote Control enabled — check terminal for connection URL' : 'Remote Control disabled for future sessions', 'success')
+        }
+      },
       { label: 'Copy Worktree Path', icon: <CopyIcon className={iconClass} />, action: () => {
         if (targetSession) copyToClipboard(targetSession.worktree_path, 'Worktree path')
       }},

@@ -20,6 +20,7 @@ export interface Session {
   agentId?: string
   team_name?: string | null
   bypass_permissions?: number
+  remote_control?: number
   pid?: number | null
   created_at?: number
   archived_at?: number | null
@@ -60,6 +61,7 @@ export interface Agent {
   system_prompt: string
   mcp_config: string
   bypass_permissions: number
+  remote_control: number
   status: 'active' | 'idle' | 'archived'
   pid: number | null
   team_name: string | null

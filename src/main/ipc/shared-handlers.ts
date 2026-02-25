@@ -29,6 +29,18 @@ export function sessionEnv(sessionId: string): Record<string, string> {
   }
 }
 
+/**
+ * Schedule enabling Remote Control on a Claude Code session.
+ * Waits for Claude Code to initialize, then sends the /remote-control command.
+ */
+function enableRemoteControl(ptyService: PTYService, sessionId: string): void {
+  setTimeout(() => {
+    if (ptyService.isRunning(sessionId)) {
+      ptyService.write(sessionId, '/remote-control\n')
+    }
+  }, 3000)
+}
+
 // ── Project handlers ────────────────────────────────────────
 
 export function listProjects({ db }: HandlerServices): any[] {
@@ -190,9 +202,10 @@ export async function createSession(
   projectId: string,
   sessionName: string,
   useMainRepo?: boolean,
-  bypassPermissions?: boolean
+  bypassPermissions?: boolean,
+  remoteControl?: boolean
 ): Promise<any> {
-  console.log('[session:create] Starting:', { projectId, sessionName, useMainRepo })
+  console.log('[session:create] Starting:', { projectId, sessionName, useMainRepo, remoteControl })
   const project = db.getProject(projectId)
   if (!project) throw new Error('Project not found')
   console.log('[session:create] Project found:', project.path)
@@ -232,13 +245,15 @@ export async function createSession(
   // Create session record
   const id = uuidv4()
   const skipPerms = bypassPermissions !== false  // default true
+  const rc = remoteControl ? 1 : 0
   const session = db.addSession({
     id,
     project_id: projectId,
     name: sessionName,
     branch,
     worktree_path: worktreePath,
-    bypass_permissions: skipPerms ? 1 : 0
+    bypass_permissions: skipPerms ? 1 : 0,
+    remote_control: rc
   })
   console.log('[session:create] Session saved:', { id, status: session?.status })
 
@@ -254,6 +269,11 @@ export async function createSession(
   console.log('[session:create] Claude spawned, pid:', pid)
   if (pid) {
     db.updateSession(id, { pid })
+  }
+
+  // Enable Remote Control if requested
+  if (remoteControl) {
+    enableRemoteControl(pty, id)
   }
 
   // Push branch to remote on creation (fire-and-forget) — skip for main repo / non-git / empty repo sessions
@@ -464,6 +484,11 @@ export async function restartSession(
       args,
       env: sessionEnv(sessionId)
     })
+
+    // Re-enable Remote Control if previously set
+    if (session.remote_control) {
+      enableRemoteControl(pty, sessionId)
+    }
   }
   const pid = pty.getPid(sessionId)
   db.updateSession(sessionId, { status: 'active', pid: pid ?? null })
@@ -500,6 +525,11 @@ export async function resumeSession(
       args,
       env: sessionEnv(sessionId)
     })
+
+    // Re-enable Remote Control if previously set
+    if (session.remote_control) {
+      enableRemoteControl(pty, sessionId)
+    }
   }
   const pid = pty.getPid(sessionId)
   db.updateSession(sessionId, { status: 'active', pid: pid ?? null })
@@ -676,13 +706,17 @@ function writeAgentManifest(
 
 export function addAgent(
   { db }: HandlerServices,
-  data: { id?: string; name: string; description?: string; system_prompt?: string; mcp_config?: string; bypass_permissions?: boolean }
+  data: { id?: string; name: string; description?: string; system_prompt?: string; mcp_config?: string; bypass_permissions?: boolean; remote_control?: boolean }
 ): any {
   const id = data.id || uuidv4()
   // Create scratch directory for this agent
   const cwd = path.join(os.homedir(), '.sorcerer', 'agents', id)
   fs.mkdirSync(cwd, { recursive: true })
-  const agent = db.addAgent({ id, ...data, bypass_permissions: (data.bypass_permissions !== false) ? 1 : 0 })
+  const agent = db.addAgent({
+    id, ...data,
+    bypass_permissions: (data.bypass_permissions !== false) ? 1 : 0,
+    remote_control: data.remote_control ? 1 : 0
+  })
   writeAgentManifest(id, data)
   return agent
 }
@@ -752,6 +786,12 @@ export function startAgent(
   })
   const pid = pty.getPid(agentId)
   db.updateAgent(agentId, { status: 'active', pid: pid ?? null })
+
+  // Enable Remote Control if configured
+  if (agent.remote_control) {
+    enableRemoteControl(pty, agentId)
+  }
+
   return db.getAgent(agentId)
 }
 
@@ -781,6 +821,12 @@ export function resumeAgent(
   })
   const pid = pty.getPid(agentId)
   db.updateAgent(agentId, { status: 'active', pid: pid ?? null })
+
+  // Re-enable Remote Control if configured
+  if (agent.remote_control) {
+    enableRemoteControl(pty, agentId)
+  }
+
   return db.getAgent(agentId)
 }
 
@@ -810,6 +856,12 @@ export function restartAgent(
   })
   const pid = pty.getPid(agentId)
   db.updateAgent(agentId, { status: 'active', pid: pid ?? null })
+
+  // Re-enable Remote Control if configured
+  if (agent.remote_control) {
+    enableRemoteControl(pty, agentId)
+  }
+
   return db.getAgent(agentId)
 }
 
@@ -954,6 +1006,38 @@ export function listQuickNoteParents(
   { db }: HandlerServices
 ): { parent_id: string; parent_type: string }[] {
   return db.listQuickNoteParents()
+}
+
+// ── Remote Control handlers ─────────────────────────────────
+
+export function setSessionRemoteControl(
+  { db, pty }: HandlerServices,
+  sessionId: string,
+  enabled: boolean
+): any {
+  db.updateSession(sessionId, { remote_control: enabled ? 1 : 0 })
+
+  // If enabling on a running session, send the command now
+  if (enabled && pty.isRunning(sessionId)) {
+    pty.write(sessionId, '/remote-control\n')
+  }
+
+  return db.getSession(sessionId)
+}
+
+export function setAgentRemoteControl(
+  { db, pty }: HandlerServices,
+  agentId: string,
+  enabled: boolean
+): any {
+  db.updateAgent(agentId, { remote_control: enabled ? 1 : 0 })
+
+  // If enabling on a running agent, send the command now
+  if (enabled && pty.isRunning(agentId)) {
+    pty.write(agentId, '/remote-control\n')
+  }
+
+  return db.getAgent(agentId)
 }
 
 // ── System info handlers ────────────────────────────────────
