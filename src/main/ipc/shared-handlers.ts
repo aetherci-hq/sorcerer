@@ -618,11 +618,6 @@ export async function landOnMain(
   { db, pty, worktree }: HandlerServices,
   sessionId: string
 ): Promise<{ landed: boolean; error?: string }> {
-  // Kill running process if active
-  if (pty.isRunning(sessionId)) {
-    pty.kill(sessionId)
-  }
-
   const session = db.getSession(sessionId)
   if (!session) throw new Error('Session not found')
   const project = db.getProject(session.project_id as string)
@@ -631,6 +626,11 @@ export async function landOnMain(
   // Main repo sessions have nothing to land — already on main
   if (session.worktree_path === project.path) {
     return { landed: false, error: 'Cannot land a main repository session — it is already working in the main repo.' }
+  }
+
+  // Kill running process — needed so worktree files aren't locked
+  if (pty.isRunning(sessionId)) {
+    pty.kill(sessionId)
   }
 
   // Auto-commit dirty work in the worktree
@@ -649,6 +649,8 @@ export async function landOnMain(
   )
 
   if (!mergeResult.merged) {
+    // Merge failed — restore session to idle state so it's not left broken
+    db.updateSession(sessionId, { status: 'idle', pid: null })
     return { landed: false, error: mergeResult.error }
   }
 

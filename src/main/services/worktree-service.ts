@@ -321,9 +321,10 @@ export class WorktreeService {
   }
 
   async squashMergeToMain(projectPath: string, branch: string, sessionName: string): Promise<{ merged: boolean; error?: string }> {
-    try {
-      const git: SimpleGit = simpleGit(projectPath)
+    const git: SimpleGit = simpleGit(projectPath)
+    let needsStash = false
 
+    try {
       // Detect default branch
       let defaultBranch = 'main'
       try {
@@ -337,11 +338,11 @@ export class WorktreeService {
         }
       }
 
-      // Check that the default branch worktree has no staged or modified files
-      // (untracked files are fine — they don't interfere with a merge)
+      // Stash dirty changes on main so they don't block the merge
       const status = await git.status()
-      if (status.modified.length > 0 || status.staged.length > 0 || status.deleted.length > 0 || status.renamed.length > 0 || status.conflicted.length > 0) {
-        return { merged: false, error: `The ${defaultBranch} branch has uncommitted changes` }
+      needsStash = status.modified.length > 0 || status.staged.length > 0 || status.deleted.length > 0 || status.renamed.length > 0
+      if (needsStash) {
+        await git.raw(['stash', 'push', '-m', `sorcerer-land: auto-stash before landing ${branch}`])
       }
 
       // Pull latest from remote so local main is up to date
@@ -396,12 +397,14 @@ export class WorktreeService {
       return { merged: true }
     } catch (err: any) {
       // Unexpected error — ensure we don't leave main in a dirty state
-      try {
-        const git: SimpleGit = simpleGit(projectPath)
-        await git.raw(['reset', '--hard'])
-      } catch { /* ignore */ }
+      try { await git.raw(['reset', '--hard']) } catch { /* ignore */ }
       console.error('[squashMergeToMain] Failed:', err)
       return { merged: false, error: err?.message || 'Squash merge failed' }
+    } finally {
+      // Always restore stashed changes
+      if (needsStash) {
+        try { await git.raw(['stash', 'pop']) } catch { /* ignore — stash may have been consumed */ }
+      }
     }
   }
 

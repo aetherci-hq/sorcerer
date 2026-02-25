@@ -1,6 +1,6 @@
 import { useEffect, useRef, type ReactNode } from 'react'
 import { getApi } from '../api/client'
-import { useUIStore, findLeafBySession } from '../stores/useUIStore'
+import { useUIStore, findLeaf, findLeafBySession } from '../stores/useUIStore'
 import { useProjectStore } from '../stores/useProjectStore'
 import { useSessionStore } from '../stores/useSessionStore'
 import { useAgentStore } from '../stores/useAgentStore'
@@ -134,6 +134,20 @@ export function ContextMenu() {
     }
   }
 
+  // If the currently focused panel is empty, fill it with the session instead of splitting
+  const fillEmptyOrSplit = (sessionId: string) => {
+    const { splitRoot: root, focusedPanelId, setPanelSession } = useUIStore.getState()
+    if (root && focusedPanelId) {
+      const focused = findLeaf(root, focusedPanelId)
+      if (focused && focused.sessionId === null) {
+        setPanelSession(focusedPanelId, sessionId)
+        useSessionStore.getState().setActiveSession(sessionId)
+        return
+      }
+    }
+    splitRight(sessionId)
+  }
+
   let items: MenuItem[]
 
   if (contextMenu.type === 'agent') {
@@ -171,8 +185,7 @@ export function ContextMenu() {
         if (qt) {
           useSessionStore.getState().addLocalSession(qt as any)
           ensureExpanded(contextMenu.targetId)
-          focusTargetPanel(contextMenu.targetId)
-          splitRight(qt.id)
+          fillEmptyOrSplit(qt.id)
           const { splitRoot: root, setFocusedPanel } = useUIStore.getState()
           if (root) {
             const leaf = findLeafBySession(root, qt.id)
@@ -205,7 +218,7 @@ export function ContextMenu() {
         const newSession = await window.sorcerer.session.createProjectQuickTerminal(contextMenu.targetId)
         if (newSession) {
           await useSessionStore.getState().loadSessions()
-          splitRight(newSession.id)
+          fillEmptyOrSplit(newSession.id)
           useSessionStore.getState().setActiveSession(newSession.id)
         }
       }},
@@ -293,8 +306,7 @@ export function ContextMenu() {
         const newSession = await createQuickTerminal(contextMenu.targetId)
         if (newSession) {
           ensureExpanded(contextMenu.targetId)
-          focusTargetPanel(contextMenu.targetId)
-          splitRight(newSession.id)
+          fillEmptyOrSplit(newSession.id)
           const { splitRoot: root, setFocusedPanel } = useUIStore.getState()
           if (root) {
             const leaf = findLeafBySession(root, newSession.id)

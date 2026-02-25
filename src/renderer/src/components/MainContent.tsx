@@ -3,10 +3,10 @@ import { getApi } from '../api/client'
 import { useSessionStore } from '../stores/useSessionStore'
 import { useProjectStore } from '../stores/useProjectStore'
 import { useAgentStore } from '../stores/useAgentStore'
-import { useUIStore, findLeafBySession } from '../stores/useUIStore'
+import { useUIStore, findLeaf, findLeafBySession } from '../stores/useUIStore'
 import { useTeamStore } from '../stores/useTeamStore'
 import { OrphanWorkspaceBanner } from './OrphanWorkspaceBanner'
-import { GitBranchIcon, TerminalIcon, ClockIcon, UserIcon, BotIcon, NotesIcon } from './icons'
+import { GitBranchIcon, TerminalIcon, ClockIcon, UserIcon, BotIcon, NotesIcon, SplitHorizontalIcon, SplitVerticalIcon } from './icons'
 import { StatusDot } from './StatusDot'
 import { Tooltip } from './Tooltip'
 import { TerminalView } from './TerminalView'
@@ -174,7 +174,7 @@ function SplitDivider({ direction, onDrag }: { direction: 'horizontal' | 'vertic
 }
 
 function SplitNodeView({ node }: { node: SplitNode }) {
-  const { focusedPanelId, setFocusedPanel, closePanel, setSplitRatio, setPanelSession, splitRight } = useUIStore()
+  const { focusedPanelId, setFocusedPanel, closePanel, setSplitRatio, setPanelSession, splitRight, splitDown } = useUIStore()
   const { sessions, setActiveSession, deleteSession, createQuickTerminal, addLocalSession } = useSessionStore()
   const { agents: agentsList } = useAgentStore()
 
@@ -228,6 +228,20 @@ function SplitNodeView({ node }: { node: SplitNode }) {
       }
     }
 
+    // If the focused panel is empty, fill it instead of creating a new split
+    const fillEmptyOrSplit = (sessionId: string) => {
+      const { splitRoot: root, focusedPanelId: fpId } = useUIStore.getState()
+      if (root && fpId) {
+        const focused = findLeaf(root, fpId)
+        if (focused && focused.sessionId === null) {
+          setPanelSession(fpId, sessionId)
+          setActiveSession(sessionId)
+          return
+        }
+      }
+      splitRight(sessionId)
+    }
+
     const openQuickNotesSplit = (parentId: string, parentType: 'session' | 'agent') => {
       const notePanelId = `quicknotes:${parentType}:${parentId}`
       useQuickNotesStore.getState().addNotePanel(parentId)
@@ -270,7 +284,7 @@ function SplitNodeView({ node }: { node: SplitNode }) {
                     const newSession = await createQuickTerminal(session.id)
                     if (newSession) {
                       ensureExpanded(session.id)
-                      splitRight(newSession.id)
+                      fillEmptyOrSplit(newSession.id)
                       const { splitRoot: root } = useUIStore.getState()
                       if (root) {
                         const leaf = findLeafBySession(root, newSession.id)
@@ -307,7 +321,7 @@ function SplitNodeView({ node }: { node: SplitNode }) {
                     if (qt) {
                       addLocalSession(qt as any)
                       ensureExpanded(agent.id)
-                      splitRight(qt.id)
+                      fillEmptyOrSplit(qt.id)
                       const { splitRoot: root } = useUIStore.getState()
                       if (root) {
                         const leaf = findLeafBySession(root, qt.id)
@@ -318,6 +332,32 @@ function SplitNodeView({ node }: { node: SplitNode }) {
                   }}
                 >
                   <TerminalIcon />
+                </button>
+              </>
+            )}
+            {node.sessionId && (
+              <>
+                <button
+                  className="split-panel-action"
+                  title="Split Right"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setFocusedPanel(node.id)
+                    splitRight(node.sessionId!)
+                  }}
+                >
+                  <SplitHorizontalIcon />
+                </button>
+                <button
+                  className="split-panel-action"
+                  title="Split Down"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setFocusedPanel(node.id)
+                    splitDown(node.sessionId!)
+                  }}
+                >
+                  <SplitVerticalIcon />
                 </button>
               </>
             )}
@@ -402,7 +442,7 @@ export function MainContent() {
   const { projects } = useProjectStore()
   const { agents: agentsList } = useAgentStore()
   const { teams } = useTeamStore()
-  const { splitRoot, splitRight } = useUIStore()
+  const { splitRoot, splitRight, splitDown } = useUIStore()
 
   const activeSession = sessions.find((s) => s.id === activeSessionId)
   const activeAgent = !activeSession && activeSessionId
@@ -505,6 +545,12 @@ export function MainContent() {
                   >
                     <TerminalIcon />
                   </button>
+                  <button className="split-panel-action" title="Split Right" onClick={() => splitRight(activeSession.id)}>
+                    <SplitHorizontalIcon />
+                  </button>
+                  <button className="split-panel-action" title="Split Down" onClick={() => splitDown(activeSession.id)}>
+                    <SplitVerticalIcon />
+                  </button>
                 </>
               )}
               {activeAgent && (
@@ -553,6 +599,12 @@ export function MainContent() {
                     }}
                   >
                     <TerminalIcon />
+                  </button>
+                  <button className="split-panel-action" title="Split Right" onClick={() => splitRight(activeAgent.id)}>
+                    <SplitHorizontalIcon />
+                  </button>
+                  <button className="split-panel-action" title="Split Down" onClick={() => splitDown(activeAgent.id)}>
+                    <SplitVerticalIcon />
                   </button>
                 </>
               )}

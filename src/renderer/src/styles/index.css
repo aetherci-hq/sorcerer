@@ -2466,8 +2466,8 @@ button:focus-visible,
    SETTINGS DIALOG
    ============================ */
 .settings-dialog {
-  width: 600px;
-  height: 440px;
+  width: 720px;
+  height: 560px;
   max-width: calc(100vw - 32px);
   max-height: calc(100vh - 64px);
   background: var(--bg-sidebar);

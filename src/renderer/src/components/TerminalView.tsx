@@ -155,10 +155,19 @@ export function TerminalView({ sessionId, isFocused }: TerminalViewProps) {
       terminalCache.set(sessionId, cached)
 
       // Intercept Ctrl+I before xterm processes it (Ctrl+I = Tab in terminal)
+      // Also handle Ctrl+V paste explicitly — xterm's built-in paste can fail
+      // in Electron when switching between split panels
       terminal.attachCustomKeyEventHandler((e: KeyboardEvent) => {
         if (e.ctrlKey && e.key === 'i' && e.type === 'keydown') {
           e.preventDefault()
           window.dispatchEvent(new CustomEvent('sorcerer:dictation', { detail: sessionId }))
+          return false
+        }
+        if (e.ctrlKey && e.key === 'v' && e.type === 'keydown') {
+          e.preventDefault()
+          navigator.clipboard.readText().then((text) => {
+            if (text) terminal.paste(text)
+          }).catch(() => {})
           return false
         }
         return true
