@@ -109,6 +109,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
         qnState.closeOverlay()
       }
       qnState.removeNotePanel(sessionId)
+      qnState.clearSaved(sessionId)
 
       // Clear deleted session from split panels
       const { splitRoot } = useUIStore.getState()

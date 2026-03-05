@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { getApi } from '../api/client'
 import { useToastStore } from '../stores/useToastStore'
+import { useQuickNotesStore } from '../stores/useQuickNotesStore'
 import { CopyIcon } from './icons'
 
 interface QuickNotesEditorProps {
@@ -44,6 +45,7 @@ export function QuickNotesEditor({ parentId, parentType, parentName }: QuickNote
         setNoteId(id)
       }
       getApi().quickNotes.save(id, parentId, parentType, text)
+      useQuickNotesStore.getState().markSaved(parentId)
     }, 500)
   }, [noteId, parentId, parentType])
 

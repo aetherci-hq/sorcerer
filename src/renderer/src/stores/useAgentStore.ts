@@ -69,6 +69,7 @@ export const useAgentStore = create<AgentState>((set) => ({
         qnState.closeOverlay()
       }
       qnState.removeNotePanel(id)
+      qnState.clearSaved(id)
 
       // Clear from split panels
       const { splitRoot } = useUIStore.getState()

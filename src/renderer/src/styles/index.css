@@ -3117,6 +3117,14 @@ button:focus-visible,
   /* inherits tree-icon sizing (16x16) and color (--text-tertiary) */
 }
 
+.tree-notes-indicator {
+  width: 12px;
+  height: 12px;
+  flex: none;
+  color: var(--text-muted);
+  opacity: 0.5;
+}
+
 /* ============================
    ORPHAN WORKSPACE BANNER
    ============================ */

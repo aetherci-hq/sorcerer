@@ -191,6 +191,7 @@ function SessionItem({
 
   // Quick notes panel open?
   const hasNotesPanel = useQuickNotesStore((s) => s.openNotePanels.has(session.id))
+  const hasSavedNotes = useQuickNotesStore((s) => s.savedNotes.has(session.id))
 
   // Team members and tasks for this session
   const team = session.team_name ? teams.find((t) => t.name === session.team_name) : undefined
@@ -330,6 +331,7 @@ function SessionItem({
         </div>
         {!isRenaming && (
           <>
+            {hasSavedNotes && <NotesIcon className="tree-icon tree-notes-indicator" />}
             <button className="tree-item-actions" onClick={handleMoreClick}>
               <MoreHorizontalIcon />
             </button>
