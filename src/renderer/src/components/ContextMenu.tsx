@@ -215,7 +215,7 @@ export function ContextMenu() {
     items = [
       { label: 'New Session', icon: <PlusIcon className={iconClass} />, shortcut: 'Ctrl+N', action: () => openDialog('new-session', contextMenu.targetId) },
       { label: 'Open Quick Terminal', icon: <TerminalIcon className={iconClass} />, action: async () => {
-        const newSession = await window.sorcerer.session.createProjectQuickTerminal(contextMenu.targetId)
+        const newSession = await window.sorcerer?.session.createProjectQuickTerminal(contextMenu.targetId)
         if (newSession) {
           await useSessionStore.getState().loadSessions()
           fillEmptyOrSplit(newSession.id)
