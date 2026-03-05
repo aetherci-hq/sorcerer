@@ -97,8 +97,55 @@ export const DEFAULT_THEME: SorcererTheme = {
   }
 }
 
+const AETHERCI_THEME: SorcererTheme = {
+  id: 'aetherci',
+  name: 'AetherCI',
+  colors: {
+    'bg-root': '#060606',
+    'bg-sidebar': '#0a0a0a',
+    'bg-titlebar': '#0a0a0a',
+    'bg-hover': '#1a1a1a',
+    'bg-active': '#222222',
+    'bg-elevated': '#121212',
+    'terminal-bg': '#060606',
+    'border-subtle': 'rgba(255, 255, 255, 0.10)',
+    'border-medium': 'rgba(255, 255, 255, 0.15)',
+    'text-primary': '#ffffff',
+    'text-secondary': '#9ca3af',
+    'text-tertiary': '#6b7280',
+    'text-muted': '#4b5563',
+    'accent': '#00ff88',
+    'accent-dim': '#00cc6a',
+    'accent-glow': 'rgba(0, 255, 136, 0.10)',
+    'accent-glow-strong': 'rgba(0, 255, 136, 0.20)',
+    'danger': '#db504a'
+  },
+  terminal: {
+    foreground: '#d1d5db',
+    cursor: '#00ff88',
+    selectionBackground: 'rgba(0, 255, 136, 0.15)',
+    black: '#060606',
+    red: '#db504a',
+    green: '#00ff88',
+    yellow: '#eca400',
+    blue: '#3b82f6',
+    magenta: '#c084fc',
+    cyan: '#22d3ee',
+    white: '#d1d5db',
+    brightBlack: '#6b7280',
+    brightRed: '#fca5a5',
+    brightGreen: '#86efac',
+    brightYellow: '#fde68a',
+    brightBlue: '#93c5fd',
+    brightMagenta: '#d8b4fe',
+    brightCyan: '#67e8f9',
+    brightWhite: '#ffffff'
+  }
+}
+
 export const THEMES: Record<string, SorcererTheme> = {
-  default: DEFAULT_THEME
+  default: DEFAULT_THEME,
+  aetherci: AETHERCI_THEME
 }
 
 export function getThemeById(id: string): SorcererTheme {
@@ -110,5 +157,10 @@ export function applyTheme(theme: SorcererTheme): void {
   for (const [key, value] of Object.entries(theme.colors)) {
     root.style.setProperty(`--${key}`, value)
   }
+  // Update native title bar buttons to match the theme (Windows/Linux)
+  window.sorcerer?.window.setTitleBarOverlay({
+    color: theme.colors['bg-titlebar'],
+    symbolColor: theme.colors['text-secondary']
+  })
   window.dispatchEvent(new CustomEvent('sorcerer:themeChange', { detail: theme }))
 }

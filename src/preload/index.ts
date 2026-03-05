@@ -125,7 +125,8 @@ const api = {
     minimize: () => ipcRenderer.send('window:minimize'),
     maximize: () => ipcRenderer.send('window:maximize'),
     close: () => ipcRenderer.send('window:close'),
-    isMaximized: () => ipcRenderer.invoke('window:isMaximized')
+    isMaximized: () => ipcRenderer.invoke('window:isMaximized'),
+    setTitleBarOverlay: (options: { color: string; symbolColor: string }) => ipcRenderer.send('window:setTitleBarOverlay', options)
   }
 }
 

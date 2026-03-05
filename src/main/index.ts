@@ -77,8 +77,8 @@ async function createWindow(): Promise<void> {
       ? { trafficLightPosition: { x: 12, y: 10 } }
       : {
           titleBarOverlay: {
-            color: '#111114',
-            symbolColor: '#9b9a97',
+            color: '#1a1714',
+            symbolColor: '#a69e8e',
             height: 36
           }
         }),
@@ -267,3 +267,8 @@ ipcMain.on('window:maximize', () => {
 })
 ipcMain.on('window:close', () => mainWindow?.close())
 ipcMain.handle('window:isMaximized', () => mainWindow?.isMaximized() ?? false)
+ipcMain.on('window:setTitleBarOverlay', (_e, options: { color: string; symbolColor: string }) => {
+  if (process.platform !== 'darwin' && mainWindow) {
+    try { mainWindow.setTitleBarOverlay({ ...options, height: 36 }) } catch { /* unsupported */ }
+  }
+})
