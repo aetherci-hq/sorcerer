@@ -1,6 +1,6 @@
 {
   "name": "sorcerer",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Claude Code Agent Orchestration App",
   "main": "./out/main/index.js",
   "scripts": {
@@ -30,7 +30,9 @@
       "icon": "build/icon.ico"
     },
     "mac": {
-      "target": ["dmg"],
+      "target": [
+        "dmg"
+      ],
       "icon": "build/icon.icns",
       "identity": null
     },
