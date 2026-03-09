@@ -537,6 +537,11 @@ function GeneralTab() {
           Clear Data
         </button>
       </SettingRow>
+
+      <SectionTitle>About</SectionTitle>
+      <SettingRow label="Version" description="Sorcerer">
+        <span className="settings-version">{__APP_VERSION__}</span>
+      </SettingRow>
     </>
   )
 }

@@ -660,11 +660,7 @@ export function MainContent() {
             <span>No session selected</span>
           </div>
         )}
-        <div className="status-bar-right">
-          <div className="status-bar-item">
-            <span>Sorcerer v1.0.0</span>
-          </div>
-        </div>
+        <div className="status-bar-right" />
       </div>
     </div>
   )

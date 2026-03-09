@@ -2817,6 +2817,12 @@ button:focus-visible,
   border-color: rgba(226, 85, 85, 0.4);
 }
 
+.settings-version {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--text-tertiary);
+}
+
 /* ── Remote tab ──────────────────────────────────────────────── */
 
 .settings-remote-preview {
