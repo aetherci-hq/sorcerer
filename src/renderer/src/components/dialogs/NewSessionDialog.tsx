@@ -101,7 +101,7 @@ export function NewSessionDialog() {
             checked={remoteControl}
             onChange={(e) => setRemoteControl(e.target.checked)}
           />
-          Enable Remote Control
+          Enable Session Remote Control
         </label>
         <div className="dialog-hint">
           {useMainRepo

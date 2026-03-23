@@ -87,7 +87,7 @@ export function AddAgentDialog() {
             checked={remoteControl}
             onChange={(e) => setRemoteControl(e.target.checked)}
           />
-          Enable Remote Control
+          Enable Session Remote Control
         </label>
         <div className="dialog-hint">
           A standalone Claude Code session — not tied to any git repo.

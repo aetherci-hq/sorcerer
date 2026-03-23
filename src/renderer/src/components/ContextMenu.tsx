@@ -169,12 +169,12 @@ export function ContextMenu() {
           addToast('New agent session started', 'info')
         }}
       ]),
-      { label: agentRcEnabled ? 'Disable Remote Control' : 'Enable Remote Control',
+      { label: agentRcEnabled ? 'Disable Session Remote Control' : 'Enable Session Remote Control',
         icon: <SmartphoneIcon className={iconClass} />,
         action: async () => {
           await getApi().agent.setRemoteControl(contextMenu.targetId, !agentRcEnabled)
           useAgentStore.getState().updateAgentInStore(contextMenu.targetId, { remote_control: agentRcEnabled ? 0 : 1 })
-          addToast(agentRcEnabled ? 'Remote Control disabled for future sessions' : 'Remote Control enabled — check terminal for connection URL', 'success')
+          addToast(agentRcEnabled ? 'Session Remote Control disabled for future sessions' : 'Session Remote Control enabled — check terminal for connection URL', 'success')
         }
       },
       { type: 'separator' as const },
@@ -337,13 +337,13 @@ export function ContextMenu() {
         await restartSession(contextMenu.targetId)
         addToast('New session started', 'info')
       }},
-      { label: targetSession?.remote_control ? 'Disable Remote Control' : 'Enable Remote Control',
+      { label: targetSession?.remote_control ? 'Disable Session Remote Control' : 'Enable Session Remote Control',
         icon: <SmartphoneIcon className={iconClass} />,
         action: async () => {
           const enabling = !targetSession?.remote_control
           await getApi().session.setRemoteControl(contextMenu.targetId, enabling)
           useSessionStore.getState().updateSessionInStore(contextMenu.targetId, { remote_control: enabling ? 1 : 0 })
-          addToast(enabling ? 'Remote Control enabled — check terminal for connection URL' : 'Remote Control disabled for future sessions', 'success')
+          addToast(enabling ? 'Session Remote Control enabled — check terminal for connection URL' : 'Session Remote Control disabled for future sessions', 'success')
         }
       },
       { label: 'Copy Worktree Path', icon: <CopyIcon className={iconClass} />, action: () => {

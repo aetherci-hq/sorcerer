@@ -15,7 +15,7 @@ const TABS: { id: SettingsTab; label: string; icon: React.ReactNode }[] = [
   { id: 'appearance', label: 'Appearance', icon: <PaletteIcon /> },
   { id: 'sessions', label: 'Sessions', icon: <TerminalIcon /> },
   { id: 'git', label: 'Git', icon: <GitBranchIcon /> },
-  { id: 'remote', label: 'Remote', icon: <WifiIcon /> },
+  { id: 'remote', label: 'Remote Desktop', icon: <WifiIcon /> },
   { id: 'general', label: 'General', icon: <SettingsIcon /> }
 ]
 
@@ -349,14 +349,14 @@ function RemoteTab() {
         const result = await getApi().remote.enable()
         setRunning(true)
         setToken(result.token)
-        addToast(`Remote access started on ${result.bindAddress}:${result.port}`, 'success')
+        addToast(`Remote desktop started on ${result.bindAddress}:${result.port}`, 'success')
       } else {
         await getApi().remote.disable()
         setRunning(false)
-        addToast('Remote access stopped', 'success')
+        addToast('Remote desktop stopped', 'success')
       }
     } catch (err: any) {
-      addToast(`Failed to ${enable ? 'start' : 'stop'} remote access: ${err.message}`, 'error')
+      addToast(`Failed to ${enable ? 'start' : 'stop'} remote desktop: ${err.message}`, 'error')
     } finally {
       setToggling(false)
     }
@@ -392,7 +392,7 @@ function RemoteTab() {
     <>
       <SectionTitle>Server</SectionTitle>
 
-      <SettingRow label="Enable remote access" description="Start an HTTP API server for browser-based access">
+      <SettingRow label="Enable remote desktop" description="Start an HTTP API server for full browser-based access to Sorcerer">
         <Toggle checked={running} onChange={handleToggle} />
       </SettingRow>
 
@@ -409,7 +409,7 @@ function RemoteTab() {
             </button>
           </div>
           <span className="settings-remote-preview-hint">
-            Open this URL in any browser on your network to access Sorcerer remotely.
+            Open this URL in any browser on your network for full remote desktop access to Sorcerer.
           </span>
         </div>
       )}
