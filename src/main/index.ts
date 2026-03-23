@@ -6,6 +6,7 @@ import { PTYService } from './services/pty-service'
 import { DatabaseService } from './services/database-service'
 import { WorktreeService } from './services/worktree-service'
 import { FileWatcherService } from './services/file-watcher-service'
+import { PopoutService } from './services/popout-service'
 import { registerIPC } from './ipc/handlers'
 import { syncWorktrees } from './ipc/shared-handlers'
 
@@ -27,6 +28,7 @@ let ptyService: PTYService
 let dbService: DatabaseService
 let worktreeService: WorktreeService
 let fileWatcherService: FileWatcherService
+let popoutService: PopoutService
 
 function getWindowBounds(): { x?: number; y?: number; width: number; height: number; maximized: boolean } {
   const defaults = { width: 1200, height: 800, maximized: false }
@@ -98,6 +100,7 @@ async function createWindow(): Promise<void> {
   // Initialize remaining services
   ptyService = new PTYService(mainWindow)
   worktreeService = new WorktreeService()
+  popoutService = new PopoutService(mainWindow)
   fileWatcherService = new FileWatcherService(mainWindow, dbService)
 
   // Mark all previously-active sessions as idle (PTY processes died on app exit)
@@ -219,6 +222,7 @@ async function createWindow(): Promise<void> {
   }
 
   mainWindow.on('closed', () => {
+    popoutService.closeAll()
     mainWindow = null
   })
 
@@ -268,7 +272,66 @@ ipcMain.on('window:maximize', () => {
 ipcMain.on('window:close', () => mainWindow?.close())
 ipcMain.handle('window:isMaximized', () => mainWindow?.isMaximized() ?? false)
 ipcMain.on('window:setTitleBarOverlay', (_e, options: { color: string; symbolColor: string }) => {
-  if (process.platform !== 'darwin' && mainWindow) {
-    try { mainWindow.setTitleBarOverlay({ ...options, height: 36 }) } catch { /* unsupported */ }
+  if (process.platform !== 'darwin') {
+    // Update main window
+    if (mainWindow) {
+      try { mainWindow.setTitleBarOverlay({ ...options, height: 36 }) } catch { /* unsupported */ }
+    }
+    // Update all pop-out windows
+    if (popoutService) {
+      for (const win of popoutService.getAllWindows()) {
+        try { win.setTitleBarOverlay({ ...options, height: 36 }) } catch { /* ignore */ }
+      }
+    }
+  }
+})
+
+// ── Pop-out window IPC ──────────────────────────────────────
+ipcMain.handle('popout:open', (_e, panelType: string, panelId: string, entityName: string) => {
+  const themeId = dbService?.getSetting('theme') || 'default'
+  const win = popoutService.open({ panelType, panelId, entityName, themeId })
+
+  // Register the pop-out window as a listener for terminal data
+  if (panelType === 'terminal') {
+    const wc = win.webContents
+    ptyService.addListener(panelId, wc)
+    win.on('closed', () => {
+      ptyService.removeListener(panelId, wc)
+    })
+  }
+
+  return { opened: true }
+})
+
+ipcMain.handle('popout:close', (_e, panelId: string) => {
+  popoutService.close(panelId)
+  return { closed: true }
+})
+
+ipcMain.handle('popout:isOpen', (_e, panelId: string) => {
+  return popoutService.isOpen(panelId)
+})
+
+ipcMain.handle('popout:getScrollback', (_e, sessionId: string) => {
+  return ptyService.scrollback.getScrollback(sessionId)
+})
+
+// When a popout window resumes/restarts a session, notify the main window
+// so its Zustand store updates the status dot
+ipcMain.on('popout:sessionUpdated', (_e, sessionId: string, status: string, pid: number | null) => {
+  try {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('popout:sessionUpdated', sessionId, status, pid)
+    }
+  } catch { /* main window already destroyed */ }
+})
+
+ipcMain.on('popout:broadcastTheme', (_e, themeId: string) => {
+  for (const win of popoutService.getAllWindows()) {
+    try {
+      if (!win.isDestroyed()) {
+        win.webContents.send('popout:theme-update', themeId)
+      }
+    } catch { /* window already destroyed */ }
   }
 })

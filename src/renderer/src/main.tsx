@@ -1,6 +1,7 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { App } from './App'
+import { PopoutApp, isPopout } from './PopoutApp'
 import { getThemeById, applyTheme } from './themes'
 import './styles/index.css'
 
@@ -21,6 +22,16 @@ async function boot() {
     const baseUrl = window.location.origin
     const { initRemoteClient } = await import('./api/client')
     await initRemoteClient(baseUrl, token)
+  }
+
+  // Popout windows get a minimal chrome-less view
+  if (isPopout()) {
+    ReactDOM.createRoot(document.getElementById('root')!).render(
+      <React.StrictMode>
+        <PopoutApp />
+      </React.StrictMode>
+    )
+    return
   }
 
   // Apply persisted theme before first render to avoid color flash

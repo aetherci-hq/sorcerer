@@ -162,5 +162,7 @@ export function applyTheme(theme: SorcererTheme): void {
     color: theme.colors['bg-titlebar'],
     symbolColor: theme.colors['text-secondary']
   })
+  // Broadcast theme to pop-out windows
+  window.sorcerer?.popout.broadcastTheme(theme.id)
   window.dispatchEvent(new CustomEvent('sorcerer:themeChange', { detail: theme }))
 }

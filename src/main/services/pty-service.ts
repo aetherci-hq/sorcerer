@@ -1,6 +1,7 @@
-import { BrowserWindow } from 'electron'
+import { BrowserWindow, WebContents } from 'electron'
 import * as pty from 'node-pty'
 import os from 'os'
+import { ScrollbackBuffer } from '../server/scrollback'
 
 interface PTYSession {
   ptyProcess: pty.IPty
@@ -13,6 +14,10 @@ export class PTYService {
   private customShell: string | undefined
   private outputListener: ((sessionId: string, data: string) => void) | null = null
   private exitListener: ((sessionId: string, exitCode: number) => void) | null = null
+  /** Extra windows that should receive terminal data for a given session */
+  private extraListeners: Map<string, Set<WebContents>> = new Map()
+  /** Scrollback buffer for terminal replay in pop-out windows */
+  readonly scrollback: ScrollbackBuffer = new ScrollbackBuffer()
 
   constructor(mainWindow: BrowserWindow) {
     this.mainWindow = mainWindow
@@ -30,6 +35,25 @@ export class PTYService {
   /** Register a listener for all PTY exits */
   onExit(listener: (sessionId: string, exitCode: number) => void): void {
     this.exitListener = listener
+  }
+
+  /** Subscribe an extra WebContents to a session's terminal output */
+  addListener(sessionId: string, wc: WebContents): void {
+    let set = this.extraListeners.get(sessionId)
+    if (!set) {
+      set = new Set()
+      this.extraListeners.set(sessionId, set)
+    }
+    set.add(wc)
+  }
+
+  /** Unsubscribe an extra WebContents from a session's terminal output */
+  removeListener(sessionId: string, wc: WebContents): void {
+    const set = this.extraListeners.get(sessionId)
+    if (set) {
+      set.delete(wc)
+      if (set.size === 0) this.extraListeners.delete(sessionId)
+    }
   }
 
   /**
@@ -74,9 +98,30 @@ export class PTYService {
     this.sessions.set(sessionId, session)
 
     ptyProcess.onData((data: string) => {
+      // Store in scrollback for pop-out replay
+      this.scrollback.append(sessionId, data)
+
+      // Send to main window
       if (this.mainWindow && !this.mainWindow.isDestroyed()) {
         this.mainWindow.webContents.send(`terminal:data:${sessionId}`, data)
       }
+
+      // Send to any extra listeners (pop-out windows)
+      const extras = this.extraListeners.get(sessionId)
+      if (extras) {
+        for (const wc of extras) {
+          try {
+            if (!wc.isDestroyed()) {
+              wc.send(`terminal:data:${sessionId}`, data)
+            } else {
+              extras.delete(wc)
+            }
+          } catch {
+            extras.delete(wc)
+          }
+        }
+      }
+
       this.outputListener?.(sessionId, data)
     })
 
@@ -84,6 +129,20 @@ export class PTYService {
       if (this.mainWindow && !this.mainWindow.isDestroyed()) {
         this.mainWindow.webContents.send(`terminal:exit:${sessionId}`, exitCode)
       }
+
+      // Notify extra listeners of exit
+      const extras = this.extraListeners.get(sessionId)
+      if (extras) {
+        for (const wc of extras) {
+          try {
+            if (!wc.isDestroyed()) {
+              wc.send(`terminal:exit:${sessionId}`, exitCode)
+            }
+          } catch { /* window already destroyed */ }
+        }
+        this.extraListeners.delete(sessionId)
+      }
+
       this.exitListener?.(sessionId, exitCode)
       this.sessions.delete(sessionId)
     })
@@ -109,6 +168,9 @@ export class PTYService {
       session.ptyProcess.kill()
       this.sessions.delete(sessionId)
     }
+    // Clean up scrollback and extra listeners
+    this.scrollback.remove(sessionId)
+    this.extraListeners.delete(sessionId)
   }
 
   killAll(): void {

@@ -180,6 +180,19 @@ export function ContextMenu() {
       { type: 'separator' as const },
       { label: 'Split Right', icon: <SplitHorizontalIcon className={iconClass} />, action: () => { focusTargetPanel(contextMenu.targetId); splitRight(contextMenu.targetId) } },
       { label: 'Split Down', icon: <SplitVerticalIcon className={iconClass} />, action: () => { focusTargetPanel(contextMenu.targetId); splitDown(contextMenu.targetId) } },
+      { label: 'Pop Out', icon: <ExternalLinkIcon className={iconClass} />, action: async () => {
+        await getApi().popout.open('terminal', contextMenu.targetId, targetAgent?.name || 'Agent')
+        // Clear the panel in the main app so it's not shown in two places
+        const { splitRoot: root, setPanelSession } = useUIStore.getState()
+        if (root) {
+          const leaf = findLeafBySession(root, contextMenu.targetId)
+          if (leaf) setPanelSession(leaf.id, null)
+        } else {
+          // Single panel mode (no splits) — clear the active session
+          useSessionStore.getState().setActiveSession(contextMenu.targetId)
+          useSessionStore.setState({ activeSessionId: null })
+        }
+      }},
       { label: 'Open Quick Terminal', icon: <TerminalIcon className={iconClass} />, action: async () => {
         const qt = await getApi().agent.createQuickTerminal(contextMenu.targetId)
         if (qt) {
@@ -302,6 +315,18 @@ export function ContextMenu() {
     items = [
       { label: 'Split Right', icon: <SplitHorizontalIcon className={iconClass} />, action: () => { focusTargetPanel(contextMenu.targetId); splitRight(contextMenu.targetId) } },
       { label: 'Split Down', icon: <SplitVerticalIcon className={iconClass} />, action: () => { focusTargetPanel(contextMenu.targetId); splitDown(contextMenu.targetId) } },
+      { label: 'Pop Out', icon: <ExternalLinkIcon className={iconClass} />, action: async () => {
+        await getApi().popout.open('terminal', contextMenu.targetId, targetSession?.name || 'Session')
+        // Clear the panel in the main app so it's not shown in two places
+        const { splitRoot: root, setPanelSession } = useUIStore.getState()
+        if (root) {
+          const leaf = findLeafBySession(root, contextMenu.targetId)
+          if (leaf) setPanelSession(leaf.id, null)
+        } else {
+          // Single panel mode (no splits) — clear the active session
+          useSessionStore.setState({ activeSessionId: null })
+        }
+      }},
       { label: 'Open Quick Terminal', icon: <TerminalIcon className={iconClass} />, action: async () => {
         const newSession = await createQuickTerminal(contextMenu.targetId)
         if (newSession) {

@@ -52,7 +52,7 @@ interface UIState {
   closeSplit: () => void
   setSplitRatio: (nodeId: string, ratio: number) => void
   setFocusedPanel: (panelId: string) => void
-  setPanelSession: (panelId: string, sessionId: string) => void
+  setPanelSession: (panelId: string, sessionId: string | null) => void
 }
 
 // --- Split tree helpers ---
@@ -122,7 +122,7 @@ function updateNodeRatio(node: SplitNode, targetId: string, ratio: number): Spli
   }
 }
 
-function updateLeafSession(node: SplitNode, leafId: string, sessionId: string): SplitNode {
+function updateLeafSession(node: SplitNode, leafId: string, sessionId: string | null): SplitNode {
   if (node.type === 'leaf' && node.id === leafId) {
     return { ...node, sessionId }
   }

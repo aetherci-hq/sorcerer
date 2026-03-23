@@ -127,6 +127,41 @@ const api = {
     close: () => ipcRenderer.send('window:close'),
     isMaximized: () => ipcRenderer.invoke('window:isMaximized'),
     setTitleBarOverlay: (options: { color: string; symbolColor: string }) => ipcRenderer.send('window:setTitleBarOverlay', options)
+  },
+
+  popout: {
+    open: (panelType: string, panelId: string, entityName: string) =>
+      ipcRenderer.invoke('popout:open', panelType, panelId, entityName) as Promise<{ opened: boolean }>,
+    close: (panelId: string) =>
+      ipcRenderer.invoke('popout:close', panelId) as Promise<{ closed: boolean }>,
+    isOpen: (panelId: string) =>
+      ipcRenderer.invoke('popout:isOpen', panelId) as Promise<boolean>,
+    getScrollback: (sessionId: string) =>
+      ipcRenderer.invoke('popout:getScrollback', sessionId) as Promise<string>,
+    broadcastTheme: (themeId: string) =>
+      ipcRenderer.send('popout:broadcastTheme', themeId),
+    onOpened: (callback: (panelId: string) => void) => {
+      const handler = (_event: any, panelId: string) => callback(panelId)
+      ipcRenderer.on('popout:opened', handler)
+      return () => ipcRenderer.removeListener('popout:opened', handler)
+    },
+    onClosed: (callback: (panelId: string) => void) => {
+      const handler = (_event: any, panelId: string) => callback(panelId)
+      ipcRenderer.on('popout:closed', handler)
+      return () => ipcRenderer.removeListener('popout:closed', handler)
+    },
+    onThemeUpdate: (callback: (themeId: string) => void) => {
+      const handler = (_event: any, themeId: string) => callback(themeId)
+      ipcRenderer.on('popout:theme-update', handler)
+      return () => ipcRenderer.removeListener('popout:theme-update', handler)
+    },
+    notifySessionUpdated: (sessionId: string, status: string, pid: number | null) =>
+      ipcRenderer.send('popout:sessionUpdated', sessionId, status, pid),
+    onSessionUpdated: (callback: (sessionId: string, status: string, pid: number | null) => void) => {
+      const handler = (_event: any, sessionId: string, status: string, pid: number | null) => callback(sessionId, status, pid)
+      ipcRenderer.on('popout:sessionUpdated', handler)
+      return () => ipcRenderer.removeListener('popout:sessionUpdated', handler)
+    }
   }
 }
 

@@ -84,9 +84,15 @@ export function App() {
       }
     })
 
+    // Subscribe to session updates from pop-out windows (status dot sync)
+    const unsubPopout = getApi().popout.onSessionUpdated((sessionId: string, status: string, pid: number | null) => {
+      useSessionStore.getState().updateSessionInStore(sessionId, { status: status as any, pid })
+    })
+
     return () => {
       unsub()
       unsubLink()
+      unsubPopout()
     }
   }, [])
 
