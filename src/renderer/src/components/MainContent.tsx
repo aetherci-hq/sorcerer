@@ -7,7 +7,6 @@ import { useUIStore, findLeaf, findLeafBySession } from '../stores/useUIStore'
 import { OrphanWorkspaceBanner } from './OrphanWorkspaceBanner'
 import { GitBranchIcon, TerminalIcon, BotIcon, NotesIcon, SplitHorizontalIcon, SplitVerticalIcon } from './icons'
 import { StatusDot } from './StatusDot'
-import { Tooltip } from './Tooltip'
 import { TerminalView } from './TerminalView'
 import { QuickNotesPanel, parseQuickNotesPanelId } from './QuickNotesPanel'
 import { useQuickNotesStore } from '../stores/useQuickNotesStore'
@@ -198,6 +197,39 @@ function SplitDivider({ direction, onDrag }: { direction: 'horizontal' | 'vertic
   )
 }
 
+function PanelHeaderInfo({ session, agent }: { session?: Session; agent?: Agent }) {
+  const { projects } = useProjectStore()
+  if (agent) {
+    return (
+      <span className="split-panel-name">
+        <BotIcon style={{ width: 12, height: 12, opacity: 0.5, flexShrink: 0 }} />
+        {agent.name}
+      </span>
+    )
+  }
+  if (!session) return <span className="split-panel-name">Empty</span>
+
+  const project = projects.find((p) => p.id === session.project_id)
+
+  return (
+    <span className="split-panel-name">
+      {project && (
+        <>
+          <span className="split-panel-project">{project.name}</span>
+          <span className="split-panel-sep">/</span>
+        </>
+      )}
+      {session.name}
+      {session.branch && session.type !== 'quick-terminal' && (
+        <span className="split-panel-branch">
+          <GitBranchIcon />
+          {session.branch}
+        </span>
+      )}
+    </span>
+  )
+}
+
 function SplitNodeView({ node }: { node: SplitNode }) {
   const { focusedPanelId, setFocusedPanel, closePanel, setSplitRatio, setPanelSession, splitRight, splitDown } = useUIStore()
   const { sessions, setActiveSession, deleteSession, createQuickTerminal, addLocalSession } = useSessionStore()
@@ -285,7 +317,11 @@ function SplitNodeView({ node }: { node: SplitNode }) {
         onClick={handleClick}
       >
         <div className="split-panel-titlebar">
-          <span className="split-panel-name">{isQuickNotes ? quickNotesName : (activeItem?.name ?? 'Empty')}</span>
+          {isQuickNotes ? (
+            <span className="split-panel-name">{quickNotesName}</span>
+          ) : (
+            <PanelHeaderInfo session={session} agent={agent} />
+          )}
           <div className="split-panel-actions">
             {session && session.type !== 'quick-terminal' && (
               <>
@@ -484,7 +520,7 @@ function formatMemory(mb: number): string {
 }
 
 export function MainContent() {
-  const { sessions, activeSessionId, setActiveSession, createQuickTerminal, addLocalSession } = useSessionStore()
+  const { sessions, activeSessionId, setActiveSession, deleteSession, createQuickTerminal, addLocalSession } = useSessionStore()
   const { projects } = useProjectStore()
   const { agents: agentsList } = useAgentStore()
   const { splitRoot, splitRight, splitDown } = useUIStore()
@@ -494,40 +530,12 @@ export function MainContent() {
   const activeAgent = !activeSession && activeSessionId
     ? agentsList.find((a) => a.id === activeSessionId)
     : undefined
-  const activeProject = activeSession
-    ? projects.find((p) => p.id === activeSession.project_id)
-    : undefined
 
 
   return (
     <div className="main-content">
-      {/* Titlebar */}
-      <div className="main-titlebar">
-        <div className="main-titlebar-info">
-          {activeAgent ? (
-            <>
-              <BotIcon style={{ width: 14, height: 14, opacity: 0.6 }} />
-              <span className="main-titlebar-session">{activeAgent.name}</span>
-            </>
-          ) : activeSession ? (
-            <>
-              {activeProject && (
-                <>
-                  <span className="main-titlebar-project">{activeProject.name}</span>
-                  <span className="main-titlebar-separator">/</span>
-                </>
-              )}
-              <span className="main-titlebar-session">{activeSession.name}</span>
-              <Tooltip label={activeSession.branch}>
-                <span className="branch-badge">
-                  <GitBranchIcon />
-                  {activeSession.branch}
-                </span>
-              </Tooltip>
-            </>
-          ) : null}
-        </div>
-      </div>
+      {/* Titlebar — minimal drag region */}
+      <div className="main-titlebar" />
 
       <OrphanWorkspaceBanner />
 
@@ -537,7 +545,7 @@ export function MainContent() {
       ) : (activeSession || activeAgent) ? (
         <div className="split-panel split-panel--focused">
           <div className="split-panel-titlebar">
-            <span className="split-panel-name">{(activeSession || activeAgent)?.name}</span>
+            <PanelHeaderInfo session={activeSession} agent={activeAgent} />
             <div className="split-panel-actions">
               {activeSession && activeSession.type !== 'quick-terminal' && (
                 <>
@@ -649,6 +657,9 @@ export function MainContent() {
                 </>
               )}
               <button className="split-panel-close" onClick={() => {
+                if (activeSession?.type === 'quick-terminal') {
+                  deleteSession(activeSession.id)
+                }
                 useSessionStore.setState({ activeSessionId: null })
               }}>&times;</button>
             </div>

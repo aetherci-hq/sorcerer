@@ -11,6 +11,8 @@ interface PopoutParams {
   panelId: string
   entityName: string
   themeId: string
+  projectName?: string
+  branch?: string
 }
 
 function parsePopoutParams(): PopoutParams | null {
@@ -23,7 +25,9 @@ function parsePopoutParams(): PopoutParams | null {
     panelType: popout.slice(0, colonIdx),
     panelId: popout.slice(colonIdx + 1),
     entityName: params.get('name') || 'Sorcerer',
-    themeId: params.get('theme') || 'default'
+    themeId: params.get('theme') || 'default',
+    projectName: params.get('project') || undefined,
+    branch: params.get('branch') || undefined
   }
 }
 
@@ -314,7 +318,8 @@ export function PopoutApp() {
   // Set window title
   useEffect(() => {
     if (params?.entityName) {
-      document.title = `${params.entityName} — Sorcerer`
+      const prefix = params.projectName ? `${params.projectName} / ` : ''
+      document.title = `${prefix}${params.entityName} — Sorcerer`
     }
   }, [params?.entityName])
 
@@ -326,7 +331,21 @@ export function PopoutApp() {
     return (
       <div className="popout-shell">
         <div className="popout-titlebar">
-          <span className="popout-titlebar-text">{params.entityName}</span>
+          <span className="popout-titlebar-text">
+            {params.projectName && (
+              <>
+                <span className="popout-titlebar-project">{params.projectName}</span>
+                <span className="popout-titlebar-sep">/</span>
+              </>
+            )}
+            {params.entityName}
+            {params.branch && (
+              <span className="popout-titlebar-branch">
+                <svg width="10" height="10" viewBox="0 0 16 16" fill="currentColor"><path fillRule="evenodd" d="M11.75 2.5a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5zm-2.25.75a2.25 2.25 0 1 1 3 2.122V6A2.5 2.5 0 0 1 10 8.5H6a1 1 0 0 0-1 1v1.128a2.251 2.251 0 1 1-1.5 0V5.372a2.25 2.25 0 1 1 1.5 0v1.836A2.492 2.492 0 0 1 6 7h4a1 1 0 0 0 1-1v-.628A2.25 2.25 0 0 1 9.5 3.25zM4.25 12a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5zM3.5 3.25a.75.75 0 1 1 1.5 0 .75.75 0 0 1-1.5 0z"/></svg>
+                {params.branch}
+              </span>
+            )}
+          </span>
         </div>
         <PopoutTerminalView sessionId={params.panelId} entityName={params.entityName} />
       </div>

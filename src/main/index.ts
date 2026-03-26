@@ -125,6 +125,17 @@ async function createWindow(): Promise<void> {
     dbService.updateAgent(a.id, { status: 'idle', pid: null })
   }
 
+  // Clean up idle quick terminals — they can never be recovered
+  const idleQTs = dbService.listSessions().filter(
+    (s: any) => s.type === 'quick-terminal' && s.status === 'idle'
+  )
+  for (const qt of idleQTs) {
+    dbService.removeSession(qt.id)
+  }
+  if (idleQTs.length > 0) {
+    console.log(`[startup] Cleaned up ${idleQTs.length} idle quick terminal(s)`)
+  }
+
   // Crash recovery: auto-commit orphaned worktrees
   try {
     const allProjects = dbService.listProjects()
@@ -322,7 +333,18 @@ ipcMain.on('window:setTitleBarOverlay', (_e, options: { color: string; symbolCol
 // ── Pop-out window IPC ──────────────────────────────────────
 ipcMain.handle('popout:open', (_e, panelType: string, panelId: string, entityName: string) => {
   const themeId = dbService?.getSetting('theme') || 'default'
-  const win = popoutService.open({ panelType, panelId, entityName, themeId })
+
+  // Look up project name and branch for the popout header
+  let projectName: string | undefined
+  let branch: string | undefined
+  const session = dbService?.getSession(panelId)
+  if (session) {
+    branch = session.branch as string | undefined
+    const project = session.project_id ? dbService?.getProject(session.project_id as string) : null
+    if (project) projectName = project.name as string
+  }
+
+  const win = popoutService.open({ panelType, panelId, entityName, themeId, projectName, branch })
 
   // Register the pop-out window as a listener for terminal data
   if (panelType === 'terminal') {

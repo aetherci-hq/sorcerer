@@ -6,6 +6,8 @@ export interface PopoutInfo {
   panelId: string     // sessionId, agentId, or 'quicknotes:session:parentId'
   entityName: string  // display name for the title bar
   themeId: string
+  projectName?: string
+  branch?: string
 }
 
 export class PopoutService {
@@ -58,7 +60,9 @@ export class PopoutService {
     this.windows.set(info.panelId, win)
 
     // Load the same renderer with a popout query param
-    const query = `?popout=${encodeURIComponent(info.panelType)}:${encodeURIComponent(info.panelId)}&theme=${encodeURIComponent(info.themeId)}&name=${encodeURIComponent(info.entityName)}`
+    let query = `?popout=${encodeURIComponent(info.panelType)}:${encodeURIComponent(info.panelId)}&theme=${encodeURIComponent(info.themeId)}&name=${encodeURIComponent(info.entityName)}`
+    if (info.projectName) query += `&project=${encodeURIComponent(info.projectName)}`
+    if (info.branch) query += `&branch=${encodeURIComponent(info.branch)}`
     if (process.env.ELECTRON_RENDERER_URL) {
       win.loadURL(`${process.env.ELECTRON_RENDERER_URL}${query}`)
     } else {
