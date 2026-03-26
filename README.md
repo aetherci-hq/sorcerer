@@ -1,6 +1,6 @@
 # Sorcerer
 
-Desktop workbench for [Claude Code](https://docs.anthropic.com/en/docs/claude-code). Manage multiple sessions, projects, worktrees, and teams from a single interface.
+Desktop workbench for [Claude Code](https://docs.anthropic.com/en/docs/claude-code). Manage multiple sessions, projects, worktrees, and monitor teams from a single interface.
 
 ![Sorcerer](Sorcerer_Screenshot.png)
 
