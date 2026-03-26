@@ -53,7 +53,7 @@ function ChildQTItem({
   isActive: boolean
 }) {
   const { setActiveSession } = useSessionStore()
-  const { openContextMenu, splitRoot } = useUIStore()
+  const { openContextMenu, splitRoot, poppedOutSessionIds } = useUIStore()
   const itemRef = useRef<HTMLDivElement>(null)
 
   const splitIds = splitRoot ? getAllSessionIds(splitRoot) : []
@@ -100,7 +100,7 @@ function ChildQTItem({
       <button className="tree-item-actions" onClick={handleMoreClick}>
         <MoreHorizontalIcon />
       </button>
-      <StatusDot status={session.status} />
+      <StatusDot status={poppedOutSessionIds.has(session.id) && session.status === 'active' ? 'popped-out' : session.status} />
     </div>
   )
 }
@@ -181,7 +181,7 @@ function SessionItem({
   projectId: string
 }) {
   const { setActiveSession, activeSessionId } = useSessionStore()
-  const { expandedSessions, toggleSession, openContextMenu, renamingId, setRenamingId, splitRoot, remoteSessionIds } = useUIStore()
+  const { expandedSessions, toggleSession, openContextMenu, renamingId, setRenamingId, splitRoot, remoteSessionIds, poppedOutSessionIds } = useUIStore()
   const { projects } = useProjectStore()
   const { teams, tasksByTeam } = useTeamStore()
   const isExpanded = expandedSessions.has(session.id)
@@ -338,7 +338,7 @@ function SessionItem({
             <button className="tree-item-actions" onClick={handleMoreClick}>
               <MoreHorizontalIcon />
             </button>
-            <StatusDot status={session.status} />
+            <StatusDot status={poppedOutSessionIds.has(session.id) && session.status === 'active' ? 'popped-out' : session.status} />
           </>
         )}
       </div>

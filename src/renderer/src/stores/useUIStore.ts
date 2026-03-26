@@ -57,6 +57,11 @@ interface UIState {
   // Remote control — sessions being viewed remotely
   remoteSessionIds: Set<string>
   setRemoteSessionIds: (ids: string[]) => void
+
+  // Popped-out sessions — running in separate windows
+  poppedOutSessionIds: Set<string>
+  addPoppedOut: (id: string) => void
+  removePoppedOut: (id: string) => void
 }
 
 // --- Split tree helpers ---
@@ -372,7 +377,19 @@ export const useUIStore = create<UIState>()(
       },
 
       remoteSessionIds: new Set(),
-      setRemoteSessionIds: (ids) => set({ remoteSessionIds: new Set(ids) })
+      setRemoteSessionIds: (ids) => set({ remoteSessionIds: new Set(ids) }),
+
+      poppedOutSessionIds: new Set(),
+      addPoppedOut: (id) => set((state) => {
+        const next = new Set(state.poppedOutSessionIds)
+        next.add(id)
+        return { poppedOutSessionIds: next }
+      }),
+      removePoppedOut: (id) => set((state) => {
+        const next = new Set(state.poppedOutSessionIds)
+        next.delete(id)
+        return { poppedOutSessionIds: next }
+      })
     }),
     {
       name: 'sorcerer-ui-store',

@@ -90,6 +90,14 @@ export function App() {
       useSessionStore.getState().updateSessionInStore(sessionId, { status: status as any, pid })
     })
 
+    // Track which sessions are popped out to separate windows
+    const unsubPopoutOpened = getApi().popout.onOpened((sessionId: string) => {
+      useUIStore.getState().addPoppedOut(sessionId)
+    })
+    const unsubPopoutClosed = getApi().popout.onClosed((sessionId: string) => {
+      useUIStore.getState().removePoppedOut(sessionId)
+    })
+
     // Listen for failed resume attempts (e.g. "No conversation found to continue")
     const unsubResumeFailed = getApi().terminal.onResumeFailed(({ sessionId, reason }) => {
       // Update store so UI reflects idle state immediately
@@ -117,6 +125,8 @@ export function App() {
       unsub()
       unsubLink()
       unsubPopout()
+      unsubPopoutOpened()
+      unsubPopoutClosed()
       unsubResumeFailed()
       clearInterval(remoteInterval)
     }

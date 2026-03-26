@@ -707,6 +707,32 @@ body {
   opacity: 0.6;
 }
 
+/* Popped out: hollow dot with radiating ring — "active elsewhere" */
+.signal--popped-out .signal-core {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  border: 1.5px solid var(--text-tertiary);
+  box-sizing: border-box;
+}
+
+.signal--popped-out .signal-ring {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.signal--popped-out .signal-ring::after {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  border: 1px solid var(--text-tertiary);
+  animation: signal-radiate 2.4s cubic-bezier(0.25, 0.46, 0.45, 0.94) infinite;
+}
+
 /* Archived session items — dimmed */
 .tree-item--archived {
   opacity: 0.5;
@@ -1105,55 +1131,9 @@ body {
 
 .main-titlebar {
   height: var(--titlebar-height);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 144px 0 16px; /* right padding for native window controls */
-  border-bottom: 1px solid var(--border-subtle);
   -webkit-app-region: drag;
   flex-shrink: 0;
-}
-
-.main-titlebar-info {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.main-titlebar-project {
-  font-size: 13px;
-  font-weight: 400;
-  color: var(--text-tertiary);
-}
-
-.main-titlebar-separator {
-  font-size: 13px;
-  color: var(--text-muted);
-  margin: 0 -2px;
-}
-
-.main-titlebar-session {
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--text-primary);
-}
-
-.branch-badge {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 12.5px;
-  font-family: var(--font-mono);
-  color: var(--text-tertiary);
-  background: var(--bg-elevated);
-  padding: 2px 8px;
-  border-radius: 4px;
-  border: 1px solid var(--border-subtle);
-}
-
-.branch-badge svg {
-  width: 14px;
-  height: 14px;
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 
@@ -2387,12 +2367,48 @@ button:focus-visible,
 }
 
 .split-panel-name {
+  display: flex;
+  align-items: center;
+  gap: 5px;
   font-size: 12px;
   font-weight: 500;
   color: var(--text-secondary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  min-width: 0;
+}
+
+.split-panel-project {
+  color: var(--text-tertiary);
+  font-size: 11.5px;
+  flex-shrink: 0;
+}
+
+.split-panel-sep {
+  color: var(--text-muted);
+  opacity: 0.5;
+  flex-shrink: 0;
+}
+
+.split-panel-branch {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--text-tertiary);
+  background: var(--bg-elevated);
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+  margin-left: 2px;
+}
+
+.split-panel-branch svg {
+  width: 10px;
+  height: 10px;
 }
 
 .split-panel-actions {
@@ -3569,10 +3585,37 @@ button:focus-visible,
 }
 
 .popout-titlebar-text {
+  display: flex;
+  align-items: center;
+  gap: 5px;
   font-size: 12px;
   font-weight: 500;
   color: var(--text-secondary);
   letter-spacing: 0.01em;
+}
+
+.popout-titlebar-project {
+  color: var(--text-tertiary);
+  font-size: 11.5px;
+}
+
+.popout-titlebar-sep {
+  color: var(--text-muted);
+  opacity: 0.5;
+}
+
+.popout-titlebar-branch {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--text-tertiary);
+  background: var(--bg-elevated);
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  margin-left: 2px;
 }
 
 .popout-terminal {

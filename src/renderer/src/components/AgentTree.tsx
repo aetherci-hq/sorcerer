@@ -9,7 +9,7 @@ import type { Agent, Session } from '../types'
 
 function AgentQTItem({ session, isActive }: { session: Session; isActive: boolean }) {
   const { setActiveSession } = useSessionStore()
-  const { openContextMenu, splitRoot } = useUIStore()
+  const { openContextMenu, splitRoot, poppedOutSessionIds } = useUIStore()
   const itemRef = useRef<HTMLDivElement>(null)
 
   const splitIds = splitRoot ? getAllSessionIds(splitRoot) : []
@@ -39,7 +39,7 @@ function AgentQTItem({ session, isActive }: { session: Session; isActive: boolea
       <button className="tree-item-actions" onClick={handleMoreClick}>
         <MoreHorizontalIcon />
       </button>
-      <StatusDot status={session.status} />
+      <StatusDot status={poppedOutSessionIds.has(session.id) && session.status === 'active' ? 'popped-out' : session.status} />
     </div>
   )
 }
@@ -100,7 +100,7 @@ function AgentNotesItem({ agentId }: { agentId: string }) {
 
 function AgentItem({ agent, staggerClass }: { agent: Agent; staggerClass?: string }) {
   const { setActiveSession, activeSessionId, sessions } = useSessionStore()
-  const { openContextMenu, renamingId, setRenamingId, splitRoot, expandedSessions, toggleSession } = useUIStore()
+  const { openContextMenu, renamingId, setRenamingId, splitRoot, expandedSessions, toggleSession, poppedOutSessionIds } = useUIStore()
   const { renameAgent } = useAgentStore()
   const isActive = activeSessionId === agent.id
   const itemRef = useRef<HTMLDivElement>(null)
@@ -242,7 +242,7 @@ function AgentItem({ agent, staggerClass }: { agent: Agent; staggerClass?: strin
             <button className="tree-item-actions" onClick={handleMoreClick}>
               <MoreHorizontalIcon />
             </button>
-            <StatusDot status={agent.status} />
+            <StatusDot status={poppedOutSessionIds.has(agent.id) && agent.status === 'active' ? 'popped-out' : agent.status} />
           </>
         )}
       </div>

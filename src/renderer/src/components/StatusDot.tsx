@@ -6,7 +6,8 @@ const statusLabel: Record<string, string> = {
   archived: 'Archived',
   waiting: 'Waiting',
   starting: 'Starting',
-  deleted: 'Deleted'
+  deleted: 'Deleted',
+  'popped-out': 'Popped Out'
 }
 
 function signalClass(status: string): string {
@@ -16,6 +17,7 @@ function signalClass(status: string): string {
     case 'waiting':
     case 'starting':
     case 'archived':
+    case 'popped-out':
       return status
     case 'deleted':
       return 'archived'
@@ -26,7 +28,7 @@ function signalClass(status: string): string {
 
 export function StatusDot({ status }: { status: string }) {
   const variant = signalClass(status)
-  const needsRing = variant === 'active'
+  const needsRing = variant === 'active' || variant === 'popped-out'
 
   return (
     <Tooltip label={statusLabel[status] || status}>
