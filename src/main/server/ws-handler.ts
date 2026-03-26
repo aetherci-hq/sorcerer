@@ -192,6 +192,19 @@ export class WebSocketHandler {
     return this.clients.size
   }
 
+  /** Get session IDs that have at least one remote subscriber watching terminal data. */
+  getRemoteSessionIds(): string[] {
+    const ids = new Set<string>()
+    for (const [, state] of this.clients) {
+      for (const ch of state.subscriptions) {
+        if (ch.startsWith('terminal:data:')) {
+          ids.add(ch.slice('terminal:data:'.length))
+        }
+      }
+    }
+    return Array.from(ids)
+  }
+
   // ── Shutdown ─────────────────────────────────────────────
 
   /**

@@ -49,6 +49,8 @@ import {
 } from '../ipc/shared-handlers'
 import { ScrollbackBuffer } from './scrollback'
 import { WebSocketHandler } from './ws-handler'
+// In dev, read from disk for live reloading. In production, use inlined copy.
+import remoteControlHtmlInlined from './remote-control.html?raw'
 
 // ── Config ──────────────────────────────────────────────────
 
@@ -159,6 +161,10 @@ export class ApiServer {
     return this.httpServer
   }
 
+  getRemoteSessionIds(): string[] {
+    return this.wsHandler?.getRemoteSessionIds() ?? []
+  }
+
   // ── Request routing ───────────────────────────────────────
 
   private async handleRequest(
@@ -191,6 +197,29 @@ export class ApiServer {
     // RPC endpoint
     if (req.method === 'POST' && url.pathname === '/api/rpc') {
       await this.handleRpc(req, res)
+      return
+    }
+
+    // Remote Control — lightweight mobile page
+    if (url.pathname === '/rc') {
+      const token = url.searchParams.get('token')
+      if (token !== this.config.authToken) {
+        res.writeHead(401, { 'Content-Type': 'text/plain' })
+        res.end('Unauthorized — append ?token=YOUR_TOKEN to the URL')
+        return
+      }
+      res.writeHead(200, { 'Content-Type': 'text/html', 'Cache-Control': 'no-cache' })
+      // In dev mode, read from disk for live editing. In production, use inlined copy.
+      if (process.env.ELECTRON_RENDERER_URL) {
+        const diskPath = path.join(__dirname, '../../src/main/server/remote-control.html')
+        if (fs.existsSync(diskPath)) {
+          res.end(fs.readFileSync(diskPath, 'utf-8'))
+        } else {
+          res.end(remoteControlHtmlInlined)
+        }
+      } else {
+        res.end(remoteControlHtmlInlined)
+      }
       return
     }
 
@@ -270,7 +299,8 @@ export class ApiServer {
       'settings:set': (key: string, value: string) => setSetting(s, key, value),
 
       // System
-      'system:userInfo': () => getUserInfo()
+      'system:userInfo': () => getUserInfo(),
+      'system:remoteSessionIds': () => this.wsHandler?.getRemoteSessionIds() ?? []
     }
   }
 

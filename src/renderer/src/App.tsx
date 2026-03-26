@@ -89,10 +89,21 @@ export function App() {
       useSessionStore.getState().updateSessionInStore(sessionId, { status: status as any, pid })
     })
 
+    // Poll for remote control viewers (which sessions have WS subscribers)
+    const pollRemote = async () => {
+      try {
+        const ids = await getApi().remote.remoteSessionIds()
+        useUIStore.getState().setRemoteSessionIds(ids)
+      } catch { /* remote server may not be running */ }
+    }
+    pollRemote()
+    const remoteInterval = setInterval(pollRemote, 5000)
+
     return () => {
       unsub()
       unsubLink()
       unsubPopout()
+      clearInterval(remoteInterval)
     }
   }, [])
 

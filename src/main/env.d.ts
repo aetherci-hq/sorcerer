@@ -1,3 +1,8 @@
+declare module '*.html?raw' {
+  const content: string
+  export default content
+}
+
 declare module 'sql.js' {
   interface SqlJsStatic {
     Database: new (data?: ArrayLike<number>) => Database

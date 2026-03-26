@@ -1051,3 +1051,21 @@ export function getUserInfo(): { username: string; homedir: string } {
     homedir: info.homedir
   }
 }
+
+export function getNetworkIp(): string {
+  const interfaces = os.networkInterfaces()
+  let fallback: string | null = null
+  for (const name of Object.keys(interfaces)) {
+    for (const iface of interfaces[name] || []) {
+      if (iface.family !== 'IPv4' || iface.internal) continue
+      // Prefer private LAN ranges: 10.x, 172.16-31.x, 192.168.x
+      const a = iface.address
+      if (a.startsWith('192.168.') || a.startsWith('10.') ||
+          (a.startsWith('172.') && (() => { const oct = parseInt(a.split('.')[1]); return oct >= 16 && oct <= 31 })())) {
+        return a
+      }
+      if (!fallback) fallback = a
+    }
+  }
+  return fallback || '127.0.0.1'
+}

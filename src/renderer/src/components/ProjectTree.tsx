@@ -3,7 +3,7 @@ import { useProjectStore } from '../stores/useProjectStore'
 import { useSessionStore } from '../stores/useSessionStore'
 import { useUIStore, getAllSessionIds, findLeafBySession } from '../stores/useUIStore'
 import { useTeamStore } from '../stores/useTeamStore'
-import { ChevronIcon, FolderIcon, TerminalIcon, ShellPromptIcon, UserIcon, MoreHorizontalIcon, NotesIcon } from './icons'
+import { ChevronIcon, FolderIcon, TerminalIcon, ShellPromptIcon, UserIcon, MoreHorizontalIcon, NotesIcon, WifiIcon } from './icons'
 import { useQuickNotesStore } from '../stores/useQuickNotesStore'
 import { StatusDot } from './StatusDot'
 import { EmptyState } from './EmptyState'
@@ -181,7 +181,7 @@ function SessionItem({
   projectId: string
 }) {
   const { setActiveSession, activeSessionId } = useSessionStore()
-  const { expandedSessions, toggleSession, openContextMenu, renamingId, setRenamingId, splitRoot } = useUIStore()
+  const { expandedSessions, toggleSession, openContextMenu, renamingId, setRenamingId, splitRoot, remoteSessionIds } = useUIStore()
   const { projects } = useProjectStore()
   const { teams, tasksByTeam } = useTeamStore()
   const isExpanded = expandedSessions.has(session.id)
@@ -332,6 +332,9 @@ function SessionItem({
         {!isRenaming && (
           <>
             {hasSavedNotes && <NotesIcon className="tree-icon tree-notes-indicator" />}
+            {remoteSessionIds.has(session.id) && (
+              <WifiIcon className="tree-icon tree-remote-indicator" />
+            )}
             <button className="tree-item-actions" onClick={handleMoreClick}>
               <MoreHorizontalIcon />
             </button>

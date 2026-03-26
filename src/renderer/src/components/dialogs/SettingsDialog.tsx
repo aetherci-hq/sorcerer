@@ -3,7 +3,7 @@ import { getApi, isElectron } from '../../api/client'
 import { useUIStore } from '../../stores/useUIStore'
 import { useToastStore } from '../../stores/useToastStore'
 import {
-  TerminalIcon, GitBranchIcon, SettingsIcon, UserIcon, WifiIcon, CopyIcon, RefreshIcon, EyeIcon, EyeOffIcon, PaletteIcon
+  TerminalIcon, GitBranchIcon, SettingsIcon, UserIcon, WifiIcon, CopyIcon, RefreshIcon, EyeIcon, EyeOffIcon, PaletteIcon, SmartphoneIcon
 } from '../icons'
 import { THEMES, getThemeById, applyTheme } from '../../themes'
 import { gravatarUrl } from '../SidebarFooter'
@@ -317,6 +317,7 @@ function RemoteTab() {
   const [running, setRunning] = useState(false)
   const [port, setPort] = useState('7437')
   const [bindAddress, setBindAddress] = useState('127.0.0.1')
+  const [lanIp, setLanIp] = useState('127.0.0.1')
   const [token, setToken] = useState('')
   const [tokenVisible, setTokenVisible] = useState(false)
   const [toggling, setToggling] = useState(false)
@@ -335,7 +336,10 @@ function RemoteTab() {
     }
   }
 
-  useEffect(() => { fetchStatus() }, [])
+  useEffect(() => {
+    fetchStatus()
+    getApi().system.networkIp().then(setLanIp).catch(() => {})
+  }, [])
 
   const handleToggle = async (enable: boolean) => {
     setToggling(true)
@@ -378,6 +382,8 @@ function RemoteTab() {
   }
 
   const accessUrl = `http://${bindAddress === '0.0.0.0' ? 'localhost' : bindAddress}:${port}`
+  const rcHost = bindAddress === '0.0.0.0' ? lanIp : bindAddress
+  const rcUrl = `http://${rcHost}:${port}/rc?token=${token}`
 
   const handleCopyUrl = () => {
     navigator.clipboard.writeText(accessUrl)
@@ -397,21 +403,42 @@ function RemoteTab() {
       </SettingRow>
 
       {running && (
-        <div className="settings-remote-preview">
-          <div className="settings-remote-preview-header">
-            <span className="settings-status-dot" />
-            <span>Server running</span>
+        <>
+          <div className="settings-remote-preview">
+            <div className="settings-remote-preview-header">
+              <span className="settings-status-dot" />
+              <span>Server running</span>
+            </div>
+            <div className="settings-remote-preview-url-row">
+              <code className="settings-remote-preview-url">{accessUrl}</code>
+              <button className="settings-copy-inline-btn" type="button" onClick={handleCopyUrl} title="Copy URL">
+                <CopyIcon style={{ width: 13, height: 13 }} />
+              </button>
+            </div>
+            <span className="settings-remote-preview-hint">
+              Open this URL in any browser on your network for full remote desktop access to Sorcerer.
+            </span>
           </div>
-          <div className="settings-remote-preview-url-row">
-            <code className="settings-remote-preview-url">{accessUrl}</code>
-            <button className="settings-copy-inline-btn" type="button" onClick={handleCopyUrl} title="Copy URL">
-              <CopyIcon style={{ width: 13, height: 13 }} />
-            </button>
+
+          <div className="settings-remote-preview" style={{ marginTop: 8 }}>
+            <div className="settings-remote-preview-header">
+              <SmartphoneIcon style={{ width: 14, height: 14, opacity: 0.6 }} />
+              <span>Remote Control</span>
+            </div>
+            <div className="settings-remote-preview-url-row">
+              <code className="settings-remote-preview-url">{`http://${rcHost}:${port}/rc?token=${tokenVisible ? token : '\u2022'.repeat(8)}`}</code>
+              <button className="settings-copy-inline-btn" type="button" onClick={() => {
+                navigator.clipboard.writeText(rcUrl)
+                addToast('Remote Control URL copied', 'success')
+              }} title="Copy URL">
+                <CopyIcon style={{ width: 13, height: 13 }} />
+              </button>
+            </div>
+            <span className="settings-remote-preview-hint">
+              Lightweight mobile interface — check session status and send messages from your phone.
+            </span>
           </div>
-          <span className="settings-remote-preview-hint">
-            Open this URL in any browser on your network for full remote desktop access to Sorcerer.
-          </span>
-        </div>
+        </>
       )}
 
       <SectionTitle>Configuration</SectionTitle>

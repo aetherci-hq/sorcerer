@@ -109,6 +109,7 @@ const api = {
   system: {
     userInfo: () => ipcRenderer.invoke('system:userInfo'),
     accountPicture: () => ipcRenderer.invoke('system:accountPicture'),
+    networkIp: () => ipcRenderer.invoke('system:networkIp') as Promise<string>,
     platform: process.platform
   },
 
@@ -118,7 +119,9 @@ const api = {
     disable: () => ipcRenderer.invoke('remote:disable'),
     regenerateToken: () => ipcRenderer.invoke('remote:regenerate-token'),
     updateConfig: (config: { port?: number; bindAddress?: string }) =>
-      ipcRenderer.invoke('remote:update-config', config)
+      ipcRenderer.invoke('remote:update-config', config),
+    remoteSessionIds: () =>
+      ipcRenderer.invoke('remote:remoteSessionIds') as Promise<string[]>
   },
 
   window: {

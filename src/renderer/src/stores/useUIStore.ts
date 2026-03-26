@@ -53,6 +53,10 @@ interface UIState {
   setSplitRatio: (nodeId: string, ratio: number) => void
   setFocusedPanel: (panelId: string) => void
   setPanelSession: (panelId: string, sessionId: string | null) => void
+
+  // Remote control — sessions being viewed remotely
+  remoteSessionIds: Set<string>
+  setRemoteSessionIds: (ids: string[]) => void
 }
 
 // --- Split tree helpers ---
@@ -365,7 +369,10 @@ export const useUIStore = create<UIState>()(
         const state = get()
         if (!state.splitRoot) return
         set({ splitRoot: updateLeafSession(state.splitRoot, panelId, sessionId) })
-      }
+      },
+
+      remoteSessionIds: new Set(),
+      setRemoteSessionIds: (ids) => set({ remoteSessionIds: new Set(ids) })
     }),
     {
       name: 'sorcerer-ui-store',

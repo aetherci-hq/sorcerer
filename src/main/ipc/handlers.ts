@@ -49,6 +49,7 @@ import {
   getSetting,
   setSetting,
   getUserInfo,
+  getNetworkIp,
   loadQuickNote,
   saveQuickNote,
   deleteQuickNote,
@@ -453,7 +454,15 @@ export function registerIPC(
     return getUserInfo()
   })
 
+  ipcMain.handle('system:networkIp', () => {
+    return getNetworkIp()
+  })
+
   // ── Remote access ──────────────────────────────────────────
+
+  ipcMain.handle('remote:remoteSessionIds', () => {
+    return globalApiServer?.getRemoteSessionIds?.() ?? []
+  })
 
   ipcMain.handle('remote:status', () => {
     return {
