@@ -9,6 +9,8 @@ interface OrphanWorkspace {
   dirName: string
   sessionCount: number
   fullPath: string
+  lastModified: string
+  diskSize: number
 }
 
 interface OrphanAgent {
@@ -16,6 +18,8 @@ interface OrphanAgent {
   agentName: string
   fullPath: string
   hasManifest: boolean
+  lastModified: string
+  fileCount: number
   manifest?: {
     name: string
     description?: string
@@ -24,11 +28,40 @@ interface OrphanAgent {
   }
 }
 
+function timeAgo(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime()
+  const minutes = Math.floor(diff / 60000)
+  if (minutes < 1) return 'just now'
+  if (minutes < 60) return `${minutes}m ago`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours}h ago`
+  const days = Math.floor(hours / 24)
+  if (days < 30) return `${days}d ago`
+  const months = Math.floor(days / 30)
+  return `${months}mo ago`
+}
+
+function truncateId(id: string): string {
+  // If it looks like a UUID, show first 8 chars
+  if (/^[0-9a-f]{8}-/.test(id)) return id.slice(0, 8) + '…'
+  return id
+}
+
+function shortenPath(fullPath: string): string {
+  const home = fullPath.replace(/\\/g, '/')
+  // Try to show ~/ relative path
+  const parts = home.split('/')
+  const homeIdx = parts.indexOf('.sorcerer')
+  if (homeIdx >= 0) return '~/' + parts.slice(homeIdx).join('/')
+  return fullPath
+}
+
 export function OrphanWorkspaceBanner() {
   const [orphans, setOrphans] = useState<OrphanWorkspace[]>([])
   const [orphanAgents, setOrphanAgents] = useState<OrphanAgent[]>([])
   const [linking, setLinking] = useState<string | null>(null)
   const [importing, setImporting] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState<string | null>(null)
   const loadProjects = useProjectStore((s) => s.loadProjects)
   const loadSessions = useSessionStore((s) => s.loadSessions)
   const loadAgents = useAgentStore((s) => s.loadAgents)
@@ -84,6 +117,19 @@ export function OrphanWorkspaceBanner() {
     setOrphans((prev) => prev.filter((o) => o.dirName !== dirName))
   }
 
+  const handleDeleteWorkspace = async (orphan: OrphanWorkspace) => {
+    setDeleting(orphan.dirName)
+    try {
+      await getApi().workspace.deleteOrphan(orphan.dirName)
+      setOrphans((prev) => prev.filter((o) => o.dirName !== orphan.dirName))
+      addToast(`Deleted orphaned workspace "${orphan.dirName}"`, 'success')
+    } catch (err: any) {
+      addToast(err.message || 'Failed to delete workspace', 'error')
+    } finally {
+      setDeleting(null)
+    }
+  }
+
   const handleImportAgent = async (orphan: OrphanAgent) => {
     setImporting(orphan.dirName)
     try {
@@ -112,6 +158,19 @@ export function OrphanWorkspaceBanner() {
     setOrphanAgents((prev) => prev.filter((o) => o.dirName !== dirName))
   }
 
+  const handleDeleteAgent = async (orphan: OrphanAgent) => {
+    setDeleting(orphan.dirName)
+    try {
+      await getApi().workspace.deleteOrphanAgent(orphan.dirName)
+      setOrphanAgents((prev) => prev.filter((o) => o.dirName !== orphan.dirName))
+      addToast(`Deleted orphaned agent directory`, 'success')
+    } catch (err: any) {
+      addToast(err.message || 'Failed to delete agent', 'error')
+    } finally {
+      setDeleting(null)
+    }
+  }
+
   const handleDismissAll = async () => {
     await Promise.all([
       ...orphans.map((o) => getApi().workspace.dismissOrphan(o.dirName)),
@@ -134,53 +193,86 @@ export function OrphanWorkspaceBanner() {
           Dismiss All
         </button>
       </div>
+
       {orphans.map((orphan) => (
-        <div key={orphan.dirName} className="orphan-banner-row">
-          <span className="orphan-banner-name">{orphan.dirName}</span>
-          <span className="orphan-banner-count">{orphan.sessionCount} session{orphan.sessionCount !== 1 ? 's' : ''}</span>
-          <div className="orphan-banner-actions">
-            <button
-              className="orphan-banner-link"
-              onClick={() => handleLink(orphan)}
-              disabled={linking === orphan.dirName}
-            >
-              {linking === orphan.dirName ? 'Linking...' : 'Link Project'}
-            </button>
-            <button
-              className="orphan-banner-dismiss"
-              onClick={() => handleDismiss(orphan.dirName)}
-            >
-              Dismiss
-            </button>
-          </div>
-        </div>
-      ))}
-      {orphanAgents.map((orphan) => (
-        <div key={orphan.dirName} className="orphan-banner-row">
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" style={{ flexShrink: 0, opacity: 0.5 }}>
-            <path d="M6 9a.5.5 0 0 1 .5-.5h3a.5.5 0 0 1 0 1h-3A.5.5 0 0 1 6 9zM5.5 6a.5.5 0 0 0 0 1h.01a.5.5 0 0 0 0-1H5.5zm5 0a.5.5 0 0 0 0 1h.01a.5.5 0 0 0 0-1h-.01z"/>
-            <path d="M4.5 2A2.5 2.5 0 0 0 2 4.5v2.003C2 8.985 3.893 11 6.275 11h3.45C12.107 11 14 8.985 14 6.503V4.5A2.5 2.5 0 0 0 11.5 2h-7zM3 4.5A1.5 1.5 0 0 1 4.5 3h7A1.5 1.5 0 0 1 13 4.5v2.003C13 8.45 11.514 10 9.725 10h-3.45C4.486 10 3 8.45 3 6.503V4.5z"/>
-            <path d="M8 12a1 1 0 0 0-1 1v1h2v-1a1 1 0 0 0-1-1zM5 15h6v-2a3 3 0 0 0-6 0v2z"/>
-          </svg>
-          <span className="orphan-banner-name">{orphan.agentName}</span>
-          {!orphan.hasManifest && <span className="orphan-banner-count">no manifest</span>}
-          <div className="orphan-banner-actions">
-            {orphan.hasManifest && (
+        <div key={orphan.dirName} className="orphan-banner-item">
+          <div className="orphan-banner-item-top">
+            <span className="orphan-banner-name">{orphan.dirName}</span>
+            <span className="orphan-banner-meta">
+              {orphan.sessionCount} session{orphan.sessionCount !== 1 ? 's' : ''}
+              <span className="orphan-banner-sep">·</span>
+              {timeAgo(orphan.lastModified)}
+            </span>
+            <div className="orphan-banner-actions">
               <button
                 className="orphan-banner-link"
-                onClick={() => handleImportAgent(orphan)}
-                disabled={importing === orphan.dirName}
+                onClick={() => handleLink(orphan)}
+                disabled={linking === orphan.dirName}
               >
-                {importing === orphan.dirName ? 'Importing...' : 'Re-import'}
+                {linking === orphan.dirName ? 'Linking...' : 'Link Project'}
               </button>
-            )}
-            <button
-              className="orphan-banner-dismiss"
-              onClick={() => handleDismissAgent(orphan.dirName)}
-            >
-              Dismiss
-            </button>
+              <button
+                className="orphan-banner-delete"
+                onClick={() => handleDeleteWorkspace(orphan)}
+                disabled={deleting === orphan.dirName}
+              >
+                {deleting === orphan.dirName ? 'Deleting...' : 'Delete'}
+              </button>
+              <button
+                className="orphan-banner-dismiss"
+                onClick={() => handleDismiss(orphan.dirName)}
+              >
+                Dismiss
+              </button>
+            </div>
           </div>
+          <div className="orphan-banner-path">{shortenPath(orphan.fullPath)}</div>
+        </div>
+      ))}
+
+      {orphanAgents.map((orphan) => (
+        <div key={orphan.dirName} className="orphan-banner-item">
+          <div className="orphan-banner-item-top">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" style={{ flexShrink: 0, opacity: 0.5 }}>
+              <path d="M6 9a.5.5 0 0 1 .5-.5h3a.5.5 0 0 1 0 1h-3A.5.5 0 0 1 6 9zM5.5 6a.5.5 0 0 0 0 1h.01a.5.5 0 0 0 0-1H5.5zm5 0a.5.5 0 0 0 0 1h.01a.5.5 0 0 0 0-1h-.01z"/>
+              <path d="M4.5 2A2.5 2.5 0 0 0 2 4.5v2.003C2 8.985 3.893 11 6.275 11h3.45C12.107 11 14 8.985 14 6.503V4.5A2.5 2.5 0 0 0 11.5 2h-7zM3 4.5A1.5 1.5 0 0 1 4.5 3h7A1.5 1.5 0 0 1 13 4.5v2.003C13 8.45 11.514 10 9.725 10h-3.45C4.486 10 3 8.45 3 6.503V4.5z"/>
+              <path d="M8 12a1 1 0 0 0-1 1v1h2v-1a1 1 0 0 0-1-1zM5 15h6v-2a3 3 0 0 0-6 0v2z"/>
+            </svg>
+            <span className="orphan-banner-name">
+              {orphan.hasManifest ? orphan.agentName : truncateId(orphan.dirName)}
+            </span>
+            <span className="orphan-banner-meta">
+              {!orphan.hasManifest && <span className="orphan-banner-label">no manifest</span>}
+              {orphan.fileCount > 0 && <>{!orphan.hasManifest && <span className="orphan-banner-sep">·</span>}{orphan.fileCount} file{orphan.fileCount !== 1 ? 's' : ''}</>}
+              <span className="orphan-banner-sep">·</span>
+              {timeAgo(orphan.lastModified)}
+            </span>
+            <div className="orphan-banner-actions">
+              {orphan.hasManifest && (
+                <button
+                  className="orphan-banner-link"
+                  onClick={() => handleImportAgent(orphan)}
+                  disabled={importing === orphan.dirName}
+                >
+                  {importing === orphan.dirName ? 'Importing...' : 'Re-import'}
+                </button>
+              )}
+              <button
+                className="orphan-banner-delete"
+                onClick={() => handleDeleteAgent(orphan)}
+                disabled={deleting === orphan.dirName}
+              >
+                {deleting === orphan.dirName ? 'Deleting...' : 'Delete'}
+              </button>
+              <button
+                className="orphan-banner-dismiss"
+                onClick={() => handleDismissAgent(orphan.dirName)}
+              >
+                Dismiss
+              </button>
+            </div>
+          </div>
+          <div className="orphan-banner-path">{shortenPath(orphan.fullPath)}</div>
         </div>
       ))}
     </div>
