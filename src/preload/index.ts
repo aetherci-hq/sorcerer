@@ -30,7 +30,8 @@ const api = {
     createProjectQuickTerminal: (projectId: string) => ipcRenderer.invoke('session:create-project-quick-terminal', projectId),
     rename: (sessionId: string, name: string) => ipcRenderer.invoke('session:rename', sessionId, name),
     landOnMain: (sessionId: string) => ipcRenderer.invoke('session:land-on-main', sessionId),
-    setRemoteControl: (sessionId: string, enabled: boolean) => ipcRenderer.invoke('session:set-remote-control', sessionId, enabled)
+    setRemoteControl: (sessionId: string, enabled: boolean) => ipcRenderer.invoke('session:set-remote-control', sessionId, enabled),
+    hasConversation: (sessionId: string) => ipcRenderer.invoke('session:has-conversation', sessionId) as Promise<boolean>
   },
 
   agent: {
@@ -45,6 +46,7 @@ const api = {
     kill: (id: string) => ipcRenderer.invoke('agent:kill', id),
     createQuickTerminal: (agentId: string) => ipcRenderer.invoke('agent:create-quick-terminal', agentId),
     setRemoteControl: (agentId: string, enabled: boolean) => ipcRenderer.invoke('agent:set-remote-control', agentId, enabled),
+    hasConversation: (agentId: string) => ipcRenderer.invoke('agent:has-conversation', agentId) as Promise<boolean>
   },
 
   terminal: {
@@ -63,6 +65,11 @@ const api = {
       const handler = (_event: any, exitCode: number) => callback(exitCode)
       ipcRenderer.on(`terminal:exit:${sessionId}`, handler)
       return () => ipcRenderer.removeListener(`terminal:exit:${sessionId}`, handler)
+    },
+    onResumeFailed: (callback: (data: { sessionId: string; reason: string }) => void) => {
+      const handler = (_event: any, data: { sessionId: string; reason: string }) => callback(data)
+      ipcRenderer.on('session:resume-failed', handler)
+      return () => ipcRenderer.removeListener('session:resume-failed', handler)
     }
   },
 
@@ -90,8 +97,10 @@ const api = {
   workspace: {
     scanOrphans: () => ipcRenderer.invoke('workspace:scan-orphans'),
     dismissOrphan: (dirName: string) => ipcRenderer.invoke('workspace:dismiss-orphan', dirName),
+    deleteOrphan: (dirName: string) => ipcRenderer.invoke('workspace:delete-orphan', dirName),
     scanOrphanAgents: () => ipcRenderer.invoke('workspace:scan-orphan-agents'),
-    dismissOrphanAgent: (dirName: string) => ipcRenderer.invoke('workspace:dismiss-orphan-agent', dirName)
+    dismissOrphanAgent: (dirName: string) => ipcRenderer.invoke('workspace:dismiss-orphan-agent', dirName),
+    deleteOrphanAgent: (dirName: string) => ipcRenderer.invoke('workspace:delete-orphan-agent', dirName)
   },
 
   quickNotes: {

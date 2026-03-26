@@ -8,7 +8,7 @@ import { WorktreeService } from './services/worktree-service'
 import { FileWatcherService } from './services/file-watcher-service'
 import { PopoutService } from './services/popout-service'
 import { registerIPC } from './ipc/handlers'
-import { syncWorktrees } from './ipc/shared-handlers'
+import { syncWorktrees, checkResumeFailed } from './ipc/shared-handlers'
 
 // On macOS/Linux, Electron doesn't inherit the user's shell PATH.
 // Fix process.env.PATH so spawned processes (e.g. 'claude') can be found.
@@ -195,6 +195,29 @@ async function createWindow(): Promise<void> {
 
   // Register IPC handlers
   registerIPC(ptyService, dbService, worktreeService, fileWatcherService)
+
+  // Detect failed resumes (e.g. "No conversation found to continue")
+  ptyService.onExit((sessionId, exitCode) => {
+    const scrollbackText = ptyService.scrollback.getScrollback(sessionId)
+    const reason = checkResumeFailed(sessionId, scrollbackText)
+    if (reason) {
+      console.log(`[resume-failed] ${sessionId}: ${reason} (exit code ${exitCode})`)
+      // Update DB status back to idle
+      const session = dbService.getSession(sessionId)
+      if (session) {
+        dbService.updateSession(sessionId, { status: 'idle', pid: null })
+      } else {
+        const agent = dbService.getAgent(sessionId)
+        if (agent) {
+          dbService.updateAgent(sessionId, { status: 'idle', pid: null })
+        }
+      }
+      // Notify renderer
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('session:resume-failed', { sessionId, reason })
+      }
+    }
+  })
 
   // Auto-start remote access if previously enabled
   const remoteEnabled = dbService.getSetting('remoteEnabled')

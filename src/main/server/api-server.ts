@@ -84,6 +84,8 @@ export class ApiServer {
   private httpServer: http.Server | null = null
   private scrollback = new ScrollbackBuffer()
   private wsHandler: WebSocketHandler | null = null
+  private _ptyOutputListener: ((sessionId: string, data: string) => void) | null = null
+  private _ptyExitListener: ((sessionId: string, exitCode: number) => void) | null = null
   private dispatch: Record<string, (...args: any[]) => any>
 
   constructor(
@@ -107,15 +109,17 @@ export class ApiServer {
     )
 
     // Hook into PTY output → feed scrollback buffer + broadcast to WS clients
-    this.services.pty.onOutput((sessionId, data) => {
+    this._ptyOutputListener = (sessionId: string, data: string) => {
       this.scrollback.append(sessionId, data)
       this.wsHandler?.broadcastTerminalData(sessionId, data)
-    })
+    }
+    this.services.pty.onOutput(this._ptyOutputListener)
 
     // Hook into PTY exit → broadcast to WS clients
-    this.services.pty.onExit((sessionId, exitCode) => {
+    this._ptyExitListener = (sessionId: string, exitCode: number) => {
       this.wsHandler?.broadcastTerminalExit(sessionId, exitCode)
-    })
+    }
+    this.services.pty.onExit(this._ptyExitListener)
 
     // Hook into file watcher events → broadcast to WS clients
     this.services.fileWatcher.onEvent((event, data) => {
@@ -135,8 +139,10 @@ export class ApiServer {
 
   stop(): void {
     // Unhook PTY listeners
-    this.services.pty.onOutput(() => {})
-    this.services.pty.onExit(() => {})
+    if (this._ptyOutputListener) this.services.pty.removeOutputListener(this._ptyOutputListener)
+    if (this._ptyExitListener) this.services.pty.removeExitListener(this._ptyExitListener)
+    this._ptyOutputListener = null
+    this._ptyExitListener = null
 
     if (this.wsHandler) {
       this.wsHandler.close()

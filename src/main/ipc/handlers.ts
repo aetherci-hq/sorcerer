@@ -50,6 +50,7 @@ import {
   setSetting,
   getUserInfo,
   getNetworkIp,
+  hasClaudeConversation,
   loadQuickNote,
   saveQuickNote,
   deleteQuickNote,
@@ -124,7 +125,7 @@ export function registerIPC(
     const dismissed = new Set<string>(dismissedRaw ? JSON.parse(dismissedRaw) : [])
 
     const entries = fs.readdirSync(root, { withFileTypes: true })
-    const orphans: { dirName: string; sessionCount: number; fullPath: string }[] = []
+    const orphans: { dirName: string; sessionCount: number; fullPath: string; lastModified: string; diskSize: number }[] = []
 
     for (const entry of entries) {
       if (!entry.isDirectory()) continue
@@ -132,15 +133,28 @@ export function registerIPC(
       if (dismissed.has(entry.name)) continue
 
       const dirPath = path.join(root, entry.name)
-      // Count child directories (sessions)
+      // Count child directories (sessions) and gather stats
       let sessionCount = 0
+      let lastModified = new Date(0)
+      let diskSize = 0
       try {
         const children = fs.readdirSync(dirPath, { withFileTypes: true })
-        sessionCount = children.filter((c) => c.isDirectory()).length
+        for (const child of children) {
+          if (child.isDirectory()) {
+            sessionCount++
+            try {
+              const stat = fs.statSync(path.join(dirPath, child.name))
+              if (stat.mtime > lastModified) lastModified = stat.mtime
+              diskSize += stat.size
+            } catch { /* skip */ }
+          }
+        }
       } catch { /* skip unreadable */ }
 
       if (sessionCount > 0) {
-        orphans.push({ dirName: entry.name, sessionCount, fullPath: dirPath })
+        const dirStat = fs.statSync(dirPath)
+        if (dirStat.mtime > lastModified) lastModified = dirStat.mtime
+        orphans.push({ dirName: entry.name, sessionCount, fullPath: dirPath, lastModified: lastModified.toISOString(), diskSize })
       }
     }
 
@@ -169,7 +183,7 @@ export function registerIPC(
     const dismissed = new Set<string>(dismissedRaw ? JSON.parse(dismissedRaw) : [])
 
     const entries = fs.readdirSync(agentsRoot, { withFileTypes: true })
-    const orphans: { dirName: string; agentName: string; fullPath: string; hasManifest: boolean; manifest?: any }[] = []
+    const orphans: { dirName: string; agentName: string; fullPath: string; hasManifest: boolean; manifest?: any; lastModified: string; fileCount: number }[] = []
 
     for (const entry of entries) {
       if (!entry.isDirectory()) continue
@@ -190,7 +204,23 @@ export function registerIPC(
         } catch { /* ignore corrupt manifest */ }
       }
 
-      orphans.push({ dirName: entry.name, agentName, fullPath: dirPath, hasManifest, manifest })
+      // Gather directory stats
+      let lastModified = new Date(0)
+      let fileCount = 0
+      try {
+        const dirStat = fs.statSync(dirPath)
+        lastModified = dirStat.mtime
+        const children = fs.readdirSync(dirPath)
+        fileCount = children.length
+        for (const child of children) {
+          try {
+            const childStat = fs.statSync(path.join(dirPath, child))
+            if (childStat.mtime > lastModified) lastModified = childStat.mtime
+          } catch { /* skip */ }
+        }
+      } catch { /* skip */ }
+
+      orphans.push({ dirName: entry.name, agentName, fullPath: dirPath, hasManifest, manifest, lastModified: lastModified.toISOString(), fileCount })
     }
 
     return orphans
@@ -203,6 +233,22 @@ export function registerIPC(
       list.push(dirName)
     }
     dbService.setSetting('dismissedAgents', JSON.stringify(list))
+  })
+
+  ipcMain.handle('workspace:delete-orphan', (_event, dirName: string) => {
+    const root = worktreeService.getWorkspacesRoot()
+    const dirPath = path.join(root, dirName)
+    // Safety: only delete if it's actually inside the workspaces root
+    if (!dirPath.startsWith(root) || !fs.existsSync(dirPath)) return
+    fs.rmSync(dirPath, { recursive: true, force: true })
+  })
+
+  ipcMain.handle('workspace:delete-orphan-agent', (_event, dirName: string) => {
+    const agentsRoot = path.join(os.homedir(), '.sorcerer', 'agents')
+    const dirPath = path.join(agentsRoot, dirName)
+    // Safety: only delete if it's actually inside the agents root
+    if (!dirPath.startsWith(agentsRoot) || !fs.existsSync(dirPath)) return
+    fs.rmSync(dirPath, { recursive: true, force: true })
   })
 
   ipcMain.handle('project:update', (_event, id: string, updates: any) => {
@@ -311,6 +357,17 @@ export function registerIPC(
     return resumeSession(services, sessionId)
   })
 
+  ipcMain.handle('session:has-conversation', (_event, sessionId: string) => {
+    const session = dbService.getSession(sessionId)
+    if (!session) return false
+    // Use worktree path if it exists, otherwise fall back to project path
+    const cwd = fs.existsSync(session.worktree_path as string)
+      ? (session.worktree_path as string)
+      : (dbService.getProject(session.project_id as string)?.path as string)
+    if (!cwd) return false
+    return hasClaudeConversation(cwd)
+  })
+
   ipcMain.handle('session:set-team', (_event, sessionId: string, teamName: string | null) => {
     return setSessionTeam(services, sessionId, teamName)
   })
@@ -378,6 +435,12 @@ export function registerIPC(
 
   ipcMain.handle('agent:resume', (_event, agentId: string) => {
     return resumeAgent(services, agentId)
+  })
+
+  ipcMain.handle('agent:has-conversation', (_event, agentId: string) => {
+    const cwd = path.join(os.homedir(), '.sorcerer', 'agents', agentId)
+    if (!fs.existsSync(cwd)) return false
+    return hasClaudeConversation(cwd)
   })
 
   ipcMain.handle('agent:restart', (_event, agentId: string) => {

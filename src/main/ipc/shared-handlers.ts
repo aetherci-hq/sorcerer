@@ -68,6 +68,77 @@ export function sessionEnv(sessionId: string): Record<string, string> {
 }
 
 /**
+ * Check if Claude Code has conversation data for a given working directory.
+ * Claude stores conversations in ~/.claude/projects/<encoded-path>/ where
+ * the encoded path replaces all non-alphanumeric characters with dashes.
+ * Returns true if at least one .jsonl conversation file exists.
+ */
+export function hasClaudeConversation(cwd: string): boolean {
+  const encoded = cwd.replace(/[^a-zA-Z0-9]/g, '-')
+  const convDir = path.join(os.homedir(), '.claude', 'projects', encoded)
+  if (!fs.existsSync(convDir)) return false
+  try {
+    const entries = fs.readdirSync(convDir)
+    return entries.some((e) => e.endsWith('.jsonl'))
+  } catch {
+    return false
+  }
+}
+
+// ── Resume failure detection ────────────────────────────────
+//
+// Tracks sessions spawned via --continue so we can detect early exits
+// (e.g. "No conversation found to continue") and notify the renderer.
+
+/** Map of sessionId → timestamp when resume was initiated */
+const resumeTimestamps = new Map<string, number>()
+
+/** Threshold in ms — exits faster than this after a resume are considered failures */
+const EARLY_EXIT_THRESHOLD = 8000
+
+/** Patterns in Claude Code output that indicate a failed resume */
+const RESUME_FAILURE_PATTERNS = [
+  'No conversation found',
+  'no conversation found',
+  'Could not find conversation',
+  'could not find conversation'
+]
+
+/**
+ * Mark a session as having just been resumed via --continue.
+ * Called from resumeSession/resumeAgent.
+ */
+function trackResume(sessionId: string): void {
+  resumeTimestamps.set(sessionId, Date.now())
+}
+
+/**
+ * Check whether an exiting session was a failed resume.
+ * Returns the failure reason if detected, or null.
+ */
+export function checkResumeFailed(sessionId: string, scrollback: string): string | null {
+  const resumeTime = resumeTimestamps.get(sessionId)
+  resumeTimestamps.delete(sessionId)
+  if (!resumeTime) return null
+
+  const elapsed = Date.now() - resumeTime
+  if (elapsed > EARLY_EXIT_THRESHOLD) return null
+
+  for (const pattern of RESUME_FAILURE_PATTERNS) {
+    if (scrollback.includes(pattern)) {
+      return 'No conversation found to continue'
+    }
+  }
+
+  // Still an early exit even without a known pattern
+  if (elapsed < 3000) {
+    return 'Session exited immediately after resume'
+  }
+
+  return null
+}
+
+/**
  * Schedule enabling Remote Control on a Claude Code session.
  * Waits for Claude Code to initialize, then sends the /remote-control command.
  */
@@ -558,6 +629,7 @@ export async function resumeSession(
     // Resume the most recent Claude Code conversation in this worktree
     const args = ['--continue']
     if (session.bypass_permissions !== 0) args.push('--dangerously-skip-permissions')
+    trackResume(sessionId)
     pty.spawn(sessionId, cwd, {
       command: resolveClaudeBinary(),
       args,
@@ -854,6 +926,7 @@ export function resumeAgent(
   if (agent.mcp_config) args.push('--mcp-config', agent.mcp_config as string)
   if (agent.system_prompt) args.push('--append-system-prompt', agent.system_prompt as string)
 
+  trackResume(agentId)
   pty.spawn(agentId, cwd, {
     command: resolveClaudeBinary(),
     args,

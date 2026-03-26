@@ -19,6 +19,7 @@ import { useSessionStore } from './stores/useSessionStore'
 import { useAgentStore } from './stores/useAgentStore'
 import { useTeamStore } from './stores/useTeamStore'
 import { useQuickNotesStore } from './stores/useQuickNotesStore'
+import { useToastStore } from './stores/useToastStore'
 import { useUIStore } from './stores/useUIStore'
 
 export function App() {
@@ -89,6 +90,19 @@ export function App() {
       useSessionStore.getState().updateSessionInStore(sessionId, { status: status as any, pid })
     })
 
+    // Listen for failed resume attempts (e.g. "No conversation found to continue")
+    const unsubResumeFailed = getApi().terminal.onResumeFailed(({ sessionId, reason }) => {
+      // Update store so UI reflects idle state immediately
+      const session = useSessionStore.getState().sessions.find((s) => s.id === sessionId)
+      if (session) {
+        useSessionStore.getState().updateSessionInStore(sessionId, { status: 'idle', pid: null })
+        useToastStore.getState().addToast(`Resume failed for "${session.name}": ${reason}. Use "New Session" to start fresh.`, 'error')
+      } else {
+        useAgentStore.getState().updateAgentInStore(sessionId, { status: 'idle', pid: null })
+        useToastStore.getState().addToast(`Resume failed: ${reason}. Use "Start New Session" to start fresh.`, 'error')
+      }
+    })
+
     // Poll for remote control viewers (which sessions have WS subscribers)
     const pollRemote = async () => {
       try {
@@ -103,6 +117,7 @@ export function App() {
       unsub()
       unsubLink()
       unsubPopout()
+      unsubResumeFailed()
       clearInterval(remoteInterval)
     }
   }, [])

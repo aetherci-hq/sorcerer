@@ -1181,6 +1181,14 @@ body {
   line-height: 1.6;
 }
 
+.terminal-placeholder-hint {
+  font-size: 12.5px;
+  color: var(--accent);
+  text-align: center;
+  margin-top: 4px;
+  opacity: 0.85;
+}
+
 .terminal-placeholder-text kbd {
   font-family: var(--font-mono);
   font-size: 12.5px;
@@ -3195,15 +3203,22 @@ button:focus-visible,
   color: var(--text-secondary);
 }
 
-.orphan-banner-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 5px 12px 5px 25px;
+.orphan-banner-item {
+  padding: 6px 12px 6px 25px;
 }
 
-.orphan-banner-row:last-child {
-  padding-bottom: 8px;
+.orphan-banner-item:last-child {
+  padding-bottom: 10px;
+}
+
+.orphan-banner-item + .orphan-banner-item {
+  border-top: 1px solid var(--border-subtle);
+}
+
+.orphan-banner-item-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .orphan-banner-name {
@@ -3213,16 +3228,42 @@ button:focus-visible,
   color: var(--text-primary);
 }
 
-.orphan-banner-count {
+.orphan-banner-meta {
   font-size: 11.5px;
   color: var(--text-tertiary);
   font-family: var(--font-mono);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.orphan-banner-sep {
+  opacity: 0.4;
+}
+
+.orphan-banner-label {
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.orphan-banner-path {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-tertiary);
+  opacity: 0.7;
+  margin-top: 2px;
+  padding-left: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .orphan-banner-actions {
   display: flex;
   gap: 6px;
   margin-left: auto;
+  flex-shrink: 0;
 }
 
 .orphan-banner-link {
@@ -3265,6 +3306,29 @@ button:focus-visible,
   background: var(--bg-hover);
   color: var(--text-secondary);
   border-color: var(--border-medium);
+}
+
+.orphan-banner-delete {
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  background: transparent;
+  color: #ef4444;
+  font-family: var(--font-sans);
+  font-size: 11.5px;
+  font-weight: 500;
+  padding: 3px 10px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.15s var(--ease-out);
+}
+
+.orphan-banner-delete:hover {
+  background: rgba(239, 68, 68, 0.12);
+  border-color: rgba(239, 68, 68, 0.4);
+}
+
+.orphan-banner-delete:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 /* ============================
@@ -3320,6 +3384,36 @@ button:focus-visible,
 
 .quick-notes-copy-btn:hover {
   color: var(--accent);
+}
+
+.quick-notes-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.quick-notes-delete-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: transparent;
+  border: none;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  font-family: var(--font-sans);
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  transition: color 0.15s var(--ease-out);
+}
+
+.quick-notes-delete-btn svg {
+  width: 12px;
+  height: 12px;
+}
+
+.quick-notes-delete-btn:hover {
+  color: #ef4444;
 }
 
 .quick-notes-textarea {

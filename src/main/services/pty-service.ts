@@ -12,8 +12,8 @@ export class PTYService {
   private sessions: Map<string, PTYSession> = new Map()
   private mainWindow: BrowserWindow
   private customShell: string | undefined
-  private outputListener: ((sessionId: string, data: string) => void) | null = null
-  private exitListener: ((sessionId: string, exitCode: number) => void) | null = null
+  private outputListeners: ((sessionId: string, data: string) => void)[] = []
+  private exitListeners: ((sessionId: string, exitCode: number) => void)[] = []
   /** Extra windows that should receive terminal data for a given session */
   private extraListeners: Map<string, Set<WebContents>> = new Map()
   /** Scrollback buffer for terminal replay in pop-out windows */
@@ -29,12 +29,22 @@ export class PTYService {
 
   /** Register a listener for all PTY output (used by API server for WebSocket broadcast) */
   onOutput(listener: (sessionId: string, data: string) => void): void {
-    this.outputListener = listener
+    this.outputListeners.push(listener)
+  }
+
+  /** Remove a previously registered output listener */
+  removeOutputListener(listener: (sessionId: string, data: string) => void): void {
+    this.outputListeners = this.outputListeners.filter((l) => l !== listener)
   }
 
   /** Register a listener for all PTY exits */
   onExit(listener: (sessionId: string, exitCode: number) => void): void {
-    this.exitListener = listener
+    this.exitListeners.push(listener)
+  }
+
+  /** Remove a previously registered exit listener */
+  removeExitListener(listener: (sessionId: string, exitCode: number) => void): void {
+    this.exitListeners = this.exitListeners.filter((l) => l !== listener)
   }
 
   /** Subscribe an extra WebContents to a session's terminal output */
@@ -122,7 +132,7 @@ export class PTYService {
         }
       }
 
-      this.outputListener?.(sessionId, data)
+      for (const listener of this.outputListeners) listener(sessionId, data)
     })
 
     ptyProcess.onExit(({ exitCode }) => {
@@ -143,7 +153,7 @@ export class PTYService {
         this.extraListeners.delete(sessionId)
       }
 
-      this.exitListener?.(sessionId, exitCode)
+      for (const listener of this.exitListeners) listener(sessionId, exitCode)
       this.sessions.delete(sessionId)
     })
   }
