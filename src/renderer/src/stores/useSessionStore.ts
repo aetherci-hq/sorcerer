@@ -11,7 +11,7 @@ interface SessionState {
   loading: boolean
 
   loadSessions: (projectId?: string) => Promise<void>
-  createSession: (projectId: string, name: string, useMainRepo?: boolean, bypassPermissions?: boolean, remoteControl?: boolean) => Promise<Session | null>
+  createSession: (projectId: string, name: string, useMainRepo?: boolean, bypassPermissions?: boolean, remoteControl?: boolean) => Promise<{ session: Session; error?: string } | { session: null; error: string }>
   createQuickTerminal: (sourceSessionId: string) => Promise<Session | null>
   killSession: (sessionId: string) => Promise<void>
   archiveSession: (sessionId: string) => Promise<void>
@@ -46,15 +46,15 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   createSession: async (projectId, name, useMainRepo?, bypassPermissions?, remoteControl?) => {
     try {
       const session = await getApi().session.create(projectId, name, useMainRepo, bypassPermissions, remoteControl)
-      if (!session) return null
+      if (!session) return { session: null, error: 'No session returned' }
       set((state) => ({
         sessions: [session, ...state.sessions]
       }))
       get().setActiveSession(session.id)
-      return session
-    } catch (err) {
+      return { session }
+    } catch (err: any) {
       console.error('[session-store] createSession failed:', err)
-      return null
+      return { session: null, error: err?.message || 'Failed to create session' }
     }
   },
 

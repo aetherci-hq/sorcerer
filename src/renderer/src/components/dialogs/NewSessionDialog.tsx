@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Dialog, DialogField, DialogActions, DialogButton } from '../Dialog'
+import { getApi } from '../../api/client'
 import { useUIStore } from '../../stores/useUIStore'
 import { useProjectStore } from '../../stores/useProjectStore'
 import { useSessionStore } from '../../stores/useSessionStore'
@@ -15,6 +16,7 @@ export function NewSessionDialog() {
   const [useMainRepo, setUseMainRepo] = useState(false)
   const [bypassPermissions, setBypassPermissions] = useState(true)
   const [remoteControl, setRemoteControl] = useState(false)
+  const [gitInfo, setGitInfo] = useState<{ hasGit: boolean; hasCommits: boolean } | null>(null)
 
   const open = activeDialog === 'new-session'
 
@@ -22,12 +24,25 @@ export function NewSessionDialog() {
   const effectiveProjectId = dialogTargetId || projectId
   const project = projects.find((p) => p.id === effectiveProjectId)
 
+  // Check git status when project selection changes
+  useEffect(() => {
+    if (!effectiveProjectId || !open) {
+      setGitInfo(null)
+      return
+    }
+    getApi().project.checkGit(effectiveProjectId).then(setGitInfo)
+  }, [effectiveProjectId, open])
+
+  const isGitProject = gitInfo?.hasGit && gitInfo?.hasCommits
+  const isEmptyGit = gitInfo?.hasGit && !gitInfo?.hasCommits
+
   const handleClose = () => {
     setName('')
     setProjectId('')
     setUseMainRepo(false)
     setBypassPermissions(true)
     setRemoteControl(false)
+    setGitInfo(null)
     closeDialog()
   }
 
@@ -41,13 +56,27 @@ export function NewSessionDialog() {
       addToast('Please enter a session name', 'error')
       return
     }
-    const session = await createSession(effectiveProjectId, name.trim(), useMainRepo, bypassPermissions, remoteControl)
-    if (session) {
+    const result = await createSession(effectiveProjectId, name.trim(), useMainRepo, bypassPermissions, remoteControl)
+    if (result?.session) {
       addToast(`Session "${name.trim()}" created`, 'success')
     } else {
-      addToast('Failed to create session', 'error')
+      addToast(result?.error || 'Failed to create session', 'error')
     }
     handleClose()
+  }
+
+  // Build the hint text based on project type
+  let hintText: React.ReactNode
+  if (!gitInfo) {
+    hintText = null
+  } else if (!gitInfo.hasGit) {
+    hintText = 'Claude Code will run directly in this folder.'
+  } else if (isEmptyGit) {
+    hintText = 'Git repository has no commits yet — will work directly in the project folder.'
+  } else if (useMainRepo) {
+    hintText = 'Will use current branch in main repository.'
+  } else {
+    hintText = <>An isolated worktree branch <span className="dialog-hint-mono">{project?.name || '...'}/{name || '...'}</span> will be created.</>
   }
 
   return (
@@ -79,14 +108,16 @@ export function NewSessionDialog() {
             autoFocus
           />
         </DialogField>
-        <label className="dialog-checkbox">
-          <input
-            type="checkbox"
-            checked={useMainRepo}
-            onChange={(e) => setUseMainRepo(e.target.checked)}
-          />
-          Work in main repository
-        </label>
+        {isGitProject && (
+          <label className="dialog-checkbox">
+            <input
+              type="checkbox"
+              checked={useMainRepo}
+              onChange={(e) => setUseMainRepo(e.target.checked)}
+            />
+            Work in main repository
+          </label>
+        )}
         <label className="dialog-checkbox">
           <input
             type="checkbox"
@@ -103,12 +134,7 @@ export function NewSessionDialog() {
           />
           Enable Session Remote Control
         </label>
-        <div className="dialog-hint">
-          {useMainRepo
-            ? 'Will use current branch in main repository'
-            : <>A git worktree branch <span className="dialog-hint-mono">{project?.name || '...'}/{name || '...'}</span> will be created.</>
-          }
-        </div>
+        {hintText && <div className="dialog-hint">{hintText}</div>}
         <DialogActions>
           <DialogButton onClick={handleClose}>Cancel</DialogButton>
           <DialogButton variant="primary" type="submit">Create Session</DialogButton>

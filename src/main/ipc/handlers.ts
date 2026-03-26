@@ -267,6 +267,29 @@ export function registerIPC(
     return getProjectGitStatus(services, projectPath)
   })
 
+  ipcMain.handle('project:check-git', (_event, projectId: string) => {
+    const project = dbService.getProject(projectId)
+    if (!project) return { hasGit: false, hasCommits: false }
+    const hasGit = fs.existsSync(path.join(project.path as string, '.git'))
+    let hasCommits = false
+    if (hasGit) {
+      try {
+        // Quick check: HEAD ref exists
+        fs.accessSync(path.join(project.path as string, '.git', 'HEAD'))
+        const headContent = fs.readFileSync(path.join(project.path as string, '.git', 'HEAD'), 'utf8')
+        // If HEAD points to a ref, check if that ref file exists (has commits)
+        if (headContent.startsWith('ref: ')) {
+          const refPath = path.join(project.path as string, '.git', headContent.trim().slice(5))
+          hasCommits = fs.existsSync(refPath)
+        } else {
+          // Detached HEAD with a hash = has commits
+          hasCommits = true
+        }
+      } catch { /* no commits */ }
+    }
+    return { hasGit, hasCommits }
+  })
+
   // ── Session operations ──────────────────────────────────────
 
   // Load custom shell setting on startup

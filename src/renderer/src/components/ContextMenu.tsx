@@ -387,31 +387,33 @@ export function ContextMenu() {
           addToast(enabling ? 'Session Remote Control enabled — check terminal for connection URL' : 'Session Remote Control disabled for future sessions', 'success')
         }
       },
-      { label: 'Copy Worktree Path', icon: <CopyIcon className={iconClass} />, action: () => {
-        if (targetSession) copyToClipboard(targetSession.worktree_path, 'Worktree path')
+      { label: targetSession?.branch ? 'Copy Worktree Path' : 'Copy Path', icon: <CopyIcon className={iconClass} />, action: () => {
+        if (targetSession) copyToClipboard(targetSession.worktree_path, 'Path')
       }},
-      { type: 'separator' },
-      { label: 'Push Branch', icon: <UploadIcon className={iconClass} />, action: async () => {
-        addToast('Pushing branch...', 'info')
-        const result = await pushBranch(contextMenu.targetId)
-        if (result.pushed) {
-          addToast('Branch pushed to remote', 'success')
-        } else {
-          addToast(result.error || 'Push failed', 'error')
-        }
-      }},
-      { label: 'Open Remote', icon: <ExternalLinkIcon className={iconClass} />, action: async () => {
-        try {
-          const result = await getApi().session.openRemote(contextMenu.targetId)
-          if (!result.opened) {
-            addToast(result.error || 'No remote URL found', 'error')
+      ...(targetSession?.branch ? [
+        { type: 'separator' as const },
+        { label: 'Push Branch', icon: <UploadIcon className={iconClass} />, action: async () => {
+          addToast('Pushing branch...', 'info')
+          const result = await pushBranch(contextMenu.targetId)
+          if (result.pushed) {
+            addToast('Branch pushed to remote', 'success')
+          } else {
+            addToast(result.error || 'Push failed', 'error')
           }
-        } catch {
-          addToast('Failed to open remote', 'error')
-        }
-      }},
-      ...(!isMainRepo ? [
-        { label: 'Land on Main', icon: <MergeIcon className={iconClass} />, action: () => openDialog('land-session', contextMenu.targetId) },
+        }},
+        { label: 'Open Remote', icon: <ExternalLinkIcon className={iconClass} />, action: async () => {
+          try {
+            const result = await getApi().session.openRemote(contextMenu.targetId)
+            if (!result.opened) {
+              addToast(result.error || 'No remote URL found', 'error')
+            }
+          } catch {
+            addToast('Failed to open remote', 'error')
+          }
+        }},
+        ...(!isMainRepo ? [
+          { label: 'Land on Main', icon: <MergeIcon className={iconClass} />, action: () => openDialog('land-session', contextMenu.targetId) },
+        ] : []),
       ] : []),
       { type: 'separator' },
       { label: 'Archive Session', icon: <ArchiveIcon className={iconClass} />, action: () => openDialog('archive-session', contextMenu.targetId) },

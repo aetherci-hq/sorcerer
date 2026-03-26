@@ -325,7 +325,7 @@ function SessionItem({
           ) : (
             <span className="tree-label" onDoubleClick={handleDoubleClick}>{session.name}</span>
           )}
-          {isMainRepo && !isRenaming && (
+          {isMainRepo && session.branch && !isRenaming && (
             <span className="tree-hint">direct</span>
           )}
         </div>

@@ -8,7 +8,8 @@ const api = {
     update: (id: string, updates: any) => ipcRenderer.invoke('project:update', id, updates),
     remove: (id: string) => ipcRenderer.invoke('project:remove', id),
     gitStatus: (projectPath: string) => ipcRenderer.invoke('project:git-status', projectPath),
-    syncWorktrees: (projectId: string) => ipcRenderer.invoke('project:sync-worktrees', projectId)
+    syncWorktrees: (projectId: string) => ipcRenderer.invoke('project:sync-worktrees', projectId),
+    checkGit: (projectId: string) => ipcRenderer.invoke('project:check-git', projectId) as Promise<{ hasGit: boolean; hasCommits: boolean }>
   },
 
   session: {
