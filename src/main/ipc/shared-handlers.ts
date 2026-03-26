@@ -19,6 +19,44 @@ export interface HandlerServices {
 
 // ── Helpers ─────────────────────────────────────────────────
 
+let _claudeBinary: string | null = null
+
+/**
+ * Resolve the full path to the Claude Code binary.
+ * Checks well-known install locations so we don't depend on PATH ordering
+ * (the native installer puts claude.exe in ~/.local/bin which Electron may not see).
+ */
+function resolveClaudeBinary(): string {
+  if (_claudeBinary) return _claudeBinary
+
+  const home = os.homedir()
+  const candidates =
+    os.platform() === 'win32'
+      ? [
+          path.join(home, '.local', 'bin', 'claude.exe'),
+          path.join(home, 'AppData', 'Roaming', 'npm', 'claude.cmd'),
+          path.join(home, 'AppData', 'Roaming', 'npm', 'claude')
+        ]
+      : [
+          path.join(home, '.local', 'bin', 'claude'),
+          '/usr/local/bin/claude',
+          path.join(home, '.npm-global', 'bin', 'claude')
+        ]
+
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) {
+      console.log('[claude-binary] Resolved:', candidate)
+      _claudeBinary = candidate
+      return candidate
+    }
+  }
+
+  // Fallback: hope it's on PATH
+  console.warn('[claude-binary] No known path found, falling back to bare "claude"')
+  _claudeBinary = 'claude'
+  return 'claude'
+}
+
 /**
  * Build session-scoped env vars for Claude Code.
  * Each session gets its own CLAUDE_CODE_TASK_LIST_ID to prevent cross-session task contamination.
@@ -261,7 +299,7 @@ export async function createSession(
   const args: string[] = []
   if (skipPerms) args.push('--dangerously-skip-permissions')
   pty.spawn(id, worktreePath, {
-    command: 'claude',
+    command: resolveClaudeBinary(),
     args,
     env: sessionEnv(id)
   })
@@ -480,7 +518,7 @@ export async function restartSession(
     const args: string[] = []
     if (session.bypass_permissions !== 0) args.push('--dangerously-skip-permissions')
     pty.spawn(sessionId, cwd, {
-      command: 'claude',
+      command: resolveClaudeBinary(),
       args,
       env: sessionEnv(sessionId)
     })
@@ -521,7 +559,7 @@ export async function resumeSession(
     const args = ['--continue']
     if (session.bypass_permissions !== 0) args.push('--dangerously-skip-permissions')
     pty.spawn(sessionId, cwd, {
-      command: 'claude',
+      command: resolveClaudeBinary(),
       args,
       env: sessionEnv(sessionId)
     })
@@ -782,7 +820,7 @@ export function startAgent(
   if (agent.system_prompt) args.push('--append-system-prompt', agent.system_prompt as string)
 
   pty.spawn(agentId, cwd, {
-    command: 'claude',
+    command: resolveClaudeBinary(),
     args,
     env: sessionEnv(agentId)
   })
@@ -817,7 +855,7 @@ export function resumeAgent(
   if (agent.system_prompt) args.push('--append-system-prompt', agent.system_prompt as string)
 
   pty.spawn(agentId, cwd, {
-    command: 'claude',
+    command: resolveClaudeBinary(),
     args,
     env: sessionEnv(agentId)
   })
@@ -852,7 +890,7 @@ export function restartAgent(
   if (agent.system_prompt) args.push('--append-system-prompt', agent.system_prompt as string)
 
   pty.spawn(agentId, cwd, {
-    command: 'claude',
+    command: resolveClaudeBinary(),
     args,
     env: sessionEnv(agentId)
   })
