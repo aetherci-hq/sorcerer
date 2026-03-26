@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import type { Session } from '../types'
 import { useUIStore, findLeaf, findLeafBySession, clearSessionFromTree } from './useUIStore'
 import { useQuickNotesStore } from './useQuickNotesStore'
+import { disposeTerminal } from '../components/TerminalView'
 import { getApi } from '../api/client'
 
 interface SessionState {
@@ -101,6 +102,9 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   deleteSession: async (sessionId) => {
     try {
       await getApi().session.delete(sessionId)
+
+      // Clean up terminal cache
+      disposeTerminal(sessionId)
 
       // Clean up quick notes
       getApi().quickNotes.delete(sessionId, 'session')

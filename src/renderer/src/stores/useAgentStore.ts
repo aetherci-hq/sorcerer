@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import type { Agent } from '../types'
 import { useUIStore, clearSessionFromTree } from './useUIStore'
 import { useQuickNotesStore } from './useQuickNotesStore'
+import { disposeTerminal } from '../components/TerminalView'
 import { getApi } from '../api/client'
 
 interface AgentState {
@@ -61,6 +62,9 @@ export const useAgentStore = create<AgentState>((set) => ({
   removeAgent: async (id) => {
     try {
       await getApi().agent.remove(id)
+
+      // Clean up terminal cache
+      disposeTerminal(id)
 
       // Clean up quick notes
       getApi().quickNotes.delete(id, 'agent')

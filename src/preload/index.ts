@@ -110,6 +110,11 @@ const api = {
     userInfo: () => ipcRenderer.invoke('system:userInfo'),
     accountPicture: () => ipcRenderer.invoke('system:accountPicture'),
     networkIp: () => ipcRenderer.invoke('system:networkIp') as Promise<string>,
+    memoryUsage: () => ipcRenderer.invoke('system:memoryUsage') as Promise<{
+      totalMB: number
+      breakdown: { type: string; pid: number; mb: number }[]
+      processCount: number
+    }>,
     platform: process.platform
   },
 

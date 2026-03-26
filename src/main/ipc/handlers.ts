@@ -1,4 +1,4 @@
-import { ipcMain, dialog, shell } from 'electron'
+import { ipcMain, dialog, shell, app } from 'electron'
 import { v4 as uuidv4 } from 'uuid'
 import os from 'os'
 import path from 'path'
@@ -456,6 +456,18 @@ export function registerIPC(
 
   ipcMain.handle('system:networkIp', () => {
     return getNetworkIp()
+  })
+
+  ipcMain.handle('system:memoryUsage', () => {
+    const metrics = app.getAppMetrics()
+    let totalMB = 0
+    const breakdown: { type: string; pid: number; mb: number }[] = []
+    for (const m of metrics) {
+      const mb = Math.round(m.memory.workingSetSize / 1024)
+      totalMB += mb
+      breakdown.push({ type: m.type, pid: m.pid, mb })
+    }
+    return { totalMB, breakdown, processCount: metrics.length }
   })
 
   // ── Remote access ──────────────────────────────────────────

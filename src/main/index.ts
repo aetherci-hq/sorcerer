@@ -23,6 +23,14 @@ if (process.platform !== 'win32') {
   } catch { /* keep existing PATH */ }
 }
 
+// ── Memory optimizations ─────────────────────────────────────
+// Reduce GPU process memory overhead (terminals are text-only)
+app.commandLine.appendSwitch('disable-gpu-compositing')
+// Limit renderer JS heap to 128 MB (default is ~4 GB on 64-bit)
+app.commandLine.appendSwitch('js-flags', '--max-old-space-size=128')
+// Disable background tab throttling workarounds that bloat memory
+app.commandLine.appendSwitch('disable-backgrounding-occluded-windows')
+
 let mainWindow: BrowserWindow | null = null
 let ptyService: PTYService
 let dbService: DatabaseService
@@ -89,7 +97,9 @@ async function createWindow(): Promise<void> {
       preload: path.join(__dirname, '../preload/index.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false
+      sandbox: false,
+      backgroundThrottling: true,
+      v8CacheOptions: 'bypassHeatCheck'
     }
   })
 

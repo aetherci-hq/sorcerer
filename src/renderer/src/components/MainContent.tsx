@@ -1,12 +1,11 @@
-import { useCallback, useRef, useEffect } from 'react'
+import { useCallback, useRef, useEffect, useState } from 'react'
 import { getApi } from '../api/client'
 import { useSessionStore } from '../stores/useSessionStore'
 import { useProjectStore } from '../stores/useProjectStore'
 import { useAgentStore } from '../stores/useAgentStore'
 import { useUIStore, findLeaf, findLeafBySession } from '../stores/useUIStore'
-import { useTeamStore } from '../stores/useTeamStore'
 import { OrphanWorkspaceBanner } from './OrphanWorkspaceBanner'
-import { GitBranchIcon, TerminalIcon, ClockIcon, UserIcon, BotIcon, NotesIcon, SplitHorizontalIcon, SplitVerticalIcon } from './icons'
+import { GitBranchIcon, TerminalIcon, BotIcon, NotesIcon, SplitHorizontalIcon, SplitVerticalIcon } from './icons'
 import { StatusDot } from './StatusDot'
 import { Tooltip } from './Tooltip'
 import { TerminalView } from './TerminalView'
@@ -437,12 +436,33 @@ function SplitNodeView({ node }: { node: SplitNode }) {
   )
 }
 
+function useMemoryUsage() {
+  const [memoryMB, setMemoryMB] = useState<number | null>(null)
+  useEffect(() => {
+    let mounted = true
+    const poll = () => {
+      getApi().system.memoryUsage().then((m) => {
+        if (mounted) setMemoryMB(m.totalMB)
+      }).catch(() => {})
+    }
+    poll()
+    const interval = setInterval(poll, 10_000)
+    return () => { mounted = false; clearInterval(interval) }
+  }, [])
+  return memoryMB
+}
+
+function formatMemory(mb: number): string {
+  if (mb >= 1024) return `${(mb / 1024).toFixed(1)} GB`
+  return `${mb} MB`
+}
+
 export function MainContent() {
   const { sessions, activeSessionId, setActiveSession, createQuickTerminal, addLocalSession } = useSessionStore()
   const { projects } = useProjectStore()
   const { agents: agentsList } = useAgentStore()
-  const { teams } = useTeamStore()
   const { splitRoot, splitRight, splitDown } = useUIStore()
+  const memoryMB = useMemoryUsage()
 
   const activeSession = sessions.find((s) => s.id === activeSessionId)
   const activeAgent = !activeSession && activeSessionId
@@ -452,12 +472,6 @@ export function MainContent() {
     ? projects.find((p) => p.id === activeSession.project_id)
     : undefined
 
-  // Count team members for active session/agent
-  const teamName = activeSession?.team_name || activeAgent?.team_name
-  const activeTeam = teamName
-    ? teams.find((t) => t.name === teamName)
-    : undefined
-  const teamMemberCount = activeTeam?.members.length ?? 0
 
   return (
     <div className="main-content">
@@ -621,46 +635,20 @@ export function MainContent() {
 
       {/* Status bar */}
       <div className="status-bar">
-        {activeAgent ? (
-          <>
-            <StatusDot status={activeAgent.status} />
-            <div className="status-bar-item">
-              <BotIcon />
-              <span>Agent: {activeAgent.status}</span>
-            </div>
-            {teamMemberCount > 0 && (
-              <>
-                <div className="status-bar-separator" />
-                <div className="status-bar-item">
-                  <UserIcon />
-                  <span>{teamMemberCount} member{teamMemberCount !== 1 ? 's' : ''}</span>
-                </div>
-              </>
-            )}
-          </>
-        ) : activeSession ? (
-          <>
-            <StatusDot status={activeSession.status} />
-            <div className="status-bar-item">
-              <ClockIcon />
-              <span>Session: {activeSession.status}</span>
-            </div>
-            {teamMemberCount > 0 && (
-              <>
-                <div className="status-bar-separator" />
-                <div className="status-bar-item">
-                  <UserIcon />
-                  <span>{teamMemberCount} member{teamMemberCount !== 1 ? 's' : ''}</span>
-                </div>
-              </>
-            )}
-          </>
-        ) : (
+        <div className="status-bar-right">
           <div className="status-bar-item">
-            <span>No session selected</span>
+            <StatusDot status={sessions.filter((s) => s.status === 'active').length > 0 ? 'active' : 'idle'} />
+            <span>{sessions.filter((s) => s.status === 'active').length} active</span>
           </div>
-        )}
-        <div className="status-bar-right" />
+          {memoryMB !== null && (
+            <>
+              <div className="status-bar-separator" />
+              <div className="status-bar-item status-bar-memory">
+                <span>{formatMemory(memoryMB)}</span>
+              </div>
+            </>
+          )}
+        </div>
       </div>
     </div>
   )

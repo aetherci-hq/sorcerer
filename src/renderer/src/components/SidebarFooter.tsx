@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { getApi } from '../api/client'
 import { SettingsIcon } from './icons'
-import { StatusDot } from './StatusDot'
 import { useSessionStore } from '../stores/useSessionStore'
 import { useUIStore } from '../stores/useUIStore'
 
@@ -218,7 +217,6 @@ export function SidebarFooter({ collapsed, width = 260 }: { collapsed: boolean; 
   // Responsive breakpoints based on sidebar width
   const showClock = width >= 280
   const showClockDate = width >= 320
-  const showStatus = width >= 230
   const compact = width < 220
 
   const handleCloseStats = useCallback(() => setShowStats(false), [])
@@ -251,12 +249,6 @@ export function SidebarFooter({ collapsed, width = 260 }: { collapsed: boolean; 
       </button>
       <div className="user-info">
         <div className="user-name">{displayName}</div>
-        {showStatus && (
-          <div className="user-status">
-            <StatusDot status={activeCount > 0 ? 'active' : 'idle'} />
-            {activeCount} session{activeCount !== 1 ? 's' : ''} active
-          </div>
-        )}
       </div>
       {showClock && (
         <div className="footer-clock">

@@ -144,7 +144,7 @@ export function TerminalView({ sessionId, isFocused }: TerminalViewProps) {
           brightWhite: '#ffffff'
         },
         allowTransparency: false,
-        scrollback: 10000,
+        scrollback: 5000,
         lineHeight: 1.2
       })
 

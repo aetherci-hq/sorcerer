@@ -13,9 +13,11 @@
  */
 
 interface SessionBuffer {
-  /** Fixed-size character array stored as a string, padded with null chars initially */
-  data: string
-  /** Current write position (index into data) */
+  /** Fixed-size buffer storing UTF-16 code units */
+  buf: Uint16Array
+  /** How much of the buffer has been filled (before first wrap) */
+  length: number
+  /** Current write position (index into buf) */
   writePos: number
   /** Whether the buffer has wrapped around at least once */
   wrapped: boolean
@@ -45,7 +47,8 @@ export class ScrollbackBuffer {
     let session = this.sessions.get(sessionId)
     if (!session) {
       session = {
-        data: '',
+        buf: new Uint16Array(this.maxSize),
+        length: 0,
         writePos: 0,
         wrapped: false,
         totalWritten: 0
@@ -55,53 +58,31 @@ export class ScrollbackBuffer {
 
     // If the chunk alone is larger than the buffer, only keep the tail
     if (chunk.length >= this.maxSize) {
-      const tail = chunk.slice(chunk.length - this.maxSize)
-      // Ensure we don't start with a lone low surrogate
-      const cleaned = this.trimLeadingBrokenSurrogate(tail)
-      session.data = cleaned
-      session.writePos = cleaned.length % this.maxSize
-      session.wrapped = cleaned.length >= this.maxSize
+      const start = chunk.length - this.maxSize
+      for (let i = 0; i < this.maxSize; i++) {
+        session.buf[i] = chunk.charCodeAt(start + i)
+      }
+      session.length = this.maxSize
+      session.writePos = 0
+      session.wrapped = true
       session.totalWritten += chunk.length
       return
     }
 
-    // Ensure the backing string is the right size. We grow it as needed up to maxSize.
-    // For efficiency, we work with the buffer as an array of characters when writing,
-    // then join back to a string.
-
-    const needed = session.writePos + chunk.length
-    if (!session.wrapped && needed <= this.maxSize) {
-      // Simple case: haven't wrapped yet and the chunk fits
-      session.data = session.data + chunk
-      session.writePos += chunk.length
-      if (session.writePos >= this.maxSize) {
-        session.writePos = session.writePos % this.maxSize
+    // Write chunk character-by-character into the typed array
+    let pos = session.writePos
+    for (let i = 0; i < chunk.length; i++) {
+      session.buf[pos] = chunk.charCodeAt(i)
+      pos++
+      if (pos >= this.maxSize) {
+        pos = 0
         session.wrapped = true
       }
-    } else {
-      // Need to write with wrapping
-      // Ensure backing data is padded to maxSize if we're about to wrap
-      if (session.data.length < this.maxSize) {
-        session.data = session.data + '\0'.repeat(this.maxSize - session.data.length)
-      }
-
-      // Convert to array for efficient character-by-character writing
-      const chars = session.data.split('')
-      let pos = session.writePos
-
-      for (let i = 0; i < chunk.length; i++) {
-        chars[pos] = chunk[i]
-        pos++
-        if (pos >= this.maxSize) {
-          pos = 0
-          session.wrapped = true
-        }
-      }
-
-      session.data = chars.join('')
-      session.writePos = pos
     }
-
+    session.writePos = pos
+    if (!session.wrapped) {
+      session.length = pos
+    }
     session.totalWritten += chunk.length
   }
 
@@ -114,17 +95,15 @@ export class ScrollbackBuffer {
     if (!session) return ''
 
     if (!session.wrapped) {
-      // Buffer hasn't wrapped - data is contiguous from start to writePos
-      return session.data.slice(0, session.writePos)
+      return String.fromCharCode.apply(null, session.buf.subarray(0, session.length) as any)
     }
 
-    // Buffer has wrapped: read from writePos to end, then from start to writePos.
-    // writePos is where the NEXT write would go, so the oldest data starts there.
-    const tail = session.data.slice(session.writePos)
-    const head = session.data.slice(0, session.writePos)
-    const result = tail + head
+    // Buffer has wrapped: oldest data starts at writePos
+    const tail = session.buf.subarray(session.writePos)
+    const head = session.buf.subarray(0, session.writePos)
+    const result = String.fromCharCode.apply(null, tail as any)
+      + String.fromCharCode.apply(null, head as any)
 
-    // Trim any leading broken surrogate from the oldest portion
     return this.trimLeadingBrokenSurrogate(result)
   }
 

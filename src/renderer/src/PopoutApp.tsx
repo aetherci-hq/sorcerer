@@ -68,7 +68,7 @@ function PopoutTerminal({ sessionId, onExited }: { sessionId: string; onExited: 
         brightWhite: '#ffffff'
       },
       allowTransparency: false,
-      scrollback: 10000,
+      scrollback: 3000,
       lineHeight: 1.2
     })
 

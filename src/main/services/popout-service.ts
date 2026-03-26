@@ -47,7 +47,11 @@ export class PopoutService {
         preload: this.preloadPath,
         contextIsolation: true,
         nodeIntegration: false,
-        sandbox: false
+        sandbox: false,
+        backgroundThrottling: true,
+        v8CacheOptions: 'none',
+        enableWebSQL: false,
+        spellcheck: false
       }
     })
 
