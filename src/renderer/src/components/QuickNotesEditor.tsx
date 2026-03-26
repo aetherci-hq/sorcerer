@@ -2,15 +2,16 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 import { getApi } from '../api/client'
 import { useToastStore } from '../stores/useToastStore'
 import { useQuickNotesStore } from '../stores/useQuickNotesStore'
-import { CopyIcon } from './icons'
+import { CopyIcon, TrashIcon } from './icons'
 
 interface QuickNotesEditorProps {
   parentId: string
   parentType: 'session' | 'agent'
   parentName: string
+  onDeleted?: () => void
 }
 
-export function QuickNotesEditor({ parentId, parentType, parentName }: QuickNotesEditorProps) {
+export function QuickNotesEditor({ parentId, parentType, parentName, onDeleted }: QuickNotesEditorProps) {
   const [content, setContent] = useState('')
   const [noteId, setNoteId] = useState<string | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -70,14 +71,32 @@ export function QuickNotesEditor({ parentId, parentType, parentName }: QuickNote
     })
   }
 
+  const handleDelete = async () => {
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+    await getApi().quickNotes.delete(parentId, parentType)
+    useQuickNotesStore.getState().clearSaved(parentId)
+    setContent('')
+    setNoteId(null)
+    addToast('Notes deleted', 'success')
+    onDeleted?.()
+  }
+
   return (
     <div className="quick-notes-editor">
       <div className="quick-notes-toolbar">
         <span className="quick-notes-label">{parentName}</span>
-        <button className="quick-notes-copy-btn" onClick={handleCopy} title="Copy notes">
-          <CopyIcon />
-          Copy
-        </button>
+        <div className="quick-notes-toolbar-actions">
+          <button className="quick-notes-copy-btn" onClick={handleCopy} title="Copy notes">
+            <CopyIcon />
+            Copy
+          </button>
+          {(content.length > 0 || noteId) && (
+            <button className="quick-notes-delete-btn" onClick={handleDelete} title="Delete notes">
+              <TrashIcon />
+              Delete
+            </button>
+          )}
+        </div>
       </div>
       <textarea
         ref={textareaRef}

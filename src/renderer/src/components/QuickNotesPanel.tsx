@@ -1,5 +1,7 @@
 import { useSessionStore } from '../stores/useSessionStore'
 import { useAgentStore } from '../stores/useAgentStore'
+import { useQuickNotesStore } from '../stores/useQuickNotesStore'
+import { useUIStore, findLeafBySession } from '../stores/useUIStore'
 import { QuickNotesEditor } from './QuickNotesEditor'
 
 /**
@@ -34,11 +36,21 @@ export function QuickNotesPanel({ panelSessionId }: QuickNotesPanelProps) {
     parentName = agent ? agent.name : 'Agent'
   }
 
+  const handleDeleted = () => {
+    useQuickNotesStore.getState().removeNotePanel(parentId)
+    const { splitRoot: root } = useUIStore.getState()
+    if (root) {
+      const leaf = findLeafBySession(root, panelSessionId)
+      if (leaf) useUIStore.getState().closePanel(leaf.id)
+    }
+  }
+
   return (
     <QuickNotesEditor
       parentId={parentId}
       parentType={parentType}
       parentName={parentName}
+      onDeleted={handleDeleted}
     />
   )
 }

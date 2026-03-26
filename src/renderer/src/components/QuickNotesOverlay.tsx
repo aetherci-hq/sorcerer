@@ -41,6 +41,7 @@ export function QuickNotesOverlay() {
           parentId={overlayParentId}
           parentType={overlayParentType}
           parentName={parentName}
+          onDeleted={closeOverlay}
         />
       </div>
     </div>

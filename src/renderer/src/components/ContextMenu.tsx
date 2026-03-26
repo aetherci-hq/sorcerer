@@ -258,7 +258,23 @@ export function ContextMenu() {
       { label: 'Split Right', icon: <SplitHorizontalIcon className={iconClass} />, action: () => { focusTargetPanel(contextMenu.targetId); splitRight(contextMenu.targetId) } },
       { label: 'Split Down', icon: <SplitVerticalIcon className={iconClass} />, action: () => { focusTargetPanel(contextMenu.targetId); splitDown(contextMenu.targetId) } },
       { type: 'separator' as const },
-      { label: 'Close Panel', icon: <TrashIcon className={iconClass} />, danger: true, action: () => {
+      { label: 'Delete Notes', icon: <TrashIcon className={iconClass} />, danger: true, action: async () => {
+        const parts = contextMenu.targetId.split(':')
+        if (parts.length === 3) {
+          const parentType = parts[1] as 'session' | 'agent'
+          const parentId = parts[2]
+          await getApi().quickNotes.delete(parentId, parentType)
+          useQuickNotesStore.getState().clearSaved(parentId)
+          useQuickNotesStore.getState().removeNotePanel(parentId)
+          addToast('Notes deleted', 'success')
+        }
+        const { splitRoot: root } = useUIStore.getState()
+        if (root) {
+          const leaf = findLeafBySession(root, contextMenu.targetId)
+          if (leaf) useUIStore.getState().closePanel(leaf.id)
+        }
+      }},
+      { label: 'Close Panel', icon: <ExternalLinkIcon className={iconClass} />, action: () => {
         const parts = contextMenu.targetId.split(':')
         if (parts.length === 3) {
           useQuickNotesStore.getState().removeNotePanel(parts[2])
