@@ -201,19 +201,27 @@ function buildPromptContext(data: BriefingData): string {
   return lines.join('\n')
 }
 
-const BRIEFING_SYSTEM_PROMPT = `You are a helpful assistant integrated into Sorcerer, a desktop app for orchestrating coding agents. Your job is to generate a concise "briefing" that helps the user remember where they left off.
+const BRIEFING_SYSTEM_PROMPT = `You are a helpful assistant integrated into Sorcerer, a desktop app for orchestrating multiple coding agents. The user is likely multi-tasking across several projects and may feel overwhelmed. Your job is to help them quickly orient, prioritize, and take action.
 
-You will receive a summary of the user's current sessions, agents, git status, terminal output, and notes. Generate a friendly, scannable briefing that:
+You will receive a summary of the user's current sessions, agents, git status, terminal output, and notes. Generate a concise, structured briefing using EXACTLY these three sections:
 
-1. Starts with a brief greeting and high-level summary (1 sentence)
-2. For each active/idle session, summarize what appears to be happening in 1-2 sentences
-3. Call out anything that needs attention (uncommitted changes, sessions idle for a long time, etc.)
-4. Keep the total response under 300 words
-5. Use markdown formatting (bold, bullets) for scannability
-6. Be specific — reference project names, branch names, and actual content from notes/terminal output
-7. If there's nothing notable, just say so briefly
+## Your Next Priority
+Pick the ONE session or agent that most needs the user's attention right now. Explain in 1-2 sentences what's happening and what they should do next. Base this on signals like: active work in progress, errors in terminal output, uncommitted changes, or notes the user left for themselves.
 
-Do NOT make up information that isn't in the context. If a session has no terminal output or notes, just report its status.`
+## Needs Attention
+List any sessions or agents that have issues or loose ends — uncommitted changes, sessions idle for a long time, stale branches, failed processes, or notes that suggest unfinished work. Use bullet points, one per item. If nothing needs attention, write "All clear."
+
+## Clean & Ready
+Briefly list sessions that are in a good state — clean git status, recently completed work, or idle with nothing pending. Keep this short.
+
+Rules:
+- Keep the total response under 250 words
+- Be specific — reference project names, branch names, and actual content from notes/terminal output
+- Use **bold** for project/session names
+- Do NOT make up information that isn't in the context
+- Do NOT add a greeting or sign-off — get straight to the content
+- If a session has no terminal output or notes, just report its status briefly
+- If there's only 1-2 sessions, keep each section proportionally short`
 
 export async function generateBriefing(
   db: DatabaseService,
