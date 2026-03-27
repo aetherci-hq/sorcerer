@@ -59,6 +59,28 @@ jobs:
           done
           iconutil -c icns build/icon.iconset -o build/icon.icns
 
+      # ── macOS: Import signing certificate ──
+      - name: Import macOS signing certificate
+        if: runner.os == 'macOS' && env.MAC_CERTIFICATE_BASE64 != ''
+        env:
+          MAC_CERTIFICATE_BASE64: ${{ secrets.MAC_CERTIFICATE_BASE64 }}
+          MAC_CERTIFICATE_PASSWORD: ${{ secrets.MAC_CERTIFICATE_PASSWORD }}
+        run: |
+          echo "$MAC_CERTIFICATE_BASE64" | base64 --decode > certificate.p12
+          security create-keychain -p actions build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p actions build.keychain
+          security import certificate.p12 -k build.keychain -P "$MAC_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k actions build.keychain
+          rm certificate.p12
+
+      # ── Windows: Install Azure CLI signing extension ──
+      - name: Install Azure Trusted Signing CLI
+        if: runner.os == 'Windows' && env.AZURE_TENANT_ID != ''
+        env:
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+        run: az extension add --name trustedsigning --yes
+
       - run: npm ci
 
       - name: Rebuild native modules for Electron
@@ -68,6 +90,17 @@ jobs:
         run: npm run ${{ matrix.build_script }} -- --publish never
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # macOS signing + notarization
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          # Windows Azure Trusted Signing
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_CODE_SIGNING_ENDPOINT: ${{ secrets.AZURE_CODE_SIGNING_ENDPOINT }}
+          AZURE_CODE_SIGNING_ACCOUNT: ${{ secrets.AZURE_CODE_SIGNING_ACCOUNT }}
+          AZURE_CODE_SIGNING_PROFILE: ${{ secrets.AZURE_CODE_SIGNING_PROFILE }}
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4

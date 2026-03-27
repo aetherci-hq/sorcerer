@@ -27,14 +27,21 @@
       "target": [
         "nsis"
       ],
-      "icon": "build/icon.ico"
+      "icon": "build/icon.ico",
+      "signingHashAlgorithms": [
+        "sha256"
+      ],
+      "sign": "./scripts/sign-windows.js"
     },
     "mac": {
       "target": [
         "dmg"
       ],
       "icon": "build/icon.icns",
-      "identity": null
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist"
     },
     "linux": {
       "target": [
@@ -46,7 +53,8 @@
       "oneClick": false,
       "allowToChangeInstallationDirectory": true
     },
-    "npmRebuild": false
+    "npmRebuild": false,
+    "afterSign": "./scripts/notarize-macos.js"
   },
   "keywords": [],
   "author": "",
@@ -66,6 +74,7 @@
     "zustand": "^5.0.11"
   },
   "devDependencies": {
+    "@electron/notarize": "^3.1.1",
     "@electron/rebuild": "^4.0.3",
     "@types/react": "^19.2.13",
     "@types/react-dom": "^19.2.3",
