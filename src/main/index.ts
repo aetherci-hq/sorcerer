@@ -23,6 +23,13 @@ if (process.platform !== 'win32') {
   } catch { /* keep existing PATH */ }
 }
 
+// ── Dev mode isolation ───────────────────────────────────────
+// Use a separate user data directory in dev so the dev instance doesn't
+// collide with an installed Sorcerer (GPU cache locks, port conflicts, etc.)
+if (!app.isPackaged) {
+  app.setPath('userData', path.join(app.getPath('userData'), '-dev'))
+}
+
 // ── Memory optimizations ─────────────────────────────────────
 // Disable GPU entirely — Sorcerer is a terminal app, no WebGL/3D needed.
 // This eliminates the GPU process, its memory overhead, and disk cache lock
