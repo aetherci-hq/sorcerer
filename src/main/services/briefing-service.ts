@@ -1,0 +1,257 @@
+/**
+ * Briefing Service — Collects session/agent context and generates
+ * personalized "here's where you left off" summaries via AI.
+ */
+
+import path from 'path'
+import fs from 'fs'
+import simpleGit from 'simple-git'
+import { DatabaseService } from './database-service'
+import { PTYService } from './pty-service'
+import { generateCompletion, type AIMessage } from './ai-provider-service'
+
+interface SessionContext {
+  name: string
+  projectName: string
+  branch: string
+  status: string
+  type: string
+  age: string
+  gitSummary?: string
+  scrollbackTail?: string
+  quickNotes?: string
+}
+
+interface AgentContext {
+  name: string
+  description: string
+  status: string
+  age: string
+  scrollbackTail?: string
+  quickNotes?: string
+}
+
+interface BriefingData {
+  sessions: SessionContext[]
+  agents: AgentContext[]
+}
+
+function timeAgo(epochSeconds: number): string {
+  const diff = Date.now() - epochSeconds * 1000
+  const minutes = Math.floor(diff / 60000)
+  if (minutes < 1) return 'just now'
+  if (minutes < 60) return `${minutes}m ago`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours}h ago`
+  const days = Math.floor(hours / 24)
+  if (days < 7) return `${days}d ago`
+  return `${Math.floor(days / 7)}w ago`
+}
+
+async function getGitSummary(worktreePath: string): Promise<string | undefined> {
+  if (!fs.existsSync(path.join(worktreePath, '.git')) && !fs.existsSync(worktreePath)) {
+    return undefined
+  }
+  try {
+    const git = simpleGit(worktreePath)
+    const status = await git.status()
+
+    const parts: string[] = []
+    if (status.modified.length > 0) parts.push(`${status.modified.length} modified`)
+    if (status.not_added.length > 0) parts.push(`${status.not_added.length} untracked`)
+    if (status.staged.length > 0) parts.push(`${status.staged.length} staged`)
+    if (status.ahead > 0) parts.push(`${status.ahead} ahead`)
+    if (status.behind > 0) parts.push(`${status.behind} behind`)
+
+    if (parts.length === 0 && status.isClean()) {
+      parts.push('clean')
+    }
+
+    // Get most recent commit message
+    try {
+      const log = await git.log({ maxCount: 1 })
+      if (log.latest) {
+        parts.push(`last commit: "${log.latest.message.slice(0, 80)}"`)
+      }
+    } catch { /* no commits */ }
+
+    return parts.join(', ')
+  } catch {
+    return undefined
+  }
+}
+
+function getScrollbackTail(pty: PTYService, sessionId: string, maxChars: number = 500): string | undefined {
+  const scrollback = pty.scrollback.getScrollback(sessionId)
+  if (!scrollback) return undefined
+
+  // Strip ANSI escape codes for readability
+  const clean = scrollback.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '').replace(/\r/g, '')
+
+  // Take the last N chars
+  const tail = clean.length > maxChars ? clean.slice(-maxChars) : clean
+  return tail.trim() || undefined
+}
+
+export function collectBriefingData(db: DatabaseService, pty: PTYService): BriefingData {
+  const projects = db.listProjects()
+  const allSessions = db.listSessions()
+  const allAgents = db.listAgents()
+
+  // Filter to non-deleted, non-archived sessions (exclude quick terminals)
+  const relevantSessions = allSessions.filter(
+    (s: any) => s.status !== 'deleted' && s.status !== 'archived' && s.type !== 'quick-terminal'
+  )
+
+  const sessions: SessionContext[] = []
+  for (const s of relevantSessions) {
+    const project = projects.find((p: any) => p.id === s.project_id)
+
+    const ctx: SessionContext = {
+      name: s.name,
+      projectName: project?.name || 'Unknown',
+      branch: s.branch || '',
+      status: s.status,
+      type: s.type || 'session',
+      age: timeAgo(s.created_at)
+    }
+
+    // Quick notes
+    const note = db.getQuickNote(s.id, 'session')
+    if (note?.content) {
+      ctx.quickNotes = (note.content as string).slice(0, 300)
+    }
+
+    // Scrollback (only for active sessions)
+    if (s.status === 'active') {
+      ctx.scrollbackTail = getScrollbackTail(pty, s.id)
+    }
+
+    sessions.push(ctx)
+  }
+
+  // Collect git summaries async — we'll do this in the generate function
+  const agents: AgentContext[] = []
+  for (const a of allAgents) {
+    if (a.status === 'archived') continue
+
+    const ctx: AgentContext = {
+      name: a.name,
+      description: a.description || '',
+      status: a.status,
+      age: timeAgo(a.created_at)
+    }
+
+    const note = db.getQuickNote(a.id, 'agent')
+    if (note?.content) {
+      ctx.quickNotes = (note.content as string).slice(0, 300)
+    }
+
+    if (a.status === 'active') {
+      ctx.scrollbackTail = getScrollbackTail(pty, a.id)
+    }
+
+    agents.push(ctx)
+  }
+
+  return { sessions, agents }
+}
+
+export async function collectGitSummaries(
+  db: DatabaseService,
+  sessions: SessionContext[]
+): Promise<void> {
+  const allSessions = db.listSessions()
+  for (const ctx of sessions) {
+    const dbSession = allSessions.find((s: any) => s.name === ctx.name && ctx.projectName)
+    if (dbSession?.worktree_path) {
+      ctx.gitSummary = await getGitSummary(dbSession.worktree_path)
+    }
+  }
+}
+
+function buildPromptContext(data: BriefingData): string {
+  const lines: string[] = []
+
+  if (data.sessions.length > 0) {
+    lines.push('## Sessions')
+    for (const s of data.sessions) {
+      lines.push(`- **${s.projectName} / ${s.name}** [${s.status}] (created ${s.age})`)
+      if (s.branch) lines.push(`  Branch: ${s.branch}`)
+      if (s.gitSummary) lines.push(`  Git: ${s.gitSummary}`)
+      if (s.quickNotes) lines.push(`  Notes: ${s.quickNotes}`)
+      if (s.scrollbackTail) lines.push(`  Last terminal output:\n  \`\`\`\n  ${s.scrollbackTail}\n  \`\`\``)
+    }
+  }
+
+  if (data.agents.length > 0) {
+    lines.push('\n## Agents')
+    for (const a of data.agents) {
+      lines.push(`- **${a.name}** [${a.status}] (created ${a.age})`)
+      if (a.description) lines.push(`  Description: ${a.description}`)
+      if (a.quickNotes) lines.push(`  Notes: ${a.quickNotes}`)
+      if (a.scrollbackTail) lines.push(`  Last terminal output:\n  \`\`\`\n  ${a.scrollbackTail}\n  \`\`\``)
+    }
+  }
+
+  if (lines.length === 0) {
+    return 'No active sessions or agents.'
+  }
+
+  return lines.join('\n')
+}
+
+const BRIEFING_SYSTEM_PROMPT = `You are a helpful assistant integrated into Sorcerer, a desktop app for orchestrating coding agents. Your job is to generate a concise "briefing" that helps the user remember where they left off.
+
+You will receive a summary of the user's current sessions, agents, git status, terminal output, and notes. Generate a friendly, scannable briefing that:
+
+1. Starts with a brief greeting and high-level summary (1 sentence)
+2. For each active/idle session, summarize what appears to be happening in 1-2 sentences
+3. Call out anything that needs attention (uncommitted changes, sessions idle for a long time, etc.)
+4. Keep the total response under 300 words
+5. Use markdown formatting (bold, bullets) for scannability
+6. Be specific — reference project names, branch names, and actual content from notes/terminal output
+7. If there's nothing notable, just say so briefly
+
+Do NOT make up information that isn't in the context. If a session has no terminal output or notes, just report its status.`
+
+export async function generateBriefing(
+  db: DatabaseService,
+  pty: PTYService
+): Promise<{ text: string; provider: string; model: string; error?: string }> {
+  // Get configured provider and key
+  const providerId = db.getSetting('briefingProvider') || 'anthropic'
+  const apiKey = db.getSetting(`apiKey_${providerId}`)
+
+  if (!apiKey) {
+    return {
+      text: '',
+      provider: providerId,
+      model: '',
+      error: `No API key configured for ${providerId}. Add one in Settings → Briefing.`
+    }
+  }
+
+  // Collect data
+  const data = collectBriefingData(db, pty)
+
+  if (data.sessions.length === 0 && data.agents.length === 0) {
+    return {
+      text: 'No sessions or agents to report on. Create a session to get started!',
+      provider: providerId,
+      model: '',
+    }
+  }
+
+  // Collect git summaries (async)
+  await collectGitSummaries(db, data.sessions)
+
+  // Build prompt
+  const contextText = buildPromptContext(data)
+  const messages: AIMessage[] = [
+    { role: 'system', content: BRIEFING_SYSTEM_PROMPT },
+    { role: 'user', content: `Here is the current state of my workspace:\n\n${contextText}` }
+  ]
+
+  return generateCompletion(providerId, apiKey, messages)
+}

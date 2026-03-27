@@ -111,6 +111,12 @@ const api = {
     listParents: () => ipcRenderer.invoke('quick-notes:list-parents') as Promise<{ parent_id: string; parent_type: string }[]>,
   },
 
+  briefing: {
+    generate: () => ipcRenderer.invoke('briefing:generate') as Promise<{ text: string; provider: string; model: string; error?: string }>,
+    list: (limit?: number) => ipcRenderer.invoke('briefing:list', limit) as Promise<any[]>,
+    delete: (id: string) => ipcRenderer.invoke('briefing:delete', id)
+  },
+
   settings: {
     get: (key: string) => ipcRenderer.invoke('settings:get', key),
     set: (key: string, value: string) => ipcRenderer.invoke('settings:set', key, value)

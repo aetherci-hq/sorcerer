@@ -534,6 +534,29 @@ export function registerIPC(
     return listQuickNoteParents(services)
   })
 
+  // ── Briefing ──────────────────────────────────────────────
+
+  ipcMain.handle('briefing:generate', async () => {
+    const { generateBriefing } = await import('../services/briefing-service')
+    const result = await generateBriefing(dbService, ptyService)
+
+    // Auto-save successful briefings to archive
+    if (result.text && !result.error) {
+      const id = uuidv4()
+      dbService.saveBriefing(id, result.text, result.provider, result.model)
+    }
+
+    return result
+  })
+
+  ipcMain.handle('briefing:list', (_event, limit?: number) => {
+    return dbService.listBriefings(limit || 20)
+  })
+
+  ipcMain.handle('briefing:delete', (_event, id: string) => {
+    dbService.deleteBriefing(id)
+  })
+
   // ── System info ─────────────────────────────────────────────
 
   ipcMain.handle('system:userInfo', () => {

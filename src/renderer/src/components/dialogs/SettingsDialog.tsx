@@ -3,12 +3,12 @@ import { getApi, isElectron } from '../../api/client'
 import { useUIStore } from '../../stores/useUIStore'
 import { useToastStore } from '../../stores/useToastStore'
 import {
-  TerminalIcon, GitBranchIcon, SettingsIcon, UserIcon, WifiIcon, CopyIcon, RefreshIcon, EyeIcon, EyeOffIcon, PaletteIcon, SmartphoneIcon
+  TerminalIcon, GitBranchIcon, SettingsIcon, UserIcon, WifiIcon, CopyIcon, RefreshIcon, EyeIcon, EyeOffIcon, PaletteIcon, SmartphoneIcon, BotIcon
 } from '../icons'
 import { THEMES, getThemeById, applyTheme } from '../../themes'
 import { gravatarUrl } from '../SidebarFooter'
 
-type SettingsTab = 'profile' | 'appearance' | 'sessions' | 'git' | 'remote' | 'general'
+type SettingsTab = 'profile' | 'appearance' | 'sessions' | 'git' | 'remote' | 'briefing' | 'general'
 
 const TABS: { id: SettingsTab; label: string; icon: React.ReactNode }[] = [
   { id: 'profile', label: 'Profile', icon: <UserIcon /> },
@@ -16,6 +16,7 @@ const TABS: { id: SettingsTab; label: string; icon: React.ReactNode }[] = [
   { id: 'sessions', label: 'Sessions', icon: <TerminalIcon /> },
   { id: 'git', label: 'Git', icon: <GitBranchIcon /> },
   { id: 'remote', label: 'Remote Desktop', icon: <WifiIcon /> },
+  { id: 'briefing', label: 'Briefing', icon: <BotIcon /> },
   { id: 'general', label: 'General', icon: <SettingsIcon /> }
 ]
 
@@ -27,7 +28,8 @@ const SHORTCUTS = [
   { keys: 'Ctrl + Shift + \\', action: 'Split down' },
   { keys: 'Ctrl + W', action: 'Close focused panel' },
   { keys: 'Escape', action: 'Clear search / close dialog' },
-  { keys: 'F2', action: 'Rename selected item' }
+  { keys: 'F2', action: 'Rename selected item' },
+  { keys: 'Ctrl + Shift + B', action: 'Toggle briefing panel' }
 ]
 
 function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
@@ -609,12 +611,108 @@ function AppearanceTab() {
   )
 }
 
+const AI_PROVIDER_OPTIONS = [
+  { id: 'anthropic', name: 'Anthropic (Claude)' },
+  { id: 'openai', name: 'OpenAI (GPT)' },
+  { id: 'google', name: 'Google (Gemini)' }
+]
+
+function BriefingTab() {
+  const [provider, setProvider] = useSetting('briefingProvider', 'anthropic')
+  const [anthropicKey, setAnthropicKey] = useSetting('apiKey_anthropic', '')
+  const [openaiKey, setOpenaiKey] = useSetting('apiKey_openai', '')
+  const [googleKey, setGoogleKey] = useSetting('apiKey_google', '')
+  const [autoLoadOnStartup, setAutoLoadOnStartup] = useSetting('briefingAutoStartup', 'false')
+  const [autoLoadOnIdle, setAutoLoadOnIdle] = useSetting('briefingAutoIdle', 'false')
+  const [idleMinutes, setIdleMinutes] = useSetting('briefingIdleMinutes', '15')
+  const [showKeys, setShowKeys] = useState<Record<string, boolean>>({})
+
+  const toggleShowKey = (id: string) => {
+    setShowKeys((prev) => ({ ...prev, [id]: !prev[id] }))
+  }
+
+  const keyFields = [
+    { id: 'anthropic', label: 'Anthropic API Key', value: anthropicKey, save: setAnthropicKey, placeholder: 'sk-ant-...' },
+    { id: 'openai', label: 'OpenAI API Key', value: openaiKey, save: setOpenaiKey, placeholder: 'sk-...' },
+    { id: 'google', label: 'Google AI API Key', value: googleKey, save: setGoogleKey, placeholder: 'AIza...' }
+  ]
+
+  return (
+    <>
+      <SectionTitle>AI Provider</SectionTitle>
+      <SettingRow label="Preferred provider" description="Which AI to use for generating briefings">
+        <select
+          className="dialog-input"
+          value={provider}
+          onChange={(e) => setProvider(e.target.value)}
+          style={{ width: 200 }}
+        >
+          {AI_PROVIDER_OPTIONS.map((p) => (
+            <option key={p.id} value={p.id}>{p.name}</option>
+          ))}
+        </select>
+      </SettingRow>
+
+      <SectionTitle>API Keys</SectionTitle>
+      {keyFields.map((field) => (
+        <SettingRow key={field.id} label={field.label}>
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            <input
+              className="dialog-input"
+              type={showKeys[field.id] ? 'text' : 'password'}
+              value={field.value}
+              onChange={(e) => field.save(e.target.value)}
+              placeholder={field.placeholder}
+              style={{ width: 240, fontFamily: 'var(--font-mono)', fontSize: 12 }}
+            />
+            <button
+              className="settings-action-btn"
+              type="button"
+              onClick={() => toggleShowKey(field.id)}
+              title={showKeys[field.id] ? 'Hide' : 'Show'}
+              style={{ padding: '4px 6px' }}
+            >
+              {showKeys[field.id] ? <EyeOffIcon /> : <EyeIcon />}
+            </button>
+          </div>
+        </SettingRow>
+      ))}
+
+      <SectionTitle>Behavior</SectionTitle>
+      <SettingRow label="Show on startup" description="Auto-generate a briefing when Sorcerer launches">
+        <Toggle checked={autoLoadOnStartup === 'true'} onChange={(v) => setAutoLoadOnStartup(v ? 'true' : 'false')} />
+      </SettingRow>
+      <SettingRow label="Show on return from idle" description="Refresh briefing when you come back after being away">
+        <Toggle checked={autoLoadOnIdle === 'true'} onChange={(v) => setAutoLoadOnIdle(v ? 'true' : 'false')} />
+      </SettingRow>
+      {autoLoadOnIdle === 'true' && (
+        <SettingRow label="Idle timeout (minutes)" description="How long before you're considered idle">
+          <input
+            className="dialog-input"
+            type="number"
+            min="1"
+            max="120"
+            value={idleMinutes}
+            onChange={(e) => setIdleMinutes(e.target.value)}
+            style={{ width: 80 }}
+          />
+        </SettingRow>
+      )}
+
+      <div className="dialog-hint" style={{ marginTop: 12 }}>
+        Press <kbd style={{ fontFamily: 'var(--font-mono)', fontSize: 11, background: 'var(--bg-elevated)', padding: '1px 5px', borderRadius: 3 }}>Ctrl + Shift + B</kbd> to open the briefing panel anytime.
+      </div>
+    </>
+  )
+}
+
 const TAB_CONTENT: Record<SettingsTab, () => React.JSX.Element> = {
   profile: ProfileTab,
   appearance: AppearanceTab,
   sessions: SessionsTab,
   git: GitTab,
   remote: RemoteTab,
+  briefing: BriefingTab,
   general: GeneralTab
 }
 

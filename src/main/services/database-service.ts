@@ -122,6 +122,45 @@ export class DatabaseService {
       this.db.run(`ALTER TABLE agents ADD COLUMN remote_control INTEGER NOT NULL DEFAULT 0`)
     } catch { /* column already exists */ }
 
+    // Briefing archive table
+    this.db.run(`
+      CREATE TABLE IF NOT EXISTS briefings (
+        id TEXT PRIMARY KEY,
+        content TEXT NOT NULL,
+        provider TEXT NOT NULL,
+        model TEXT NOT NULL,
+        created_at INTEGER NOT NULL DEFAULT (strftime('%s','now'))
+      );
+    `)
+
+    this.save()
+  }
+
+  // Briefing archive operations
+  saveBriefing(id: string, content: string, provider: string, model: string): void {
+    if (!this.db) return
+    this.db.run(
+      'INSERT INTO briefings (id, content, provider, model) VALUES (?, ?, ?, ?)',
+      [id, content, provider, model]
+    )
+    this.save()
+  }
+
+  listBriefings(limit: number = 20): any[] {
+    if (!this.db) return []
+    const stmt = this.db.prepare('SELECT * FROM briefings ORDER BY created_at DESC LIMIT ?')
+    stmt.bind([limit])
+    const results: any[] = []
+    while (stmt.step()) {
+      results.push(stmt.getAsObject())
+    }
+    stmt.free()
+    return results
+  }
+
+  deleteBriefing(id: string): void {
+    if (!this.db) return
+    this.db.run('DELETE FROM briefings WHERE id = ?', [id])
     this.save()
   }
 

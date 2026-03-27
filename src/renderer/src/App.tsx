@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { getApi } from './api/client'
 import { Sidebar } from './components/Sidebar'
 import { MainContent } from './components/MainContent'
@@ -13,6 +13,7 @@ import { SettingsDialog } from './components/dialogs/SettingsDialog'
 import { AddAgentDialog } from './components/dialogs/AddAgentDialog'
 import { DeleteAgentDialog } from './components/dialogs/DeleteAgentDialog'
 import { QuickNotesOverlay } from './components/QuickNotesOverlay'
+import { BriefingPanel } from './components/BriefingPanel'
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts'
 import { useProjectStore } from './stores/useProjectStore'
 import { useSessionStore } from './stores/useSessionStore'
@@ -24,6 +25,8 @@ import { useUIStore } from './stores/useUIStore'
 
 export function App() {
   useKeyboardShortcuts()
+  const [briefingOpen, setBriefingOpen] = useState(false)
+  const closeBriefing = useCallback(() => setBriefingOpen(false), [])
 
   useEffect(() => {
     // Set platform class on <html> for OS-specific CSS (e.g. macOS traffic lights)
@@ -111,6 +114,54 @@ export function App() {
       }
     })
 
+    // Idle detection for auto-briefing on return
+    let lastActivity = Date.now()
+    let wasIdle = false
+    const activityHandler = () => { lastActivity = Date.now(); wasIdle = false }
+    window.addEventListener('mousemove', activityHandler, { passive: true })
+    window.addEventListener('keydown', activityHandler, { passive: true })
+
+    const idleCheckInterval = setInterval(async () => {
+      const autoIdle = await getApi().settings.get('briefingAutoIdle')
+      if (autoIdle !== 'true') return
+
+      const idleMinutesStr = await getApi().settings.get('briefingIdleMinutes')
+      const idleThreshold = (parseInt(idleMinutesStr || '15') || 15) * 60 * 1000
+      const elapsed = Date.now() - lastActivity
+
+      if (elapsed >= idleThreshold) {
+        wasIdle = true
+      } else if (wasIdle) {
+        // User just came back from idle
+        wasIdle = false
+        const providerId = await getApi().settings.get('briefingProvider') || 'anthropic'
+        const key = await getApi().settings.get(`apiKey_${providerId}`)
+        if (key) setBriefingOpen(true)
+      }
+    }, 30000) // Check every 30 seconds
+
+    // Briefing keyboard shortcut: Ctrl+Shift+B
+    const briefingKeyHandler = (e: KeyboardEvent) => {
+      if (e.ctrlKey && e.shiftKey && e.key === 'B') {
+        e.preventDefault()
+        setBriefingOpen((prev) => !prev)
+      }
+    }
+    window.addEventListener('keydown', briefingKeyHandler)
+
+    // Auto-open briefing on startup if enabled
+    getApi().settings.get('briefingAutoStartup').then((v: string | undefined) => {
+      if (v === 'true') {
+        // Check that an API key is configured before auto-opening
+        getApi().settings.get('briefingProvider').then((provider: string | undefined) => {
+          const providerId = provider || 'anthropic'
+          getApi().settings.get(`apiKey_${providerId}`).then((key: string | undefined) => {
+            if (key) setBriefingOpen(true)
+          })
+        })
+      }
+    })
+
     // Poll for remote control viewers (which sessions have WS subscribers)
     const pollRemote = async () => {
       try {
@@ -128,6 +179,10 @@ export function App() {
       unsubPopoutOpened()
       unsubPopoutClosed()
       unsubResumeFailed()
+      window.removeEventListener('keydown', briefingKeyHandler)
+      window.removeEventListener('mousemove', activityHandler)
+      window.removeEventListener('keydown', activityHandler)
+      clearInterval(idleCheckInterval)
       clearInterval(remoteInterval)
     }
   }, [])
@@ -147,6 +202,7 @@ export function App() {
       <AddAgentDialog />
       <DeleteAgentDialog />
       <QuickNotesOverlay />
+      <BriefingPanel open={briefingOpen} onClose={closeBriefing} />
     </div>
   )
 }
