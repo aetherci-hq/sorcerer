@@ -24,15 +24,14 @@ if (process.platform !== 'win32') {
 }
 
 // ── Memory optimizations ─────────────────────────────────────
-// Reduce GPU process memory overhead (terminals are text-only)
-app.commandLine.appendSwitch('disable-gpu-compositing')
+// Disable GPU entirely — Sorcerer is a terminal app, no WebGL/3D needed.
+// This eliminates the GPU process, its memory overhead, and disk cache lock
+// errors on Windows when restarting quickly or running multiple instances.
+app.disableHardwareAcceleration()
 // Limit renderer JS heap to 128 MB (default is ~4 GB on 64-bit)
 app.commandLine.appendSwitch('js-flags', '--max-old-space-size=128')
 // Disable background tab throttling workarounds that bloat memory
 app.commandLine.appendSwitch('disable-backgrounding-occluded-windows')
-// Suppress Chromium GPU disk cache errors on Windows (harmless, just noisy)
-app.commandLine.appendSwitch('disk-cache-size', '0')
-app.commandLine.appendSwitch('gpu-disk-cache-size-kb', '0')
 
 let mainWindow: BrowserWindow | null = null
 let ptyService: PTYService
