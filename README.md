@@ -1,8 +1,32 @@
 # Sorcerer
 
-Desktop workbench for [Claude Code](https://docs.anthropic.com/en/docs/claude-code). Manage multiple sessions, projects, worktrees, and monitor teams from a single interface.
+The desktop workbench for AI command-line coding tools. Not an IDE — a mission control for the agents that do the work.
 
 ![Sorcerer](Sorcerer_Screenshot.png)
+
+## Project Charter
+
+Sorcerer exists for people who build with AI. Not people who happen to use AI inside their editor — people whose primary workflow *is* the AI. Vibe coders, founders shipping with Claude Code, developers orchestrating multiple agents across repos.
+
+**Sorcerer is not an IDE.** It will never have a code editor, file tree, syntax highlighting, or debugger. Those tools already exist and they're excellent. Sorcerer is the layer above: it manages the AI sessions, the branching, the orchestration, and the context — so you can focus on directing the work, not typing the code.
+
+### Guiding Principles
+
+1. **AI-first, always.** Every feature should make AI-driven development better. If a feature doesn't involve AI sessions, agents, or their orchestration, it probably doesn't belong here.
+
+2. **Direct, don't type.** Sorcerer users are directors, not typists. Features should help users give better instructions, monitor progress, and manage multiple streams of AI work — not manually edit files.
+
+3. **Stay out of the IDE's lane.** No code editor. No file browser. No terminal emulator for general use. If VS Code, Cursor, or Zed already does it well, we don't rebuild it.
+
+4. **Multi-agent is the default.** The whole point is running several AI sessions at once. Single-session convenience is fine, but features should scale to many concurrent agents.
+
+5. **Tools, not opinions.** Support Claude Code, Codex, Gemini CLI, Aider, and whatever comes next. Sorcerer is the workbench, not the tool on it.
+
+6. **Simple over powerful.** Resist feature creep. A clean interface with five things done well beats a cluttered one with fifty. When in doubt, leave it out.
+
+### The Litmus Test
+
+Before adding any feature, ask: *"Does this help someone orchestrate AI coding agents, or does this turn Sorcerer into an IDE?"* If the answer is the latter, stop.
 
 ## Download
 
@@ -10,17 +34,17 @@ Grab the latest release for your platform:
 
 **[Download for Windows, macOS, and Linux](https://github.com/aetherci-hq/sorcerer/releases/latest)**
 
-Requires [Claude Code](https://docs.anthropic.com/en/docs/claude-code) CLI installed and available on PATH.
+Requires an AI CLI tool like [Claude Code](https://docs.anthropic.com/en/docs/claude-code) installed and available on PATH.
 
 > **Windows note:** The installer is not yet code-signed. SmartScreen may show "Windows protected your PC" — click **More info** → **Run anyway** to proceed. macOS users may need to right-click → Open on first launch.
 
 ## Features
 
-- **Multi-session management** — Run multiple Claude Code sessions side-by-side with persistent terminals
+- **Multi-session management** — Run multiple AI agent sessions side-by-side with persistent terminals
 - **Project & worktree isolation** — Automatically create git worktrees so each session works in its own branch
 - **Split view** — View and interact with multiple sessions simultaneously
 - **Team awareness** — Monitor Claude Code teams and tasks via filesystem integration
-- **Standalone sessions** — Launch non-project Claude Code sessions for quick tasks
+- **Standalone sessions** — Launch quick agent sessions without a project
 - **Session recovery** — Resume previous sessions, detect orphaned worktrees, recover from crashes
 - **Quick Notes** — Per-session scratchpad that persists across restarts
 - **Remote access** — Built-in HTTP + WebSocket server with token auth for browser-based access
