@@ -30,6 +30,9 @@ app.commandLine.appendSwitch('disable-gpu-compositing')
 app.commandLine.appendSwitch('js-flags', '--max-old-space-size=128')
 // Disable background tab throttling workarounds that bloat memory
 app.commandLine.appendSwitch('disable-backgrounding-occluded-windows')
+// Suppress Chromium GPU disk cache errors on Windows (harmless, just noisy)
+app.commandLine.appendSwitch('disk-cache-size', '0')
+app.commandLine.appendSwitch('gpu-disk-cache-size-kb', '0')
 
 let mainWindow: BrowserWindow | null = null
 let ptyService: PTYService
@@ -238,6 +241,21 @@ async function createWindow(): Promise<void> {
       const port = parseInt(dbService.getSetting('remotePort') || '7437')
       const bindAddress = dbService.getSetting('remoteBindAddress') || '127.0.0.1'
       const authToken = getOrCreateAuthToken(dbService)
+
+      // Check if port is already in use (e.g. previous instance still running)
+      const net = await import('net')
+      const portAvailable = await new Promise<boolean>((resolve) => {
+        const tester = net.createServer()
+        tester.once('error', () => resolve(false))
+        tester.listen(port, bindAddress, () => {
+          tester.close(() => resolve(true))
+        })
+      })
+
+      if (!portAvailable) {
+        console.log(`[remote-access] Port ${port} already in use, skipping auto-start (another instance may be running)`)
+        return
+      }
 
       const { setGlobalApiServer } = await import('./ipc/handlers')
       const server = new ApiServer(
