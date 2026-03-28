@@ -25,10 +25,16 @@ export function useKeyboardShortcuts() {
         openDialog('new-session')
       }
 
-      // Ctrl+B — toggle sidebar
+      // Ctrl+B — cycle sidebar (expanded → collapsed → hidden → expanded)
       if (e.ctrlKey && e.key === 'b') {
         e.preventDefault()
         useUIStore.getState().toggleSidebar()
+      }
+
+      // Ctrl+, — open settings
+      if (e.ctrlKey && e.key === ',') {
+        e.preventDefault()
+        openDialog('settings')
       }
 
       // Ctrl+Shift+N — toggle Quick Notes overlay

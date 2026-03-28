@@ -23,7 +23,8 @@ const TABS: { id: SettingsTab; label: string; icon: React.ReactNode }[] = [
 const SHORTCUTS = [
   { keys: 'Ctrl + K', action: 'Search sessions' },
   { keys: 'Ctrl + N', action: 'New session' },
-  { keys: 'Ctrl + B', action: 'Toggle sidebar' },
+  { keys: 'Ctrl + B', action: 'Cycle sidebar (expand / collapse / hide)' },
+  { keys: 'Ctrl + ,', action: 'Open settings' },
   { keys: 'Ctrl + \\', action: 'Split right' },
   { keys: 'Ctrl + Shift + \\', action: 'Split down' },
   { keys: 'Ctrl + W', action: 'Close focused panel' },
@@ -512,9 +513,18 @@ function RemoteTab() {
   )
 }
 
+function useUpdateCheck() {
+  const [update, setUpdate] = useState<{ version: string; url: string } | null>(null)
+  useEffect(() => {
+    getApi().system.checkUpdate?.()?.then((u: any) => setUpdate(u)).catch(() => {})
+  }, [])
+  return update
+}
+
 function GeneralTab() {
   const { addToast } = useToastStore()
   const [checkUpdates, setCheckUpdates] = useSetting('checkForUpdates', 'true')
+  const update = useUpdateCheck()
 
   return (
     <>
@@ -578,6 +588,17 @@ function GeneralTab() {
       <SettingRow label="Version" description="Sorcerer">
         <span className="settings-version">{__APP_VERSION__}</span>
       </SettingRow>
+      {update && (
+        <SettingRow label="Update available" description={`Version ${update.version} is available`}>
+          <button
+            className="settings-action-btn"
+            type="button"
+            onClick={() => window.open(update.url, '_blank')}
+          >
+            Download
+          </button>
+        </SettingRow>
+      )}
     </>
   )
 }

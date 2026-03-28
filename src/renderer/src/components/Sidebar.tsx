@@ -14,7 +14,7 @@ import { useAgentStore } from '../stores/useAgentStore'
 
 export function Sidebar() {
   const {
-    sidebarCollapsed, toggleSidebar,
+    sidebarCollapsed, sidebarHidden, toggleSidebar,
     sidebarWidth, setSidebarWidth
   } = useUIStore()
   const { pinned, togglePin } = useStatsPinned()
@@ -65,6 +65,11 @@ export function Sidebar() {
       window.removeEventListener('mouseup', onMouseUp)
     }
   }, [setSidebarWidth, sidebarCollapsed, toggleSidebar])
+
+  /* ---- Hidden view ---- */
+  if (sidebarHidden) {
+    return null
+  }
 
   /* ---- Collapsed view ---- */
   if (sidebarCollapsed) {

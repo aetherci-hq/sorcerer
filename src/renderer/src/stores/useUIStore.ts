@@ -41,6 +41,7 @@ interface UIState {
   collapseProjects: (projectIds: string[], groupIds: string[]) => void
   collapseAgents: (agentGroupIds: string[]) => void
   sidebarCollapsed: boolean
+  sidebarHidden: boolean
   toggleSidebar: () => void
   sidebarWidth: number
   setSidebarWidth: (width: number) => void
@@ -285,7 +286,19 @@ export const useUIStore = create<UIState>()(
       setSearchQuery: (query) => set({ searchQuery: query }),
 
       sidebarCollapsed: false,
-      toggleSidebar: () => set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
+      sidebarHidden: false,
+      toggleSidebar: () => set((state) => {
+        if (!state.sidebarCollapsed && !state.sidebarHidden) {
+          // expanded → collapsed
+          return { sidebarCollapsed: true, sidebarHidden: false }
+        } else if (state.sidebarCollapsed && !state.sidebarHidden) {
+          // collapsed → hidden
+          return { sidebarCollapsed: true, sidebarHidden: true }
+        } else {
+          // hidden → expanded
+          return { sidebarCollapsed: false, sidebarHidden: false }
+        }
+      }),
 
       sidebarWidth: SIDEBAR_DEFAULT,
       setSidebarWidth: (width) => set({
@@ -450,6 +463,7 @@ export const useUIStore = create<UIState>()(
         expandedSessions: state.expandedSessions,
         expandedGroups: state.expandedGroups,
         sidebarCollapsed: state.sidebarCollapsed,
+        sidebarHidden: state.sidebarHidden,
         sidebarWidth: state.sidebarWidth
       })
     }
