@@ -351,8 +351,9 @@ export async function createSession(
     console.log('[session:create] Worktree created:', { worktreePath, branch })
   }
 
-  // Create session record
+  // Create session record with a pinned Claude conversation ID
   const id = uuidv4()
+  const claudeSessionId = uuidv4()
   const skipPerms = bypassPermissions !== false  // default true
   const rc = remoteControl ? 1 : 0
   const session = db.addSession({
@@ -362,12 +363,15 @@ export async function createSession(
     branch,
     worktree_path: worktreePath,
     bypass_permissions: skipPerms ? 1 : 0,
-    remote_control: rc
+    remote_control: rc,
+    claude_session_id: claudeSessionId
   })
-  console.log('[session:create] Session saved:', { id, status: session?.status })
+  console.log('[session:create] Session saved:', { id, claudeSessionId, status: session?.status })
 
   // Spawn Claude Code directly in the worktree — no shell prompt visible
-  const args: string[] = []
+  // Use --session-id to pin this Claude conversation to this Sorcerer session,
+  // preventing cross-contamination when multiple sessions share the same cwd.
+  const args: string[] = ['--session-id', claudeSessionId]
   if (skipPerms) args.push('--dangerously-skip-permissions')
   pty.spawn(id, worktreePath, {
     command: resolveClaudeBinary(),
@@ -626,8 +630,14 @@ export async function resumeSession(
     // Quick terminal: just restart the shell (no Claude conversation to resume)
     pty.spawn(sessionId, cwd)
   } else {
-    // Resume the most recent Claude Code conversation in this worktree
-    const args = ['--continue']
+    // Resume the Claude Code conversation pinned to this session.
+    // Use --resume <id> for sessions with a stored claude_session_id (prevents
+    // cross-contamination when multiple sessions share the same cwd).
+    // Fall back to --continue for legacy sessions created before conversation pinning.
+    const claudeSessionId = session.claude_session_id as string | undefined
+    const args = claudeSessionId
+      ? ['--resume', claudeSessionId]
+      : ['--continue']
     if (session.bypass_permissions !== 0) args.push('--dangerously-skip-permissions')
     trackResume(sessionId)
     pty.spawn(sessionId, cwd, {
