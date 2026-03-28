@@ -7,7 +7,7 @@ import { useAgentStore } from '../stores/useAgentStore'
 import { useToastStore } from '../stores/useToastStore'
 import {
   PlusIcon, CopyIcon, TrashIcon, SplitHorizontalIcon, SplitVerticalIcon,
-  RefreshIcon, UploadIcon, ExternalLinkIcon, ArchiveIcon, RotateCcwIcon, EditIcon, PlayIcon, StopIcon, TerminalIcon, MergeIcon, NotesIcon, SmartphoneIcon, FolderIcon
+  RefreshIcon, UploadIcon, ExternalLinkIcon, ArchiveIcon, RotateCcwIcon, EditIcon, PlayIcon, StopIcon, TerminalIcon, MergeIcon, NotesIcon, SmartphoneIcon, FolderIcon, SettingsIcon
 } from './icons'
 import { useQuickNotesStore } from '../stores/useQuickNotesStore'
 
@@ -226,14 +226,14 @@ export function ContextMenu() {
       }},
       { type: 'separator' as const },
       { label: 'Rename', icon: <EditIcon className={iconClass} />, shortcut: 'F2', action: () => setRenamingId(contextMenu.targetId) },
+      { label: 'Edit Agent Settings', icon: <SettingsIcon className={iconClass} />, action: () => {
+        openDialog('edit-agent-mission', contextMenu.targetId)
+      }},
       ...(targetAgent?.mission ? [
-        { label: 'Edit Mission', icon: <EditIcon className={iconClass} />, action: () => {
-          openDialog('edit-agent-mission', contextMenu.targetId)
-        }},
         { label: 'Disable Mission', icon: <StopIcon className={iconClass} />, danger: true, action: async () => {
           await killAgent(contextMenu.targetId)
-          await getApi().agent.update(contextMenu.targetId, { mission: '', auto_start: 0, auto_restart: 0 })
-          useAgentStore.getState().updateAgentInStore(contextMenu.targetId, { mission: '', auto_start: 0, auto_restart: 0 })
+          await getApi().agent.update(contextMenu.targetId, { mission: '', auto_start: 0, auto_restart: 0, schedule_minutes: 0 })
+          useAgentStore.getState().updateAgentInStore(contextMenu.targetId, { mission: '', auto_start: 0, auto_restart: 0, schedule_minutes: 0 })
           addToast('Mission disabled — agent is now interactive', 'info')
         }}
       ] : []),
