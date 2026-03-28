@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { getApi } from '../api/client'
 import { useProjectStore } from '../stores/useProjectStore'
 import { useSessionStore } from '../stores/useSessionStore'
 import { useUIStore, getAllSessionIds, findLeafBySession } from '../stores/useUIStore'
@@ -6,6 +7,7 @@ import { useTeamStore } from '../stores/useTeamStore'
 import { ChevronIcon, FolderIcon, TerminalIcon, ShellPromptIcon, UserIcon, MoreHorizontalIcon, NotesIcon, WifiIcon, ChevronsCollapseIcon, PlusIcon } from './icons'
 import { useQuickNotesStore } from '../stores/useQuickNotesStore'
 import { StatusDot } from './StatusDot'
+import { Tooltip } from './Tooltip'
 import { EmptyState } from './EmptyState'
 import type { Project, ProjectGroup, Session, TeamMember, TaskData } from '../types'
 
@@ -187,7 +189,15 @@ function SessionItem({
   const isExpanded = expandedSessions.has(session.id)
   const project = projects.find((p) => p.id === projectId)
   const isMainRepo = project && session.worktree_path === project.path
+  const isWorktree = !isMainRepo && !!session.branch && session.type !== 'quick-terminal'
   const itemRef = useRef<HTMLDivElement>(null)
+
+  // Worktree divergence check
+  const [divergence, setDivergence] = useState<{ behind: number; ahead: number } | null>(null)
+  useEffect(() => {
+    if (!isWorktree) return
+    getApi().session.divergence(session.id).then((d) => setDivergence(d)).catch(() => {})
+  }, [session.id, isWorktree])
 
   // Quick notes panel open?
   const hasNotesPanel = useQuickNotesStore((s) => s.openNotePanels.has(session.id))
@@ -331,6 +341,14 @@ function SessionItem({
         </div>
         {!isRenaming && (
           <>
+            {divergence && divergence.behind > 0 && (
+              <Tooltip label={`${divergence.behind} commit${divergence.behind !== 1 ? 's' : ''} behind main${divergence.ahead > 0 ? `, ${divergence.ahead} ahead` : ''}`}>
+                <span className={`tree-divergence ${divergence.behind >= 10 ? 'tree-divergence--danger' : divergence.behind >= 3 ? 'tree-divergence--warning' : ''}`}>
+                  {divergence.behind}
+                  <svg width="8" height="8" viewBox="0 0 16 16" fill="currentColor"><path fillRule="evenodd" d="M8 4a.5.5 0 0 1 .5.5v5.793l2.146-2.147a.5.5 0 0 1 .708.708l-3 3a.5.5 0 0 1-.708 0l-3-3a.5.5 0 1 1 .708-.708L7.5 10.293V4.5A.5.5 0 0 1 8 4z"/></svg>
+                </span>
+              </Tooltip>
+            )}
             {hasSavedNotes && <NotesIcon className="tree-icon tree-notes-indicator" />}
             {remoteSessionIds.has(session.id) && (
               <WifiIcon className="tree-icon tree-remote-indicator" />

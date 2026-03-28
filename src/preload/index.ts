@@ -32,6 +32,7 @@ const api = {
     resume: (sessionId: string) => ipcRenderer.invoke('session:resume', sessionId),
     setTeam: (sessionId: string, teamName: string | null) => ipcRenderer.invoke('session:set-team', sessionId, teamName),
     gitStatus: (sessionId: string) => ipcRenderer.invoke('session:git-status', sessionId),
+    divergence: (sessionId: string) => ipcRenderer.invoke('session:divergence', sessionId) as Promise<{ behind: number; ahead: number } | null>,
     checkDeleteSafety: (sessionId: string) => ipcRenderer.invoke('session:check-delete-safety', sessionId),
     pushBranch: (sessionId: string) => ipcRenderer.invoke('session:push-branch', sessionId),
     openRemote: (sessionId: string) => ipcRenderer.invoke('session:open-remote', sessionId),

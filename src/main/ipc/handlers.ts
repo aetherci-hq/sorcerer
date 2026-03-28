@@ -449,6 +449,41 @@ export function registerIPC(
     return getSessionGitStatus(services, sessionId)
   })
 
+  ipcMain.handle('session:divergence', async (_event, sessionId: string) => {
+    const session = dbService.getSession(sessionId)
+    if (!session || !session.branch || session.type === 'quick-terminal') return null
+
+    const project = dbService.getProject(session.project_id as string)
+    if (!project) return null
+
+    // Skip direct sessions (worktree_path === project.path)
+    if (session.worktree_path === project.path) return null
+
+    try {
+      const git = simpleGit(project.path as string)
+
+      // Find the default branch
+      let defaultBranch = 'main'
+      try {
+        const branches = await git.branch()
+        if (branches.all.includes('master') && !branches.all.includes('main')) {
+          defaultBranch = 'master'
+        }
+      } catch { /* use main */ }
+
+      const branch = session.branch as string
+      const behind = await git.raw(['rev-list', '--count', `${branch}..${defaultBranch}`]).catch(() => '0')
+      const ahead = await git.raw(['rev-list', '--count', `${defaultBranch}..${branch}`]).catch(() => '0')
+
+      return {
+        behind: parseInt(behind.trim()) || 0,
+        ahead: parseInt(ahead.trim()) || 0
+      }
+    } catch {
+      return null
+    }
+  })
+
   ipcMain.handle('session:land-on-main', async (_event, sessionId: string) => {
     return landOnMain(services, sessionId)
   })
