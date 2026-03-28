@@ -4,13 +4,16 @@ import { useUIStore } from '../../stores/useUIStore'
 import { useAgentStore } from '../../stores/useAgentStore'
 import { useSessionStore } from '../../stores/useSessionStore'
 import { useToastStore } from '../../stores/useToastStore'
-import { ChevronIcon } from '../icons'
+import { ChevronIcon, BotIcon, TerminalIcon } from '../icons'
+
+type AgentMode = null | 'interactive' | 'autonomous'
 
 export function AddAgentDialog() {
   const { activeDialog, closeDialog } = useUIStore()
   const { addAgent, startAgent } = useAgentStore()
   const { setActiveSession } = useSessionStore()
   const { addToast } = useToastStore()
+  const [mode, setMode] = useState<AgentMode>(null)
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [mission, setMission] = useState('')
@@ -24,9 +27,9 @@ export function AddAgentDialog() {
   const [showAdvanced, setShowAdvanced] = useState(false)
 
   const open = activeDialog === 'add-agent'
-  const isAutonomous = mission.trim().length > 0
 
   const handleClose = () => {
+    setMode(null)
     setName('')
     setDescription('')
     setMission('')
@@ -44,34 +47,66 @@ export function AddAgentDialog() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!name.trim()) return
+    if (mode === 'autonomous' && !mission.trim()) return
     const id = await addAgent({
       name: name.trim(),
       description: description.trim(),
-      mission: mission.trim(),
+      mission: mode === 'autonomous' ? mission.trim() : '',
       system_prompt: systemPrompt.trim(),
       mcp_config: mcpConfig.trim(),
       bypass_permissions: bypassPermissions,
-      remote_control: remoteControl,
-      auto_start: autoStart,
-      auto_restart: autoRestart,
+      remote_control: mode === 'interactive' ? remoteControl : false,
+      auto_start: mode === 'autonomous' ? autoStart : false,
+      auto_restart: mode === 'autonomous' ? autoRestart : false,
       restart_delay: parseInt(restartDelay) || 30
     })
     if (id) {
       await startAgent(id)
       setActiveSession(id)
-      addToast(`Agent "${name.trim()}" created${isAutonomous ? ' — mission started' : ''}`, 'success')
+      addToast(`Agent "${name.trim()}" created${mode === 'autonomous' ? ' — mission started' : ''}`, 'success')
     }
     handleClose()
   }
 
+  if (!open) return null
+
+  // Step 1: Choose mode
+  if (!mode) {
+    return (
+      <Dialog open={open} onClose={handleClose} title="New Agent">
+        <div className="dialog-hint" style={{ marginBottom: 12 }}>What kind of agent do you want to create?</div>
+        <div className="agent-mode-picker">
+          <button type="button" className="agent-mode-option" onClick={() => setMode('interactive')}>
+            <TerminalIcon className="agent-mode-icon" />
+            <div className="agent-mode-info">
+              <span className="agent-mode-label">Interactive Session</span>
+              <span className="agent-mode-desc">A standalone Claude Code session you interact with directly. Not tied to any git repo.</span>
+            </div>
+          </button>
+          <button type="button" className="agent-mode-option" onClick={() => setMode('autonomous')}>
+            <BotIcon className="agent-mode-icon" />
+            <div className="agent-mode-info">
+              <span className="agent-mode-label">Autonomous Agent</span>
+              <span className="agent-mode-desc">Runs a mission automatically — monitors, responds, and acts without prompting. Can auto-start and auto-restart.</span>
+            </div>
+          </button>
+        </div>
+        <DialogActions>
+          <DialogButton onClick={handleClose}>Cancel</DialogButton>
+        </DialogActions>
+      </Dialog>
+    )
+  }
+
+  // Step 2: Configure agent
   return (
-    <Dialog open={open} onClose={handleClose} title="New Agent">
+    <Dialog open={open} onClose={handleClose} title={mode === 'autonomous' ? 'New Autonomous Agent' : 'New Interactive Agent'}>
       <form onSubmit={handleSubmit}>
         <DialogField label="Name">
           <input
             className="dialog-input"
             type="text"
-            placeholder='e.g. "Sentry Monitor", "Email Assistant"'
+            placeholder={mode === 'autonomous' ? 'e.g. "Sentry Monitor", "Email Responder"' : 'e.g. "Research Assistant", "Code Helper"'}
             value={name}
             onChange={(e) => setName(e.target.value)}
             autoFocus
@@ -87,56 +122,23 @@ export function AddAgentDialog() {
           />
         </DialogField>
 
-        <DialogField label="Mission">
-          <textarea
-            className="dialog-input dialog-textarea"
-            placeholder="Give this agent a task to run autonomously...&#10;&#10;Leave empty for an interactive Claude Code session."
-            value={mission}
-            onChange={(e) => setMission(e.target.value)}
-            rows={4}
-          />
-        </DialogField>
-
-        {isAutonomous && (
-          <div className="dialog-hint" style={{ marginBottom: 8 }}>
-            This agent will run its mission autonomously using <span className="dialog-hint-mono">claude -p</span>.
-          </div>
-        )}
-
-        <label className="dialog-checkbox">
-          <input
-            type="checkbox"
-            checked={bypassPermissions}
-            onChange={(e) => setBypassPermissions(e.target.checked)}
-          />
-          Auto-accept permissions
-        </label>
-        {!isAutonomous && (
-          <label className="dialog-checkbox">
-            <input
-              type="checkbox"
-              checked={remoteControl}
-              onChange={(e) => setRemoteControl(e.target.checked)}
-            />
-            Enable Session Remote Control
-          </label>
-        )}
-        {isAutonomous && (
+        {mode === 'autonomous' && (
           <>
-            <label className="dialog-checkbox">
-              <input
-                type="checkbox"
-                checked={autoStart}
-                onChange={(e) => setAutoStart(e.target.checked)}
+            <DialogField label="Mission">
+              <textarea
+                className="dialog-input dialog-textarea"
+                placeholder={"Describe what this agent should do...\\n\\ne.g. Monitor the Sentry project for new errors. Triage severity and investigate root causes. For critical errors, draft a fix."}
+                value={mission}
+                onChange={(e) => setMission(e.target.value)}
+                rows={4}
               />
+            </DialogField>
+            <label className="dialog-checkbox">
+              <input type="checkbox" checked={autoStart} onChange={(e) => setAutoStart(e.target.checked)} />
               Auto-start when Sorcerer launches
             </label>
             <label className="dialog-checkbox">
-              <input
-                type="checkbox"
-                checked={autoRestart}
-                onChange={(e) => setAutoRestart(e.target.checked)}
-              />
+              <input type="checkbox" checked={autoRestart} onChange={(e) => setAutoRestart(e.target.checked)} />
               Auto-restart when mission completes
             </label>
             {autoRestart && (
@@ -155,10 +157,15 @@ export function AddAgentDialog() {
           </>
         )}
 
-        {!isAutonomous && (
-          <div className="dialog-hint">
-            A standalone Claude Code session — not tied to any git repo.
-          </div>
+        <label className="dialog-checkbox">
+          <input type="checkbox" checked={bypassPermissions} onChange={(e) => setBypassPermissions(e.target.checked)} />
+          Auto-accept permissions
+        </label>
+        {mode === 'interactive' && (
+          <label className="dialog-checkbox">
+            <input type="checkbox" checked={remoteControl} onChange={(e) => setRemoteControl(e.target.checked)} />
+            Enable Session Remote Control
+          </label>
         )}
 
         {/* Collapsible advanced options */}
@@ -201,9 +208,9 @@ export function AddAgentDialog() {
         )}
 
         <DialogActions>
-          <DialogButton onClick={handleClose}>Cancel</DialogButton>
+          <DialogButton onClick={() => setMode(null)}>Back</DialogButton>
           <DialogButton variant="primary" type="submit">
-            {isAutonomous ? 'Create & Start Mission' : 'Create Agent'}
+            {mode === 'autonomous' ? 'Create & Start Mission' : 'Create Agent'}
           </DialogButton>
         </DialogActions>
       </form>

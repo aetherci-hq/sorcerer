@@ -2018,6 +2018,58 @@ select.dialog-input option {
   line-height: 1.5;
 }
 
+/* Agent mode picker */
+.agent-mode-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.agent-mode-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.15s var(--ease-out);
+}
+
+.agent-mode-option:hover {
+  border-color: var(--accent);
+  background: var(--accent-glow);
+}
+
+.agent-mode-icon {
+  width: 20px;
+  height: 20px;
+  color: var(--accent);
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.agent-mode-info {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.agent-mode-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.agent-mode-desc {
+  font-size: 11.5px;
+  color: var(--text-tertiary);
+  line-height: 1.4;
+}
+
 .dialog-advanced-toggle {
   display: flex;
   align-items: center;
