@@ -1,6 +1,6 @@
 {
   "name": "sorcerer",
-  "version": "1.5.3",
+  "version": "1.6.0",
   "description": "Claude Code Agent Orchestration App",
   "main": "./out/main/index.js",
   "scripts": {
