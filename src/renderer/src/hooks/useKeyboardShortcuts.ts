@@ -67,7 +67,16 @@ export function useKeyboardShortcuts() {
         }
       }
 
-      // Escape — clear search if focused, otherwise blur
+      // Ctrl+Shift+M — toggle maximize on focused panel
+      if (e.ctrlKey && e.shiftKey && e.key === 'M') {
+        e.preventDefault()
+        const { splitRoot, focusedPanelId, toggleMaximizePanel } = useUIStore.getState()
+        if (splitRoot && focusedPanelId) {
+          toggleMaximizePanel(focusedPanelId)
+        }
+      }
+
+      // Escape — unmaximize, clear search if focused, or blur
       if (e.key === 'Escape') {
         const searchInput = document.querySelector('.search-input') as HTMLInputElement | null
         if (document.activeElement === searchInput) {
@@ -76,6 +85,11 @@ export function useKeyboardShortcuts() {
             setSearchQuery('')
           } else {
             searchInput?.blur()
+          }
+        } else {
+          const { maximizedPanelId, unmaximizePanel } = useUIStore.getState()
+          if (maximizedPanelId) {
+            unmaximizePanel()
           }
         }
       }

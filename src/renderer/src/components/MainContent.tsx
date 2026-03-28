@@ -5,7 +5,7 @@ import { useProjectStore } from '../stores/useProjectStore'
 import { useAgentStore } from '../stores/useAgentStore'
 import { useUIStore, findLeaf, findLeafBySession } from '../stores/useUIStore'
 import { OrphanWorkspaceBanner } from './OrphanWorkspaceBanner'
-import { GitBranchIcon, TerminalIcon, BotIcon, NotesIcon, SplitHorizontalIcon, SplitVerticalIcon } from './icons'
+import { GitBranchIcon, TerminalIcon, BotIcon, NotesIcon, SplitHorizontalIcon, SplitVerticalIcon, MaximizeIcon, MinimizeIcon } from './icons'
 import { StatusDot } from './StatusDot'
 import { TerminalView } from './TerminalView'
 import { QuickNotesPanel, parseQuickNotesPanelId } from './QuickNotesPanel'
@@ -231,7 +231,7 @@ function PanelHeaderInfo({ session, agent }: { session?: Session; agent?: Agent 
 }
 
 function SplitNodeView({ node }: { node: SplitNode }) {
-  const { focusedPanelId, setFocusedPanel, closePanel, setSplitRatio, setPanelSession, splitRight, splitDown } = useUIStore()
+  const { focusedPanelId, setFocusedPanel, closePanel, setSplitRatio, setPanelSession, splitRight, splitDown, maximizedPanelId, toggleMaximizePanel } = useUIStore()
   const { sessions, setActiveSession, deleteSession, createQuickTerminal, addLocalSession } = useSessionStore()
   const { agents: agentsList } = useAgentStore()
 
@@ -422,6 +422,16 @@ function SplitNodeView({ node }: { node: SplitNode }) {
                 </button>
               </>
             )}
+            <button
+              className="split-panel-action"
+              title={maximizedPanelId === node.id ? 'Restore' : 'Maximize'}
+              onClick={(e) => {
+                e.stopPropagation()
+                toggleMaximizePanel(node.id)
+              }}
+            >
+              {maximizedPanelId === node.id ? <MinimizeIcon /> : <MaximizeIcon />}
+            </button>
             <button className="split-panel-close" onClick={(e) => {
               e.stopPropagation()
               // Quick notes: remove from openNotePanels
@@ -542,7 +552,7 @@ export function MainContent() {
   const { sessions, activeSessionId, setActiveSession, deleteSession, createQuickTerminal, addLocalSession } = useSessionStore()
   const { projects } = useProjectStore()
   const { agents: agentsList } = useAgentStore()
-  const { splitRoot, splitRight, splitDown } = useUIStore()
+  const { splitRoot, splitRight, splitDown, maximizedPanelId } = useUIStore()
   const memoryMB = useMemoryUsage()
   const updateAvailable = useUpdateCheck()
 
@@ -560,7 +570,11 @@ export function MainContent() {
       <OrphanWorkspaceBanner />
 
       {/* Terminal area */}
-      {splitRoot ? (
+      {splitRoot && maximizedPanelId && findLeaf(splitRoot, maximizedPanelId) ? (
+        <div className="split-panel--maximized-container">
+          <SplitNodeView node={findLeaf(splitRoot, maximizedPanelId)!} />
+        </div>
+      ) : splitRoot ? (
         <SplitNodeView node={splitRoot} />
       ) : (activeSession || activeAgent) ? (
         <div className="split-panel split-panel--focused">

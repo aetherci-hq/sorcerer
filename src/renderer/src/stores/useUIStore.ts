@@ -50,6 +50,7 @@ interface UIState {
   // Split view (tree-based, limitless)
   splitRoot: SplitNode | null
   focusedPanelId: string | null
+  maximizedPanelId: string | null
   splitRight: (sessionId: string) => void
   splitDown: (sessionId: string) => void
   closePanel: (panelId: string) => void
@@ -57,6 +58,8 @@ interface UIState {
   setSplitRatio: (nodeId: string, ratio: number) => void
   setFocusedPanel: (panelId: string) => void
   setPanelSession: (panelId: string, sessionId: string | null) => void
+  toggleMaximizePanel: (panelId: string) => void
+  unmaximizePanel: () => void
 
   // Remote control — sessions being viewed remotely
   remoteSessionIds: Set<string>
@@ -292,6 +295,7 @@ export const useUIStore = create<UIState>()(
       // Split view
       splitRoot: null,
       focusedPanelId: null,
+      maximizedPanelId: null,
 
       splitRight: (sessionId) => {
         const state = get()
@@ -383,9 +387,10 @@ export const useUIStore = create<UIState>()(
         const state = get()
         if (!state.splitRoot) return
 
+        const clearMaximized = state.maximizedPanelId === panelId ? null : state.maximizedPanelId
         const result = removeLeaf(state.splitRoot, panelId)
         if (!result || result.type === 'leaf') {
-          set({ splitRoot: null, focusedPanelId: null })
+          set({ splitRoot: null, focusedPanelId: null, maximizedPanelId: null })
           if (result && result.type === 'leaf' && result.sessionId) {
             useSessionStore.setState({ activeSessionId: result.sessionId })
           }
@@ -393,11 +398,11 @@ export const useUIStore = create<UIState>()(
           const newFocused = state.focusedPanelId === panelId
             ? getFirstLeaf(result).id
             : state.focusedPanelId
-          set({ splitRoot: result, focusedPanelId: newFocused })
+          set({ splitRoot: result, focusedPanelId: newFocused, maximizedPanelId: clearMaximized })
         }
       },
 
-      closeSplit: () => set({ splitRoot: null, focusedPanelId: null }),
+      closeSplit: () => set({ splitRoot: null, focusedPanelId: null, maximizedPanelId: null }),
 
       setSplitRatio: (nodeId, ratio) => {
         const state = get()
@@ -412,6 +417,15 @@ export const useUIStore = create<UIState>()(
         if (!state.splitRoot) return
         set({ splitRoot: updateLeafSession(state.splitRoot, panelId, sessionId) })
       },
+
+      toggleMaximizePanel: (panelId) => {
+        const state = get()
+        set({
+          maximizedPanelId: state.maximizedPanelId === panelId ? null : panelId
+        })
+      },
+
+      unmaximizePanel: () => set({ maximizedPanelId: null }),
 
       remoteSessionIds: new Set(),
       setRemoteSessionIds: (ids) => set({ remoteSessionIds: new Set(ids) }),

@@ -20,6 +20,7 @@ interface ToastState {
 let toastId = 0
 
 const DISPLAY_MS = 3000
+const ERROR_DISPLAY_MS = 10000
 const DISMISS_MS = 200
 
 // Track timers per toast so we can cancel on hover
@@ -44,7 +45,7 @@ export const useToastStore = create<ToastState>((set) => ({
   addToast: (message, type = 'info') => {
     const id = `toast-${++toastId}`
     set((state) => ({ toasts: [...state.toasts, { id, message, type }] }))
-    scheduleDismiss(id, set, DISPLAY_MS)
+    scheduleDismiss(id, set, type === 'error' ? ERROR_DISPLAY_MS : DISPLAY_MS)
   },
 
   removeToast: (id) => {

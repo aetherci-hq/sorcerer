@@ -320,6 +320,80 @@ export class WorktreeService {
     return worktrees
   }
 
+  /**
+   * Rebase a worktree branch onto the latest main/master.
+   * Operates in the worktree directory so it doesn't touch the main repo checkout.
+   */
+  async rebaseOntoMain(projectPath: string, worktreePath: string, branch: string): Promise<{ rebased: boolean; error?: string }> {
+    try {
+      const git: SimpleGit = simpleGit(worktreePath)
+
+      // Detect default branch
+      let defaultBranch = 'main'
+      try {
+        await git.raw(['rev-parse', '--verify', 'main'])
+      } catch {
+        try {
+          await git.raw(['rev-parse', '--verify', 'master'])
+          defaultBranch = 'master'
+        } catch {
+          return { rebased: false, error: 'No main or master branch found' }
+        }
+      }
+
+      // Fetch latest main from remote into the worktree
+      try {
+        await git.raw(['fetch', 'origin', defaultBranch])
+      } catch {
+        // No remote — rebase onto local main
+      }
+
+      // Rebase onto origin/main (or local main if no remote)
+      const rebaseTarget = await git.raw(['rev-parse', '--verify', `origin/${defaultBranch}`])
+        .then(() => `origin/${defaultBranch}`)
+        .catch(() => defaultBranch)
+
+      try {
+        await git.raw(['rebase', rebaseTarget])
+        return { rebased: true }
+      } catch (err: any) {
+        // Rebase failed (conflicts) — abort and report
+        try { await git.raw(['rebase', '--abort']) } catch { /* ignore */ }
+        return { rebased: false, error: `Rebase conflict — branch could not be cleanly rebased onto ${defaultBranch}` }
+      }
+    } catch (err: any) {
+      return { rebased: false, error: err?.message || 'Rebase failed' }
+    }
+  }
+
+  /**
+   * Sync all other active worktrees for a project by rebasing them onto updated main.
+   * Best-effort: failures are logged but don't block the caller.
+   */
+  async syncActiveWorktrees(
+    projectPath: string,
+    excludeBranch: string,
+    sessions: Array<{ branch: string; worktree_path: string }>
+  ): Promise<void> {
+    for (const session of sessions) {
+      if (!session.branch || !session.worktree_path || session.branch === excludeBranch) continue
+      if (!fs.existsSync(session.worktree_path)) continue
+
+      try {
+        // Auto-commit any dirty work first so the rebase doesn't fail on uncommitted changes
+        await this.autoCommit(session.worktree_path)
+        const result = await this.rebaseOntoMain(projectPath, session.worktree_path, session.branch)
+        if (result.rebased) {
+          console.log(`[syncActiveWorktrees] Rebased ${session.branch} onto main`)
+        } else {
+          console.log(`[syncActiveWorktrees] Skipped ${session.branch}: ${result.error}`)
+        }
+      } catch (err) {
+        console.log(`[syncActiveWorktrees] Failed to sync ${session.branch}:`, err)
+      }
+    }
+  }
+
   async squashMergeToMain(projectPath: string, branch: string, sessionName: string): Promise<{ merged: boolean; error?: string }> {
     const git: SimpleGit = simpleGit(projectPath)
     let needsStash = false

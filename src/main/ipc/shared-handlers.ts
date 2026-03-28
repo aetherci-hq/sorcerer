@@ -751,6 +751,20 @@ export async function landOnMain(
     }
   }
 
+  // Rebase onto latest main before attempting the squash merge
+  if (session.worktree_path && fs.existsSync(session.worktree_path as string)) {
+    const rebaseResult = await worktree.rebaseOntoMain(
+      project.path as string,
+      session.worktree_path as string,
+      session.branch as string
+    )
+    if (rebaseResult.rebased) {
+      console.log('[session:land-on-main] Rebased onto main before merge')
+    } else if (rebaseResult.error) {
+      return { landed: false, error: rebaseResult.error }
+    }
+  }
+
   // Squash merge to main
   const mergeResult = await worktree.squashMergeToMain(
     project.path as string,
@@ -762,6 +776,11 @@ export async function landOnMain(
     // Merge failed — restore session to idle state so it's not left broken
     db.updateSession(sessionId, { status: 'idle', pid: null })
     return { landed: false, error: mergeResult.error }
+  }
+
+  // Kill running process only after successful merge — keeps terminal alive on failure
+  if (pty.isRunning(sessionId)) {
+    pty.kill(sessionId)
   }
 
   // Remove worktree + local branch
@@ -782,6 +801,15 @@ export async function landOnMain(
 
   // Remove session from DB
   db.removeSession(sessionId)
+
+  // Sync other active worktrees onto updated main (fire-and-forget)
+  const otherSessions = db.listSessions(session.project_id as string)
+    .filter((s: any) => s.id !== sessionId && s.worktree_path && s.branch)
+  if (otherSessions.length > 0) {
+    worktree.syncActiveWorktrees(project.path as string, session.branch as string, otherSessions)
+      .then(() => console.log('[session:land-on-main] Synced other worktrees'))
+      .catch((err: any) => console.log('[session:land-on-main] Worktree sync error:', err))
+  }
 
   return { landed: true }
 }

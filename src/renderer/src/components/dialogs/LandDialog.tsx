@@ -9,6 +9,7 @@ export function LandDialog() {
   const { sessions, landOnMain } = useSessionStore()
   const { addToast } = useToastStore()
   const [landing, setLanding] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   const open = activeDialog === 'land-session'
 
@@ -18,21 +19,25 @@ export function LandDialog() {
   const handleConfirm = async () => {
     if (!dialogTargetId || landing) return
     setLanding(true)
+    setError(null)
     try {
       await landOnMain(dialogTargetId)
       addToast(`"${sessionName}" landed on main`, 'success')
+      closeDialog()
     } catch (err: any) {
       console.error('[LandDialog] land-on-main failed:', err)
-      addToast(err?.message || 'Failed to land on main', 'error')
+      setError(err?.message || 'Failed to land on main')
     } finally {
       setLanding(false)
-      closeDialog()
     }
   }
 
   // Prevent closing while the operation is in progress
   const handleClose = () => {
-    if (!landing) closeDialog()
+    if (!landing) {
+      setError(null)
+      closeDialog()
+    }
   }
 
   return (
@@ -59,11 +64,19 @@ export function LandDialog() {
             <p className="dialog-confirm-subtext">The worktree and branch will be cleaned up after merging.</p>
           </>
         )}
+        {error && (
+          <div className="dialog-error">
+            <strong>Landing failed</strong>
+            <p>{error}</p>
+          </div>
+        )}
       </div>
       <DialogActions>
-        <DialogButton onClick={handleClose} disabled={landing}>Cancel</DialogButton>
+        <DialogButton onClick={handleClose} disabled={landing}>
+          {error ? 'Close' : 'Cancel'}
+        </DialogButton>
         <DialogButton variant="primary" onClick={handleConfirm} disabled={landing}>
-          {landing ? 'Landing...' : 'Land'}
+          {landing ? 'Landing...' : error ? 'Retry' : 'Land'}
         </DialogButton>
       </DialogActions>
     </Dialog>
