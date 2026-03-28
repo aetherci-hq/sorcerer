@@ -248,6 +248,7 @@ export class ApiServer {
         addProjectByPath(s, projectPath, name),
       'project:update': (id: string, updates: any) => updateProject(s, id, updates),
       'project:remove': (id: string) => removeProject(s, id),
+      'project:reorder': (projectIds: string[]) => s.db.reorderProjects(projectIds),
       'project:sync-worktrees': (projectId: string) => syncWorktrees(s, projectId),
       'project:git-status': (projectPath: string) => getProjectGitStatus(s, projectPath),
 

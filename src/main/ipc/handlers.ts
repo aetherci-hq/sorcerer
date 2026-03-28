@@ -251,6 +251,10 @@ export function registerIPC(
     fs.rmSync(dirPath, { recursive: true, force: true })
   })
 
+  ipcMain.handle('project:reorder', (_event, projectIds: string[]) => {
+    dbService.reorderProjects(projectIds)
+  })
+
   ipcMain.handle('project:update', (_event, id: string, updates: any) => {
     return updateProject(services, id, updates)
   })

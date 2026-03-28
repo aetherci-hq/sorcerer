@@ -5,6 +5,7 @@ export interface Project {
   name: string
   path: string
   setup_script?: string | null
+  sort_order?: number
   created_at?: number
 }
 

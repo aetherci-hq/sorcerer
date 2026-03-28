@@ -381,7 +381,7 @@ function SessionItem({
   )
 }
 
-function ProjectItem({ project, staggerClass, projectIndex }: { project: Project; staggerClass: string; projectIndex: number }) {
+function ProjectItem({ project, staggerClass, projectIndex, onDragStart: onProjectDragStart, onDragOver: onProjectDragOver, onDragEnd: onProjectDragEnd, onDrop: onProjectDrop, dropPosition }: { project: Project; staggerClass: string; projectIndex: number; onDragStart: (e: React.DragEvent, index: number) => void; onDragOver: (e: React.DragEvent, index: number) => void; onDragEnd: () => void; onDrop: (e: React.DragEvent, index: number) => void; dropPosition: 'above' | 'below' | null }) {
   const { sessions, activeSessionId } = useSessionStore()
   const { expandedProjects, toggleProject, openContextMenu, renamingId, setRenamingId } = useUIStore()
   const isExpanded = expandedProjects.has(project.id)
@@ -462,9 +462,14 @@ function ProjectItem({ project, staggerClass, projectIndex }: { project: Project
     <div className={`tree-project ${staggerClass}`}>
       <div
         ref={headerRef}
-        className="tree-item"
+        className={`tree-item ${dropPosition === 'above' ? 'tree-item--drop-above' : ''} ${dropPosition === 'below' ? 'tree-item--drop-below' : ''}`}
         onClick={() => !isRenaming && toggleProject(project.id)}
         onContextMenu={handleContextMenu}
+        draggable={!isRenaming}
+        onDragStart={(e) => onProjectDragStart(e, projectIndex)}
+        onDragOver={(e) => onProjectDragOver(e, projectIndex)}
+        onDragEnd={onProjectDragEnd}
+        onDrop={(e) => onProjectDrop(e, projectIndex)}
       >
         <ChevronIcon
           className={`tree-chevron ${isExpanded ? 'tree-chevron--open' : ''}`}
@@ -526,9 +531,11 @@ function ProjectItem({ project, staggerClass, projectIndex }: { project: Project
 }
 
 export function ProjectTree() {
-  const { projects } = useProjectStore()
+  const { projects, reorderProjects } = useProjectStore()
   const { sessions } = useSessionStore()
   const { searchQuery } = useUIStore()
+  const [dragIndex, setDragIndex] = useState<number | null>(null)
+  const [dropTarget, setDropTarget] = useState<{ index: number; position: 'above' | 'below' } | null>(null)
 
   if (projects.length === 0) {
     return <EmptyState />
@@ -547,6 +554,49 @@ export function ProjectTree() {
         return hasMatchingSession || p.name.toLowerCase().includes(query)
       })
     : projects
+
+  // Drag-and-drop is only enabled when showing the full unfiltered list
+  const isDragEnabled = !query
+
+  const handleDragStart = (e: React.DragEvent, index: number) => {
+    if (!isDragEnabled) { e.preventDefault(); return }
+    e.dataTransfer.setData('application/x-project-reorder', String(index))
+    e.dataTransfer.effectAllowed = 'move'
+    setDragIndex(index)
+  }
+
+  const handleDragOver = (e: React.DragEvent, index: number) => {
+    if (!isDragEnabled || dragIndex === null) return
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+    const midY = rect.top + rect.height / 2
+    const position = e.clientY < midY ? 'above' : 'below'
+    setDropTarget({ index, position })
+  }
+
+  const handleDragEnd = () => {
+    setDragIndex(null)
+    setDropTarget(null)
+  }
+
+  const handleDrop = (_e: React.DragEvent, targetIndex: number) => {
+    if (dragIndex === null || dragIndex === targetIndex) {
+      handleDragEnd()
+      return
+    }
+    const newProjects = [...projects]
+    const [moved] = newProjects.splice(dragIndex, 1)
+    let insertAt = targetIndex
+    if (dropTarget?.position === 'below') {
+      insertAt = dragIndex < targetIndex ? targetIndex : targetIndex + 1
+    } else {
+      insertAt = dragIndex < targetIndex ? targetIndex - 1 : targetIndex
+    }
+    newProjects.splice(insertAt, 0, moved)
+    reorderProjects(newProjects.map((p) => p.id))
+    handleDragEnd()
+  }
 
   if (filteredProjects.length === 0) {
     return (
@@ -574,13 +624,18 @@ export function ProjectTree() {
         <span className="section-count">{totalSessions}</span>
       </div>
 
-      <div className="tree">
+      <div className="tree" onDragLeave={() => setDropTarget(null)}>
         {filteredProjects.map((project, i) => (
           <ProjectItem
             key={project.id}
             project={project}
             staggerClass={`stagger-${Math.min(i + 5, 10)}`}
             projectIndex={i}
+            onDragStart={handleDragStart}
+            onDragOver={handleDragOver}
+            onDragEnd={handleDragEnd}
+            onDrop={handleDrop}
+            dropPosition={dropTarget?.index === i && dragIndex !== i ? dropTarget.position : null}
           />
         ))}
       </div>

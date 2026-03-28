@@ -101,6 +101,20 @@ export class DatabaseService {
       );
     `)
 
+    // Add sort_order column to projects (idempotent migration)
+    try {
+      this.db.run(`ALTER TABLE projects ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0`)
+      // Backfill existing projects: newest first (matching previous created_at DESC order)
+      const existing = this.db.prepare('SELECT id FROM projects ORDER BY created_at DESC')
+      let idx = 0
+      while (existing.step()) {
+        const row = existing.getAsObject() as { id: string }
+        this.db.run('UPDATE projects SET sort_order = ? WHERE id = ?', [idx, row.id])
+        idx++
+      }
+      existing.free()
+    } catch { /* column already exists */ }
+
     // Add type column to sessions (idempotent migration)
     try {
       this.db.run(`ALTER TABLE sessions ADD COLUMN type TEXT NOT NULL DEFAULT 'session'`)
@@ -173,7 +187,7 @@ export class DatabaseService {
   // Project operations
   listProjects(): any[] {
     if (!this.db) return []
-    const stmt = this.db.prepare('SELECT * FROM projects ORDER BY created_at DESC')
+    const stmt = this.db.prepare('SELECT * FROM projects ORDER BY sort_order ASC')
     const results: any[] = []
     while (stmt.step()) {
       results.push(stmt.getAsObject())
@@ -193,7 +207,9 @@ export class DatabaseService {
 
   addProject(id: string, name: string, projectPath: string): any {
     if (!this.db) throw new Error('Database not initialized')
-    this.db.run('INSERT INTO projects (id, name, path) VALUES (?, ?, ?)', [id, name, projectPath])
+    // Shift all existing projects down to make room at position 0
+    this.db.run('UPDATE projects SET sort_order = sort_order + 1')
+    this.db.run('INSERT INTO projects (id, name, path, sort_order) VALUES (?, ?, ?, 0)', [id, name, projectPath])
     this.save()
     return this.getProject(id)
   }
@@ -219,6 +235,14 @@ export class DatabaseService {
     }
 
     return this.getProject(id)
+  }
+
+  reorderProjects(projectIds: string[]): void {
+    if (!this.db) return
+    for (let i = 0; i < projectIds.length; i++) {
+      this.db.run('UPDATE projects SET sort_order = ? WHERE id = ?', [i, projectIds[i]])
+    }
+    this.save()
   }
 
   removeProject(id: string): void {

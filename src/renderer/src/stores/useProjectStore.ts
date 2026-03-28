@@ -12,6 +12,7 @@ interface ProjectState {
   addProjectByPath: (path: string, name?: string) => Promise<Project | null>
   removeProject: (id: string) => Promise<void>
   updateProject: (id: string, updates: { name?: string; setup_script?: string | null }) => Promise<void>
+  reorderProjects: (projectIds: string[]) => Promise<void>
   setActiveProject: (id: string | null) => void
 }
 
@@ -77,6 +78,20 @@ export const useProjectStore = create<ProjectState>((set) => ({
       }))
     } catch (err) {
       console.error('[project-store] updateProject failed:', err)
+    }
+  },
+
+  reorderProjects: async (projectIds: string[]) => {
+    // Optimistically reorder in store
+    set((state) => {
+      const projectMap = new Map(state.projects.map((p) => [p.id, p]))
+      const reordered = projectIds.map((id) => projectMap.get(id)!).filter(Boolean)
+      return { projects: reordered }
+    })
+    try {
+      await getApi().project.reorder(projectIds)
+    } catch (err) {
+      console.error('[project-store] reorderProjects failed:', err)
     }
   },
 

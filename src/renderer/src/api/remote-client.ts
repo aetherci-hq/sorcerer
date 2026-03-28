@@ -152,6 +152,7 @@ export function createRemoteClient(baseUrl: string, token: string): SorcererAPI 
       addPath: (path: string, name?: string) => rpc('project:addPath', path, name),
       update: (id: string, updates: any) => rpc('project:update', id, updates),
       remove: (id: string) => rpc('project:remove', id),
+      reorder: (projectIds: string[]) => rpc('project:reorder', projectIds),
       gitStatus: (projectPath: string) => rpc('project:git-status', projectPath),
       syncWorktrees: (projectId: string) => rpc('project:sync-worktrees', projectId)
     },
