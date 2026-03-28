@@ -280,7 +280,7 @@ function StatsPopover({ sessions, onClose, pinned, onTogglePin }: { sessions: an
   )
 }
 
-function PinnedStats() {
+export function PinnedStats() {
   const [stats, setStats] = useState<ClaudeStats | null>(null)
 
   useEffect(() => {
@@ -318,14 +318,8 @@ function PinnedStats() {
   )
 }
 
-export function SidebarFooter({ collapsed, width = 260 }: { collapsed: boolean; width?: number }) {
-  const sessions = useSessionStore((s) => s.sessions)
-  const openDialog = useUIStore((s) => s.openDialog)
-  const { displayName, initial, avatarSrc } = useUserProfile()
-  const { time, date } = useClock()
-  const [showStats, setShowStats] = useState(false)
+export function useStatsPinned() {
   const [pinned, setPinned] = useState(() => localStorage.getItem('sorcerer-stats-pinned') === 'true')
-
   const togglePin = useCallback(() => {
     setPinned((prev) => {
       const next = !prev
@@ -333,6 +327,15 @@ export function SidebarFooter({ collapsed, width = 260 }: { collapsed: boolean; 
       return next
     })
   }, [])
+  return { pinned, togglePin }
+}
+
+export function SidebarFooter({ collapsed, width = 260, pinned, togglePin }: { collapsed: boolean; width?: number; pinned: boolean; togglePin: () => void }) {
+  const sessions = useSessionStore((s) => s.sessions)
+  const openDialog = useUIStore((s) => s.openDialog)
+  const { displayName, initial, avatarSrc } = useUserProfile()
+  const { time, date } = useClock()
+  const [showStats, setShowStats] = useState(false)
 
   const activeCount = sessions.filter((s) => s.status === 'active').length
 
@@ -358,7 +361,6 @@ export function SidebarFooter({ collapsed, width = 260 }: { collapsed: boolean; 
 
   return (
     <div className={`sidebar-footer stagger-10${compact ? ' sidebar-footer--compact' : ''}`}>
-      {pinned && <PinnedStats />}
       {showStats && <StatsPopover sessions={sessions} onClose={handleCloseStats} pinned={pinned} onTogglePin={togglePin} />}
       <button
         className="avatar-ring-btn"

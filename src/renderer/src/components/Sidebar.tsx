@@ -3,7 +3,7 @@ import { ActionBar } from './ActionBar'
 import { SearchBar } from './SearchBar'
 import { AgentTree } from './AgentTree'
 import { ProjectTree } from './ProjectTree'
-import { SidebarFooter } from './SidebarFooter'
+import { SidebarFooter, PinnedStats, useStatsPinned } from './SidebarFooter'
 import { StatusDot } from './StatusDot'
 import { Tooltip } from './Tooltip'
 import { PanelLeftCloseIcon, PanelLeftOpenIcon, BotIcon, TerminalIcon, ShellPromptIcon } from './icons'
@@ -17,6 +17,7 @@ export function Sidebar() {
     sidebarCollapsed, toggleSidebar,
     sidebarWidth, setSidebarWidth
   } = useUIStore()
+  const { pinned, togglePin } = useStatsPinned()
 
   const SNAP_THRESHOLD = 120
 
@@ -81,7 +82,7 @@ export function Sidebar() {
 
         <CollapsedTree />
 
-        <SidebarFooter collapsed />
+        <SidebarFooter collapsed pinned={pinned} togglePin={togglePin} />
       </aside>
     )
   }
@@ -105,7 +106,8 @@ export function Sidebar() {
       <SearchBar />
       <AgentTree />
       <ProjectTree />
-      <SidebarFooter collapsed={false} width={sidebarWidth} />
+      {pinned && <PinnedStats />}
+      <SidebarFooter collapsed={false} width={sidebarWidth} pinned={pinned} togglePin={togglePin} />
 
       {/* Resize handle */}
       <div className="sidebar-resize-handle" onMouseDown={onMouseDown} />
