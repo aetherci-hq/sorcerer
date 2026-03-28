@@ -1546,6 +1546,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 3px;
   width: 34px;
   height: 28px;
   border: none;
@@ -1564,9 +1565,6 @@ body {
 }
 
 .collapsed-session-btn .signal {
-  position: absolute;
-  bottom: 2px;
-  right: 2px;
   transform: scale(0.75);
 }
 
