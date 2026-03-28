@@ -228,12 +228,7 @@ export function ContextMenu() {
       { label: 'Rename', icon: <EditIcon className={iconClass} />, shortcut: 'F2', action: () => setRenamingId(contextMenu.targetId) },
       ...(targetAgent?.mission ? [
         { label: 'Edit Mission', icon: <EditIcon className={iconClass} />, action: () => {
-          const newMission = prompt('Edit mission:', targetAgent.mission)
-          if (newMission !== null) {
-            getApi().agent.update(contextMenu.targetId, { mission: newMission })
-            useAgentStore.getState().updateAgentInStore(contextMenu.targetId, { mission: newMission })
-            addToast(newMission ? 'Mission updated' : 'Mission cleared', 'success')
-          }
+          openDialog('edit-agent-mission', contextMenu.targetId)
         }},
         { label: 'Disable Mission', icon: <StopIcon className={iconClass} />, danger: true, action: async () => {
           await killAgent(contextMenu.targetId)

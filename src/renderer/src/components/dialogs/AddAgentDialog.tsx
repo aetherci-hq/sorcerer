@@ -84,8 +84,8 @@ export function AddAgentDialog() {
           <button type="button" className="agent-mode-option" onClick={() => setMode('autonomous')}>
             <BotIcon className="agent-mode-icon" />
             <div className="agent-mode-info">
-              <span className="agent-mode-label">Autonomous Agent</span>
-              <span className="agent-mode-desc">Runs a mission automatically — monitors, responds, and acts without prompting. Can auto-start and auto-restart.</span>
+              <span className="agent-mode-label">Scheduled Mission</span>
+              <span className="agent-mode-desc">Runs a mission on a schedule — monitor, scan, report, or remediate. Results are captured and diffed between runs.</span>
             </div>
           </button>
         </div>
@@ -98,7 +98,7 @@ export function AddAgentDialog() {
 
   // Step 2: Configure agent
   return (
-    <Dialog open={open} onClose={handleClose} title={mode === 'autonomous' ? 'New Autonomous Agent' : 'New Interactive Agent'}>
+    <Dialog open={open} onClose={handleClose} title={mode === 'autonomous' ? 'New Scheduled Mission' : 'New Interactive Agent'}>
       <form onSubmit={handleSubmit}>
         <DialogField label="Name">
           <input
