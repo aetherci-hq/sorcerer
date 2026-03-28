@@ -100,6 +100,11 @@ export function AddAgentDialog() {
   return (
     <Dialog open={open} onClose={handleClose} title={mode === 'autonomous' ? 'New Scheduled Mission' : 'New Interactive Agent'}>
       <form onSubmit={handleSubmit}>
+        {mode === 'autonomous' && (
+          <div className="dialog-hint" style={{ marginBottom: 10, color: 'var(--accent)' }}>
+            Scheduled missions are experimental. Start with longer intervals and monitor results before increasing frequency.
+          </div>
+        )}
         <DialogField label="Name">
           <input
             className="dialog-input"

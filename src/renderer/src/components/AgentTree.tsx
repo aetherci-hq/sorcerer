@@ -98,6 +98,31 @@ function AgentNotesItem({ agentId }: { agentId: string }) {
   )
 }
 
+function AgentCountdown({ agent }: { agent: Agent }) {
+  const [remaining, setRemaining] = useState('')
+
+  useEffect(() => {
+    const calc = () => {
+      const lastRun = agent.last_run_at || 0
+      const intervalSec = agent.schedule_minutes * 60
+      const nextRunAt = lastRun + intervalSec
+      const diff = nextRunAt - Math.floor(Date.now() / 1000)
+      if (diff <= 0) {
+        setRemaining('due')
+        return
+      }
+      if (diff < 60) { setRemaining(`${diff}s`); return }
+      if (diff < 3600) { setRemaining(`${Math.floor(diff / 60)}m`); return }
+      setRemaining(`${Math.floor(diff / 3600)}h ${Math.floor((diff % 3600) / 60)}m`)
+    }
+    calc()
+    const interval = setInterval(calc, 1000)
+    return () => clearInterval(interval)
+  }, [agent.last_run_at, agent.schedule_minutes])
+
+  return <span className="agent-countdown">{remaining}</span>
+}
+
 function AgentItem({ agent, staggerClass }: { agent: Agent; staggerClass?: string }) {
   const { setActiveSession, activeSessionId, sessions } = useSessionStore()
   const { openContextMenu, renamingId, setRenamingId, splitRoot, expandedSessions, toggleSession, poppedOutSessionIds } = useUIStore()
@@ -240,6 +265,9 @@ function AgentItem({ agent, staggerClass }: { agent: Agent; staggerClass?: strin
         </div>
         {!isRenaming && (
           <>
+            {agent.mission && agent.schedule_minutes > 0 && agent.status !== 'active' && (
+              <AgentCountdown agent={agent} />
+            )}
             <button className="tree-item-actions" onClick={handleMoreClick}>
               <MoreHorizontalIcon />
             </button>
