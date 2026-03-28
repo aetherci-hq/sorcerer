@@ -157,6 +157,14 @@ export function createRemoteClient(baseUrl: string, token: string): SorcererAPI 
       syncWorktrees: (projectId: string) => rpc('project:sync-worktrees', projectId)
     },
 
+    projectGroup: {
+      list: () => rpc('project-group:list'),
+      add: (name: string) => rpc('project-group:add', name),
+      update: (id: string, updates: { name?: string }) => rpc('project-group:update', id, updates),
+      remove: (id: string) => rpc('project-group:remove', id),
+      reorder: (groupIds: string[]) => rpc('project-group:reorder', groupIds)
+    },
+
     workspace: {
       scanOrphans: async () => [],
       dismissOrphan: async () => {},
@@ -184,6 +192,14 @@ export function createRemoteClient(baseUrl: string, token: string): SorcererAPI 
       rename: (sessionId: string, name: string) => rpc('session:rename', sessionId, name),
       landOnMain: (sessionId: string) => rpc('session:land-on-main', sessionId),
       setRemoteControl: (sessionId: string, enabled: boolean) => rpc('session:set-remote-control', sessionId, enabled)
+    },
+
+    agentGroup: {
+      list: () => rpc('agent-group:list'),
+      add: (name: string) => rpc('agent-group:add', name),
+      update: (id: string, updates: { name?: string }) => rpc('agent-group:update', id, updates),
+      remove: (id: string) => rpc('agent-group:remove', id),
+      reorder: (groupIds: string[]) => rpc('agent-group:reorder', groupIds)
     },
 
     agent: {

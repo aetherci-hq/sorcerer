@@ -33,13 +33,36 @@ export function App() {
     const platform = getApi().system.platform
     if (platform) document.documentElement.dataset.platform = platform
 
-    const { loadProjects } = useProjectStore.getState()
+    const { loadProjects, loadGroups } = useProjectStore.getState()
     const { loadSessions } = useSessionStore.getState()
-    const { loadAgents } = useAgentStore.getState()
+    const { loadAgents, loadAgentGroups } = useAgentStore.getState()
     const { loadTeams, loadTasks } = useTeamStore.getState()
 
     // Load all data on mount
     loadAgents()
+    loadAgentGroups().then(() => {
+      const agentGroups = useAgentStore.getState().groups
+      const { expandedGroups } = useUIStore.getState()
+      // Auto-expand agent groups on first load (if no groups are expanded yet)
+      if (agentGroups.length > 0) {
+        const expanded = new Set(expandedGroups)
+        let added = false
+        for (const g of agentGroups) {
+          if (!expanded.has(g.id)) { expanded.add(g.id); added = true }
+        }
+        if (added) useUIStore.setState({ expandedGroups: expanded })
+      }
+    })
+    loadGroups().then(() => {
+      // Auto-expand all groups on first load
+      const groups = useProjectStore.getState().groups
+      const { expandedGroups } = useUIStore.getState()
+      if (expandedGroups.size === 0 && groups.length > 0) {
+        const expanded = new Set<string>()
+        for (const g of groups) expanded.add(g.id)
+        useUIStore.setState({ expandedGroups: expanded })
+      }
+    })
     useQuickNotesStore.getState().loadNotePanels()
     loadProjects().then(() => {
       // Auto-expand all projects on first load

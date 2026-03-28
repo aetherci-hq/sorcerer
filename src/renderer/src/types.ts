@@ -6,7 +6,14 @@ export interface Project {
   path: string
   setup_script?: string | null
   sort_order?: number
+  group_id?: string | null
   created_at?: number
+}
+
+export interface ProjectGroup {
+  id: string
+  name: string
+  sort_order: number
 }
 
 export interface Session {
@@ -63,10 +70,17 @@ export interface Agent {
   mcp_config: string
   bypass_permissions: number
   remote_control: number
+  group_id?: string | null
   status: 'active' | 'idle' | 'archived'
   pid: number | null
   team_name: string | null
   created_at: number
+}
+
+export interface AgentGroup {
+  id: string
+  name: string
+  sort_order: number
 }
 
 // ── Quick Notes ────────────────────────────────────────────────────

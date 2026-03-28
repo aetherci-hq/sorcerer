@@ -379,7 +379,7 @@ body {
 .section-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 4px;
   padding: 12px 14px 6px;
   flex-shrink: 0;
 }
@@ -415,15 +415,11 @@ body {
   cursor: pointer;
   border-radius: var(--radius-sm);
   padding: 0;
-  opacity: 0;
-  transition: opacity 0.15s, background 0.15s, color 0.15s;
+  transition: background 0.15s, color 0.15s;
 }
 .section-add-btn svg {
   width: 12px;
   height: 12px;
-}
-.section-header:hover .section-add-btn {
-  opacity: 1;
 }
 .section-add-btn:hover {
   background: var(--bg-hover);
@@ -442,16 +438,12 @@ body {
   cursor: pointer;
   border-radius: var(--radius-sm);
   padding: 0;
-  opacity: 0;
-  transition: opacity 0.15s, background 0.15s, color 0.15s;
+  transition: background 0.15s, color 0.15s;
   margin-left: 4px;
 }
 .section-collapse-btn svg {
   width: 12px;
   height: 12px;
-}
-.section-header:hover .section-collapse-btn {
-  opacity: 1;
 }
 .section-collapse-btn:hover {
   background: var(--bg-hover);
@@ -508,16 +500,21 @@ body {
 }
 
 .tree-label--group {
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 600;
-  letter-spacing: 0.5px;
-  text-transform: uppercase;
+  letter-spacing: 0.3px;
   color: var(--text-muted);
   flex: 1;
 }
 
-.tree-group .tree-children .tree-project {
-  /* Indent projects inside groups slightly */
+.tree-group-count {
+  font-size: 9px;
+  font-family: var(--font-mono);
+  color: var(--text-tertiary);
+  background: var(--bg-hover);
+  padding: 1px 6px;
+  border-radius: 4px;
+  margin-left: auto;
 }
 
 .tree-item {

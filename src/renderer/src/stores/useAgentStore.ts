@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { Agent } from '../types'
+import type { Agent, AgentGroup } from '../types'
 import { useUIStore, clearSessionFromTree } from './useUIStore'
 import { useQuickNotesStore } from './useQuickNotesStore'
 import { disposeTerminal } from '../components/TerminalView'
@@ -7,6 +7,7 @@ import { getApi } from '../api/client'
 
 interface AgentState {
   agents: Agent[]
+  groups: AgentGroup[]
   loading: boolean
 
   loadAgents: () => Promise<void>
@@ -19,10 +20,18 @@ interface AgentState {
   killAgent: (id: string) => Promise<void>
   renameAgent: (id: string, name: string) => Promise<void>
   updateAgentInStore: (id: string, updates: Partial<Agent>) => void
+
+  loadAgentGroups: () => Promise<void>
+  addAgentGroup: (name: string) => Promise<AgentGroup | null>
+  updateAgentGroup: (id: string, updates: { name?: string }) => Promise<void>
+  removeAgentGroup: (id: string) => Promise<void>
+  reorderAgentGroups: (groupIds: string[]) => Promise<void>
+  moveAgentToGroup: (agentId: string, groupId: string | null) => Promise<void>
 }
 
 export const useAgentStore = create<AgentState>((set) => ({
   agents: [],
+  groups: [],
   loading: false,
 
   loadAgents: async () => {
@@ -158,5 +167,74 @@ export const useAgentStore = create<AgentState>((set) => ({
         a.id === id ? { ...a, ...updates } : a
       )
     }))
+  },
+
+  // Agent group operations
+  loadAgentGroups: async () => {
+    try {
+      const groups = await getApi().agentGroup.list()
+      set({ groups })
+    } catch (err) {
+      console.error('[agent-store] loadAgentGroups failed:', err)
+    }
+  },
+
+  addAgentGroup: async (name: string) => {
+    try {
+      const group = await getApi().agentGroup.add(name)
+      if (!group) return null
+      set((state) => ({ groups: [...state.groups, group] }))
+      return group
+    } catch (err) {
+      console.error('[agent-store] addAgentGroup failed:', err)
+      return null
+    }
+  },
+
+  updateAgentGroup: async (id: string, updates: { name?: string }) => {
+    try {
+      await getApi().agentGroup.update(id, updates)
+      set((state) => ({
+        groups: state.groups.map((g) => g.id === id ? { ...g, ...updates } : g)
+      }))
+    } catch (err) {
+      console.error('[agent-store] updateAgentGroup failed:', err)
+    }
+  },
+
+  removeAgentGroup: async (id: string) => {
+    try {
+      await getApi().agentGroup.remove(id)
+      set((state) => ({
+        groups: state.groups.filter((g) => g.id !== id),
+        agents: state.agents.map((a) => a.group_id === id ? { ...a, group_id: null } : a)
+      }))
+    } catch (err) {
+      console.error('[agent-store] removeAgentGroup failed:', err)
+    }
+  },
+
+  reorderAgentGroups: async (groupIds: string[]) => {
+    set((state) => {
+      const groupMap = new Map(state.groups.map((g) => [g.id, g]))
+      const reordered = groupIds.map((id) => groupMap.get(id)!).filter(Boolean)
+      return { groups: reordered }
+    })
+    try {
+      await getApi().agentGroup.reorder(groupIds)
+    } catch (err) {
+      console.error('[agent-store] reorderAgentGroups failed:', err)
+    }
+  },
+
+  moveAgentToGroup: async (agentId: string, groupId: string | null) => {
+    set((state) => ({
+      agents: state.agents.map((a) => a.id === agentId ? { ...a, group_id: groupId } : a)
+    }))
+    try {
+      await getApi().agent.update(agentId, { group_id: groupId })
+    } catch (err) {
+      console.error('[agent-store] moveAgentToGroup failed:', err)
+    }
   }
 }))

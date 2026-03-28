@@ -252,6 +252,26 @@ export class ApiServer {
       'project:sync-worktrees': (projectId: string) => syncWorktrees(s, projectId),
       'project:git-status': (projectPath: string) => getProjectGitStatus(s, projectPath),
 
+      // Project groups
+      'project-group:list': () => s.db.listProjectGroups(),
+      'project-group:add': (name: string) => {
+        const { v4: uuidv4 } = require('uuid')
+        return s.db.addProjectGroup(uuidv4(), name)
+      },
+      'project-group:update': (id: string, updates: { name?: string }) => s.db.updateProjectGroup(id, updates),
+      'project-group:remove': (id: string) => s.db.removeProjectGroup(id),
+      'project-group:reorder': (groupIds: string[]) => s.db.reorderProjectGroups(groupIds),
+
+      // Agent groups
+      'agent-group:list': () => s.db.listAgentGroups(),
+      'agent-group:add': (name: string) => {
+        const { v4: uuidv4 } = require('uuid')
+        return s.db.addAgentGroup(uuidv4(), name)
+      },
+      'agent-group:update': (id: string, updates: { name?: string }) => s.db.updateAgentGroup(id, updates),
+      'agent-group:remove': (id: string) => s.db.removeAgentGroup(id),
+      'agent-group:reorder': (groupIds: string[]) => s.db.reorderAgentGroups(groupIds),
+
       // Session
       'session:list': (projectId?: string) => listSessions(s, projectId),
       'session:create': (projectId: string, name: string, useMainRepo?: boolean, bypassPermissions?: boolean, remoteControl?: boolean) =>

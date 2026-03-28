@@ -7,7 +7,7 @@ import { useAgentStore } from '../stores/useAgentStore'
 import { useToastStore } from '../stores/useToastStore'
 import {
   PlusIcon, CopyIcon, TrashIcon, SplitHorizontalIcon, SplitVerticalIcon,
-  RefreshIcon, UploadIcon, ExternalLinkIcon, ArchiveIcon, RotateCcwIcon, EditIcon, PlayIcon, StopIcon, TerminalIcon, MergeIcon, NotesIcon, SmartphoneIcon
+  RefreshIcon, UploadIcon, ExternalLinkIcon, ArchiveIcon, RotateCcwIcon, EditIcon, PlayIcon, StopIcon, TerminalIcon, MergeIcon, NotesIcon, SmartphoneIcon, FolderIcon
 } from './icons'
 import { useQuickNotesStore } from '../stores/useQuickNotesStore'
 
@@ -221,10 +221,114 @@ export function ContextMenu() {
       }},
       { type: 'separator' as const },
       { label: 'Rename', icon: <EditIcon className={iconClass} />, shortcut: 'F2', action: () => setRenamingId(contextMenu.targetId) },
+      ...(() => {
+        const { groups: agentGroups, moveAgentToGroup } = useAgentStore.getState()
+        const currentAgent = agents.find((a) => a.id === contextMenu.targetId)
+        const agentGroupItems: MenuItem[] = agentGroups.length > 0 ? [
+          { type: 'separator' as const },
+          ...(currentAgent?.group_id ? [
+            { label: 'Remove from Group', icon: <FolderIcon className={iconClass} />, action: async () => {
+              await moveAgentToGroup(contextMenu.targetId, null)
+            }}
+          ] : []),
+          ...agentGroups
+            .filter((g) => g.id !== currentAgent?.group_id)
+            .map((g) => ({
+              label: `Move to ${g.name}`, icon: <FolderIcon className={iconClass} />, action: async () => {
+                await moveAgentToGroup(contextMenu.targetId, g.id)
+              }
+            }))
+        ] : []
+        return agentGroupItems
+      })(),
+      { type: 'separator' as const },
+      { label: 'New Group', icon: <FolderIcon className={iconClass} />, action: async () => {
+        const group = await useAgentStore.getState().addAgentGroup('New Group')
+        if (group) {
+          useUIStore.getState().toggleGroup(group.id)
+          requestAnimationFrame(() => useUIStore.getState().setRenamingId(group.id))
+        }
+      }},
       { type: 'separator' as const },
       { label: 'Delete Agent', icon: <TrashIcon className={iconClass} />, danger: true, action: () => openDialog('delete-agent', contextMenu.targetId) }
     ]
+  } else if (contextMenu.type === 'agents-header') {
+    items = [
+      { label: 'Add Agent', icon: <PlusIcon className={iconClass} />, action: () => openDialog('add-agent') },
+      { label: 'New Group', icon: <FolderIcon className={iconClass} />, action: async () => {
+        const group = await useAgentStore.getState().addAgentGroup('New Group')
+        if (group) {
+          useUIStore.getState().toggleGroup(group.id)
+          requestAnimationFrame(() => useUIStore.getState().setRenamingId(group.id))
+        }
+      }}
+    ]
+  } else if (contextMenu.type === 'agent-group') {
+    items = [
+      { label: 'Rename Group', icon: <EditIcon className={iconClass} />, action: () => setRenamingId(contextMenu.targetId) },
+      { type: 'separator' },
+      { label: 'New Group', icon: <FolderIcon className={iconClass} />, action: async () => {
+        const group = await useAgentStore.getState().addAgentGroup('New Group')
+        if (group) {
+          useUIStore.getState().toggleGroup(group.id)
+          requestAnimationFrame(() => useUIStore.getState().setRenamingId(group.id))
+        }
+      }},
+      { type: 'separator' },
+      { label: 'Delete Group', icon: <TrashIcon className={iconClass} />, danger: true, action: async () => {
+        await useAgentStore.getState().removeAgentGroup(contextMenu.targetId)
+        addToast('Group deleted', 'info')
+      }}
+    ]
+  } else if (contextMenu.type === 'projects-header') {
+    items = [
+      { label: 'Add Project', icon: <PlusIcon className={iconClass} />, action: () => openDialog('add-project') },
+      { label: 'New Group', icon: <FolderIcon className={iconClass} />, action: async () => {
+        const group = await useProjectStore.getState().addGroup('New Group')
+        if (group) {
+          useUIStore.getState().toggleGroup(group.id)
+          requestAnimationFrame(() => {
+            useUIStore.getState().setRenamingId(group.id)
+          })
+        }
+      }}
+    ]
+  } else if (contextMenu.type === 'project-group') {
+    items = [
+      { label: 'Rename Group', icon: <EditIcon className={iconClass} />, action: () => setRenamingId(contextMenu.targetId) },
+      { type: 'separator' },
+      { label: 'New Group', icon: <FolderIcon className={iconClass} />, action: async () => {
+        const group = await useProjectStore.getState().addGroup('New Group')
+        if (group) {
+          useUIStore.getState().toggleGroup(group.id)
+          requestAnimationFrame(() => useUIStore.getState().setRenamingId(group.id))
+        }
+      }},
+      { type: 'separator' },
+      { label: 'Delete Group', icon: <TrashIcon className={iconClass} />, danger: true, action: async () => {
+        await useProjectStore.getState().removeGroup(contextMenu.targetId)
+        addToast('Group deleted', 'info')
+      }}
+    ]
   } else if (contextMenu.type === 'project') {
+    const { groups, moveProjectToGroup } = useProjectStore.getState()
+    const currentProject = projects.find((p) => p.id === contextMenu.targetId)
+    const groupItems: MenuItem[] = groups.length > 0 ? [
+      { type: 'separator' },
+      ...(currentProject?.group_id ? [
+        { label: 'Remove from Group', icon: <FolderIcon className={iconClass} />, action: async () => {
+          await moveProjectToGroup(contextMenu.targetId, null)
+        }}
+      ] : []),
+      ...groups
+        .filter((g) => g.id !== currentProject?.group_id)
+        .map((g) => ({
+          label: `Move to ${g.name}`, icon: <FolderIcon className={iconClass} />, action: async () => {
+            await moveProjectToGroup(contextMenu.targetId, g.id)
+          }
+        }))
+    ] : []
+
     items = [
       { label: 'New Session', icon: <PlusIcon className={iconClass} />, shortcut: 'Ctrl+N', action: () => openDialog('new-session', contextMenu.targetId) },
       { label: 'Open Quick Terminal', icon: <TerminalIcon className={iconClass} />, action: async () => {
@@ -248,6 +352,15 @@ export function ContextMenu() {
           if (result.created > 0) parts.push(`${result.created} session${result.created > 1 ? 's' : ''} found`)
           if (result.removed > 0) parts.push(`${result.removed} stale removed`)
           addToast(parts.join(', '), 'success')
+        }
+      }},
+      ...groupItems,
+      { type: 'separator' },
+      { label: 'New Group', icon: <FolderIcon className={iconClass} />, action: async () => {
+        const group = await useProjectStore.getState().addGroup('New Group')
+        if (group) {
+          useUIStore.getState().toggleGroup(group.id)
+          requestAnimationFrame(() => useUIStore.getState().setRenamingId(group.id))
         }
       }},
       { type: 'separator' },

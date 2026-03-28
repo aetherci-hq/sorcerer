@@ -328,6 +328,15 @@ export function SmartphoneIcon(props: IconProps) {
   )
 }
 
+export function ChevronsCollapseIcon(props: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <polyline points="7 20 12 15 17 20" />
+      <polyline points="7 4 12 9 17 4" />
+    </svg>
+  )
+}
+
 export function ShellPromptIcon(props: IconProps) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...props}>

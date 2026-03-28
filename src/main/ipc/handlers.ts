@@ -461,6 +461,29 @@ export function registerIPC(
     return setSessionRemoteControl(services, sessionId, enabled)
   })
 
+  // ── Agent group operations ──────────────────────────────────
+
+  ipcMain.handle('agent-group:list', () => {
+    return dbService.listAgentGroups()
+  })
+
+  ipcMain.handle('agent-group:add', (_event, name: string) => {
+    const id = uuidv4()
+    return dbService.addAgentGroup(id, name)
+  })
+
+  ipcMain.handle('agent-group:update', (_event, id: string, updates: { name?: string }) => {
+    return dbService.updateAgentGroup(id, updates)
+  })
+
+  ipcMain.handle('agent-group:remove', (_event, id: string) => {
+    dbService.removeAgentGroup(id)
+  })
+
+  ipcMain.handle('agent-group:reorder', (_event, groupIds: string[]) => {
+    dbService.reorderAgentGroups(groupIds)
+  })
+
   // ── Agent operations ───────────────────────────────────────
 
   ipcMain.handle('agent:list', () => {

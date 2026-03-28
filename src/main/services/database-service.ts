@@ -136,6 +136,34 @@ export class DatabaseService {
       this.db.run(`ALTER TABLE agents ADD COLUMN remote_control INTEGER NOT NULL DEFAULT 0`)
     } catch { /* column already exists */ }
 
+    // Project groups table
+    this.db.run(`
+      CREATE TABLE IF NOT EXISTS project_groups (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        sort_order INTEGER NOT NULL DEFAULT 0
+      );
+    `)
+
+    // Add group_id column to projects (idempotent migration)
+    try {
+      this.db.run(`ALTER TABLE projects ADD COLUMN group_id TEXT REFERENCES project_groups(id) ON DELETE SET NULL`)
+    } catch { /* column already exists */ }
+
+    // Agent groups table
+    this.db.run(`
+      CREATE TABLE IF NOT EXISTS agent_groups (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        sort_order INTEGER NOT NULL DEFAULT 0
+      );
+    `)
+
+    // Add group_id column to agents (idempotent migration)
+    try {
+      this.db.run(`ALTER TABLE agents ADD COLUMN group_id TEXT REFERENCES agent_groups(id) ON DELETE SET NULL`)
+    } catch { /* column already exists */ }
+
     // Briefing archive table
     this.db.run(`
       CREATE TABLE IF NOT EXISTS briefings (
@@ -214,7 +242,7 @@ export class DatabaseService {
     return this.getProject(id)
   }
 
-  updateProject(id: string, updates: { name?: string; setup_script?: string | null }): any {
+  updateProject(id: string, updates: { name?: string; setup_script?: string | null; group_id?: string | null }): any {
     if (!this.db) return undefined
     const setClauses: string[] = []
     const values: any[] = []
@@ -226,6 +254,10 @@ export class DatabaseService {
     if (updates.setup_script !== undefined) {
       setClauses.push('setup_script = ?')
       values.push(updates.setup_script)
+    }
+    if (updates.group_id !== undefined) {
+      setClauses.push('group_id = ?')
+      values.push(updates.group_id)
     }
 
     if (setClauses.length > 0) {
@@ -248,6 +280,59 @@ export class DatabaseService {
   removeProject(id: string): void {
     if (!this.db) return
     this.db.run('DELETE FROM projects WHERE id = ?', [id])
+    this.save()
+  }
+
+  // Project group operations
+  listProjectGroups(): any[] {
+    if (!this.db) return []
+    const stmt = this.db.prepare('SELECT * FROM project_groups ORDER BY sort_order ASC')
+    const results: any[] = []
+    while (stmt.step()) {
+      results.push(stmt.getAsObject())
+    }
+    stmt.free()
+    return results
+  }
+
+  addProjectGroup(id: string, name: string): any {
+    if (!this.db) throw new Error('Database not initialized')
+    // Get next sort_order
+    const stmt = this.db.prepare('SELECT COALESCE(MAX(sort_order), -1) + 1 AS next_order FROM project_groups')
+    stmt.step()
+    const nextOrder = (stmt.getAsObject() as { next_order: number }).next_order
+    stmt.free()
+    this.db.run('INSERT INTO project_groups (id, name, sort_order) VALUES (?, ?, ?)', [id, name, nextOrder])
+    this.save()
+    return { id, name, sort_order: nextOrder }
+  }
+
+  updateProjectGroup(id: string, updates: { name?: string }): any {
+    if (!this.db) return undefined
+    if (updates.name !== undefined) {
+      this.db.run('UPDATE project_groups SET name = ? WHERE id = ?', [updates.name, id])
+      this.save()
+    }
+    const stmt = this.db.prepare('SELECT * FROM project_groups WHERE id = ?')
+    stmt.bind([id])
+    const result = stmt.step() ? stmt.getAsObject() : undefined
+    stmt.free()
+    return result
+  }
+
+  removeProjectGroup(id: string): void {
+    if (!this.db) return
+    // Ungroup projects in this group (set group_id to null)
+    this.db.run('UPDATE projects SET group_id = NULL WHERE group_id = ?', [id])
+    this.db.run('DELETE FROM project_groups WHERE id = ?', [id])
+    this.save()
+  }
+
+  reorderProjectGroups(groupIds: string[]): void {
+    if (!this.db) return
+    for (let i = 0; i < groupIds.length; i++) {
+      this.db.run('UPDATE project_groups SET sort_order = ? WHERE id = ?', [i, groupIds[i]])
+    }
     this.save()
   }
 
@@ -410,6 +495,57 @@ export class DatabaseService {
   removeAgent(id: string): void {
     if (!this.db) return
     this.db.run('DELETE FROM agents WHERE id = ?', [id])
+    this.save()
+  }
+
+  // Agent group operations
+  listAgentGroups(): any[] {
+    if (!this.db) return []
+    const stmt = this.db.prepare('SELECT * FROM agent_groups ORDER BY sort_order ASC')
+    const results: any[] = []
+    while (stmt.step()) {
+      results.push(stmt.getAsObject())
+    }
+    stmt.free()
+    return results
+  }
+
+  addAgentGroup(id: string, name: string): any {
+    if (!this.db) throw new Error('Database not initialized')
+    const stmt = this.db.prepare('SELECT COALESCE(MAX(sort_order), -1) + 1 AS next_order FROM agent_groups')
+    stmt.step()
+    const nextOrder = (stmt.getAsObject() as { next_order: number }).next_order
+    stmt.free()
+    this.db.run('INSERT INTO agent_groups (id, name, sort_order) VALUES (?, ?, ?)', [id, name, nextOrder])
+    this.save()
+    return { id, name, sort_order: nextOrder }
+  }
+
+  updateAgentGroup(id: string, updates: { name?: string }): any {
+    if (!this.db) return undefined
+    if (updates.name !== undefined) {
+      this.db.run('UPDATE agent_groups SET name = ? WHERE id = ?', [updates.name, id])
+      this.save()
+    }
+    const stmt = this.db.prepare('SELECT * FROM agent_groups WHERE id = ?')
+    stmt.bind([id])
+    const result = stmt.step() ? stmt.getAsObject() : undefined
+    stmt.free()
+    return result
+  }
+
+  removeAgentGroup(id: string): void {
+    if (!this.db) return
+    this.db.run('UPDATE agents SET group_id = NULL WHERE group_id = ?', [id])
+    this.db.run('DELETE FROM agent_groups WHERE id = ?', [id])
+    this.save()
+  }
+
+  reorderAgentGroups(groupIds: string[]): void {
+    if (!this.db) return
+    for (let i = 0; i < groupIds.length; i++) {
+      this.db.run('UPDATE agent_groups SET sort_order = ? WHERE id = ?', [i, groupIds[i]])
+    }
     this.save()
   }
 

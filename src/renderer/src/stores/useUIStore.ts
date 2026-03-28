@@ -8,7 +8,7 @@ type DialogType = 'new-session' | 'add-project' | 'delete-session' | 'archive-se
 interface ContextMenu {
   x: number
   y: number
-  type: 'project' | 'session' | 'agent' | 'quicknotes'
+  type: 'project' | 'session' | 'agent' | 'quicknotes' | 'project-group' | 'projects-header' | 'agent-group' | 'agents-header'
   targetId: string
 }
 
@@ -34,8 +34,12 @@ interface UIState {
   // Sidebar state (moved from session store)
   expandedProjects: Set<string>
   expandedSessions: Set<string>
+  expandedGroups: Set<string>
   toggleProject: (id: string) => void
   toggleSession: (id: string) => void
+  toggleGroup: (id: string) => void
+  collapseProjects: (projectIds: string[], groupIds: string[]) => void
+  collapseAgents: (agentGroupIds: string[]) => void
   sidebarCollapsed: boolean
   toggleSidebar: () => void
   sidebarWidth: number
@@ -175,6 +179,11 @@ const setStorage = {
         for (const v of parsed.state.expandedSessions) s.add(v)
         parsed.state.expandedSessions = s
       }
+      if (Array.isArray(parsed.state.expandedGroups)) {
+        const s = new Set<string>()
+        for (const v of parsed.state.expandedGroups) s.add(v)
+        parsed.state.expandedGroups = s
+      }
     }
     return parsed
   },
@@ -186,6 +195,9 @@ const setStorage = {
     }
     if (state.expandedSessions instanceof Set) {
       state.expandedSessions = Array.from(state.expandedSessions as Set<string>)
+    }
+    if (state.expandedGroups instanceof Set) {
+      state.expandedGroups = Array.from(state.expandedGroups as Set<string>)
     }
     localStorage.setItem(name, JSON.stringify({ ...v, state }))
   },
@@ -224,6 +236,7 @@ export const useUIStore = create<UIState>()(
       // Sidebar state
       expandedProjects: new Set<string>(),
       expandedSessions: new Set<string>(),
+      expandedGroups: new Set<string>(),
 
       toggleProject: (id) =>
         set((state) => {
@@ -231,6 +244,30 @@ export const useUIStore = create<UIState>()(
           if (next.has(id)) next.delete(id)
           else next.add(id)
           return { expandedProjects: next }
+        }),
+
+      toggleGroup: (id) =>
+        set((state) => {
+          const next = new Set(state.expandedGroups)
+          if (next.has(id)) next.delete(id)
+          else next.add(id)
+          return { expandedGroups: next }
+        }),
+
+      collapseProjects: (projectIds, groupIds) =>
+        set((state) => {
+          const nextProjects = new Set(state.expandedProjects)
+          const nextGroups = new Set(state.expandedGroups)
+          for (const id of projectIds) nextProjects.delete(id)
+          for (const id of groupIds) nextGroups.delete(id)
+          return { expandedProjects: nextProjects, expandedSessions: new Set<string>(), expandedGroups: nextGroups }
+        }),
+
+      collapseAgents: (agentGroupIds) =>
+        set((state) => {
+          const nextGroups = new Set(state.expandedGroups)
+          for (const id of agentGroupIds) nextGroups.delete(id)
+          return { expandedGroups: nextGroups }
         }),
 
       toggleSession: (id) =>
@@ -397,6 +434,7 @@ export const useUIStore = create<UIState>()(
       partialize: (state) => ({
         expandedProjects: state.expandedProjects,
         expandedSessions: state.expandedSessions,
+        expandedGroups: state.expandedGroups,
         sidebarCollapsed: state.sidebarCollapsed,
         sidebarWidth: state.sidebarWidth
       })

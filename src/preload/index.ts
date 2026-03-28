@@ -44,6 +44,14 @@ const api = {
     hasConversation: (sessionId: string) => ipcRenderer.invoke('session:has-conversation', sessionId) as Promise<boolean>
   },
 
+  agentGroup: {
+    list: () => ipcRenderer.invoke('agent-group:list'),
+    add: (name: string) => ipcRenderer.invoke('agent-group:add', name),
+    update: (id: string, updates: { name?: string }) => ipcRenderer.invoke('agent-group:update', id, updates),
+    remove: (id: string) => ipcRenderer.invoke('agent-group:remove', id),
+    reorder: (groupIds: string[]) => ipcRenderer.invoke('agent-group:reorder', groupIds)
+  },
+
   agent: {
     list: () => ipcRenderer.invoke('agent:list'),
     add: (data: { id?: string; name: string; description?: string; system_prompt?: string; mcp_config?: string; bypass_permissions?: boolean; remote_control?: boolean }) =>

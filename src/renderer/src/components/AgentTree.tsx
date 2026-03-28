@@ -2,10 +2,10 @@ import { useEffect, useRef, useState } from 'react'
 import { useAgentStore } from '../stores/useAgentStore'
 import { useSessionStore } from '../stores/useSessionStore'
 import { useUIStore, getAllSessionIds, findLeafBySession } from '../stores/useUIStore'
-import { BotIcon, ChevronIcon, MoreHorizontalIcon, PlusIcon, ShellPromptIcon, NotesIcon } from './icons'
+import { BotIcon, ChevronIcon, MoreHorizontalIcon, PlusIcon, ShellPromptIcon, NotesIcon, ChevronsCollapseIcon } from './icons'
 import { useQuickNotesStore } from '../stores/useQuickNotesStore'
 import { StatusDot } from './StatusDot'
-import type { Agent, Session } from '../types'
+import type { Agent, AgentGroup, Session } from '../types'
 
 function AgentQTItem({ session, isActive }: { session: Session; isActive: boolean }) {
   const { setActiveSession } = useSessionStore()
@@ -180,12 +180,13 @@ function AgentItem({ agent, staggerClass }: { agent: Agent; staggerClass?: strin
     openContextMenu({ x: rect.right, y: rect.bottom, type: 'agent', targetId: agent.id })
   }
 
-  // Drag source for split view
+  // Drag source for split view + group assignment
   const handleDragStart = (e: React.DragEvent) => {
     if (isRenaming) { e.preventDefault(); return }
     e.dataTransfer.setData('application/json', JSON.stringify({
       type: 'session', id: agent.id
     }))
+    e.dataTransfer.setData('application/x-agent-id', agent.id)
     e.dataTransfer.effectAllowed = 'move'
     requestAnimationFrame(() => {
       itemRef.current?.classList.add('tree-item--dragging')
@@ -267,9 +268,146 @@ function AgentItem({ agent, staggerClass }: { agent: Agent; staggerClass?: strin
   )
 }
 
+function AgentGroupItem({
+  group,
+  groupAgents,
+  filteredAgents,
+  staggerClass,
+}: {
+  group: AgentGroup
+  groupAgents: Agent[]
+  filteredAgents: Agent[]
+  staggerClass: string
+}) {
+  const { expandedGroups, toggleGroup, openContextMenu, renamingId, setRenamingId } = useUIStore()
+  const { moveAgentToGroup } = useAgentStore()
+  const isExpanded = expandedGroups.has(group.id)
+  const [isRenaming, setIsRenaming] = useState(false)
+  const [renameValue, setRenameValue] = useState('')
+  const renameInputRef = useRef<HTMLInputElement>(null)
+  const [dropHighlight, setDropHighlight] = useState(false)
+
+  useEffect(() => {
+    if (renamingId === group.id) {
+      setIsRenaming(true)
+      setRenameValue(group.name)
+      setRenamingId(null)
+    }
+  }, [renamingId, group.id, group.name, setRenamingId])
+
+  useEffect(() => {
+    if (isRenaming && renameInputRef.current) {
+      renameInputRef.current.focus()
+      renameInputRef.current.select()
+    }
+  }, [isRenaming])
+
+  const commitRename = async () => {
+    const trimmed = renameValue.trim()
+    if (trimmed && trimmed !== group.name) {
+      await useAgentStore.getState().updateAgentGroup(group.id, { name: trimmed })
+    }
+    setIsRenaming(false)
+  }
+
+  const cancelRename = () => {
+    setIsRenaming(false)
+    setRenameValue(group.name)
+  }
+
+  const handleContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    openContextMenu({ x: e.clientX, y: e.clientY, type: 'agent-group', targetId: group.id })
+  }
+
+  const handleMoreClick = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+    openContextMenu({ x: rect.right, y: rect.bottom, type: 'agent-group', targetId: group.id })
+  }
+
+  const handleGroupDragOver = (e: React.DragEvent) => {
+    if (e.dataTransfer.types.includes('application/x-agent-id')) {
+      e.preventDefault()
+      e.dataTransfer.dropEffect = 'move'
+      setDropHighlight(true)
+    }
+  }
+
+  const handleGroupDragLeave = () => {
+    setDropHighlight(false)
+  }
+
+  const handleGroupDrop = (e: React.DragEvent) => {
+    setDropHighlight(false)
+    const agentId = e.dataTransfer.getData('application/x-agent-id')
+    if (agentId) {
+      e.preventDefault()
+      e.stopPropagation()
+      moveAgentToGroup(agentId, group.id)
+    }
+  }
+
+  const visibleAgents = groupAgents.filter((a) => filteredAgents.includes(a))
+  const isSearching = filteredAgents.length !== useAgentStore.getState().agents.length
+  if (visibleAgents.length === 0 && isSearching) return null
+
+  return (
+    <div className={`tree-group ${staggerClass}`}>
+      <div
+        className={`tree-item tree-item--group ${dropHighlight ? 'tree-item--drop-inside' : ''}`}
+        onClick={() => !isRenaming && toggleGroup(group.id)}
+        onContextMenu={handleContextMenu}
+        onDragOver={handleGroupDragOver}
+        onDragLeave={handleGroupDragLeave}
+        onDrop={handleGroupDrop}
+      >
+        <ChevronIcon
+          className={`tree-chevron ${isExpanded ? 'tree-chevron--open' : ''}`}
+        />
+        {isRenaming ? (
+          <input
+            ref={renameInputRef}
+            className="tree-rename-input"
+            value={renameValue}
+            onChange={(e) => setRenameValue(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') commitRename()
+              else if (e.key === 'Escape') cancelRename()
+            }}
+            onBlur={() => commitRename()}
+            onClick={(e) => e.stopPropagation()}
+          />
+        ) : (
+          <span className="tree-label tree-label--group">{group.name}</span>
+        )}
+        {!isRenaming && (
+          <button className="tree-item-actions" onClick={handleMoreClick}>
+            <MoreHorizontalIcon />
+          </button>
+        )}
+        <span className="tree-group-count">{visibleAgents.length}</span>
+      </div>
+
+      <div className={`tree-children-wrapper ${isExpanded ? 'tree-children-wrapper--open' : ''}`}>
+        <div className="tree-children">
+          {visibleAgents.map((agent, i) => (
+            <AgentItem
+              key={agent.id}
+              agent={agent}
+              staggerClass={`stagger-${Math.min(i + 5, 10)}`}
+            />
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export function AgentTree() {
-  const { agents } = useAgentStore()
-  const { searchQuery, openDialog } = useUIStore()
+  const { agents, groups } = useAgentStore()
+  const { searchQuery, openDialog, expandedGroups, collapseAgents } = useUIStore()
 
   const query = searchQuery.toLowerCase().trim()
 
@@ -280,14 +418,29 @@ export function AgentTree() {
       )
     : agents
 
-  if (agents.length === 0 && !query) {
-    return null // Don't show empty section if no agents exist yet
+  if (agents.length === 0 && groups.length === 0 && !query) {
+    return null
+  }
+
+  const ungroupedAgents = filteredAgents.filter((a) => !a.group_id)
+  const agentGroupIds = groups.map((g) => g.id)
+  const hasAnyExpanded = agentGroupIds.some((id) => expandedGroups.has(id))
+
+  const handleSectionContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    useUIStore.getState().openContextMenu({ x: e.clientX, y: e.clientY, type: 'agents-header', targetId: '' })
   }
 
   return (
     <div className="agent-tree-section stagger-3">
-      <div className="section-header">
+      <div className="section-header" onContextMenu={handleSectionContextMenu}>
         <span className="section-label">Agents</span>
+        {hasAnyExpanded && (
+          <button className="section-collapse-btn" onClick={(e) => { e.stopPropagation(); collapseAgents(agentGroupIds) }} title="Collapse all">
+            <ChevronsCollapseIcon />
+          </button>
+        )}
         <button
           className="section-add-btn"
           onClick={(e) => { e.stopPropagation(); openDialog('add-agent') }}
@@ -298,15 +451,27 @@ export function AgentTree() {
         <span className="section-count">{filteredAgents.length}</span>
       </div>
 
-      {filteredAgents.length > 0 ? (
+      {(filteredAgents.length > 0 || groups.length > 0) ? (
         <div className="tree">
-          {filteredAgents.map((agent, i) => (
+          {ungroupedAgents.map((agent, i) => (
             <AgentItem
               key={agent.id}
               agent={agent}
               staggerClass={`stagger-${Math.min(i + 4, 10)}`}
             />
           ))}
+          {groups.map((group, gi) => {
+            const groupAgents = agents.filter((a) => a.group_id === group.id)
+            return (
+              <AgentGroupItem
+                key={group.id}
+                group={group}
+                groupAgents={groupAgents}
+                filteredAgents={filteredAgents}
+                staggerClass={`stagger-${Math.min(gi + 4, 10)}`}
+              />
+            )
+          })}
         </div>
       ) : query ? (
         <div className="empty-state empty-state--compact">

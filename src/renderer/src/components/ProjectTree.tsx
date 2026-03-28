@@ -3,11 +3,11 @@ import { useProjectStore } from '../stores/useProjectStore'
 import { useSessionStore } from '../stores/useSessionStore'
 import { useUIStore, getAllSessionIds, findLeafBySession } from '../stores/useUIStore'
 import { useTeamStore } from '../stores/useTeamStore'
-import { ChevronIcon, FolderIcon, TerminalIcon, ShellPromptIcon, UserIcon, MoreHorizontalIcon, NotesIcon, WifiIcon } from './icons'
+import { ChevronIcon, FolderIcon, TerminalIcon, ShellPromptIcon, UserIcon, MoreHorizontalIcon, NotesIcon, WifiIcon, ChevronsCollapseIcon, PlusIcon } from './icons'
 import { useQuickNotesStore } from '../stores/useQuickNotesStore'
 import { StatusDot } from './StatusDot'
 import { EmptyState } from './EmptyState'
-import type { Project, Session, TeamMember, TaskData } from '../types'
+import type { Project, ProjectGroup, Session, TeamMember, TaskData } from '../types'
 
 function TaskItem({ task }: { task: TaskData }) {
   const statusIcon = task.status === 'completed' ? 'completed'
@@ -530,10 +530,174 @@ function ProjectItem({ project, staggerClass, projectIndex, onDragStart: onProje
   )
 }
 
-export function ProjectTree() {
-  const { projects, reorderProjects } = useProjectStore()
+function GroupItem({
+  group,
+  groupProjects,
+  filteredProjects: filtered,
+  sessions: allSessions,
+  staggerClass,
+  projectDragHandlers,
+  dragState,
+}: {
+  group: ProjectGroup
+  groupProjects: Project[]
+  filteredProjects: Project[]
+  sessions: Session[]
+  staggerClass: string
+  projectDragHandlers: {
+    onDragStart: (e: React.DragEvent, index: number) => void
+    onDragOver: (e: React.DragEvent, index: number) => void
+    onDragEnd: () => void
+    onDrop: (e: React.DragEvent, index: number) => void
+  }
+  dragState: { dragIndex: number | null; dropTarget: { index: number; position: 'above' | 'below' } | null }
+}) {
+  const { expandedGroups, toggleGroup, openContextMenu, renamingId, setRenamingId } = useUIStore()
+  const { moveProjectToGroup } = useProjectStore()
   const { sessions } = useSessionStore()
-  const { searchQuery } = useUIStore()
+  const isExpanded = expandedGroups.has(group.id)
+  const [isRenaming, setIsRenaming] = useState(false)
+  const [renameValue, setRenameValue] = useState('')
+  const renameInputRef = useRef<HTMLInputElement>(null)
+  const [dropHighlight, setDropHighlight] = useState(false)
+
+  // Watch renamingId from UI store (context menu trigger)
+  useEffect(() => {
+    if (renamingId === group.id) {
+      setIsRenaming(true)
+      setRenameValue(group.name)
+      setRenamingId(null)
+    }
+  }, [renamingId, group.id, group.name, setRenamingId])
+
+  useEffect(() => {
+    if (isRenaming && renameInputRef.current) {
+      renameInputRef.current.focus()
+      renameInputRef.current.select()
+    }
+  }, [isRenaming])
+
+  const commitRename = async () => {
+    const trimmed = renameValue.trim()
+    if (trimmed && trimmed !== group.name) {
+      await useProjectStore.getState().updateGroup(group.id, { name: trimmed })
+    }
+    setIsRenaming(false)
+  }
+
+  const cancelRename = () => {
+    setIsRenaming(false)
+    setRenameValue(group.name)
+  }
+
+  const handleContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    openContextMenu({ x: e.clientX, y: e.clientY, type: 'project-group', targetId: group.id })
+  }
+
+  const handleMoreClick = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+    openContextMenu({ x: rect.right, y: rect.bottom, type: 'project-group', targetId: group.id })
+  }
+
+  // Accept project drops to assign to this group
+  const handleGroupDragOver = (e: React.DragEvent) => {
+    if (e.dataTransfer.types.includes('application/x-project-reorder')) {
+      e.preventDefault()
+      e.dataTransfer.dropEffect = 'move'
+      setDropHighlight(true)
+    }
+  }
+
+  const handleGroupDragLeave = () => {
+    setDropHighlight(false)
+  }
+
+  const handleGroupDrop = (e: React.DragEvent) => {
+    setDropHighlight(false)
+    const projectId = e.dataTransfer.getData('application/x-project-id')
+    if (projectId) {
+      e.preventDefault()
+      e.stopPropagation()
+      moveProjectToGroup(projectId, group.id)
+    }
+  }
+
+  // Filter to only show projects that match search
+  const visibleProjects = groupProjects.filter((p) => filtered.includes(p))
+
+  // Hide group only when search is active and nothing matches
+  const isSearching = filtered.length !== useProjectStore.getState().projects.length
+  if (visibleProjects.length === 0 && isSearching) return null
+
+  return (
+    <div className={`tree-group ${staggerClass}`}>
+      <div
+        className={`tree-item tree-item--group ${dropHighlight ? 'tree-item--drop-inside' : ''}`}
+        onClick={() => !isRenaming && toggleGroup(group.id)}
+        onContextMenu={handleContextMenu}
+        onDragOver={handleGroupDragOver}
+        onDragLeave={handleGroupDragLeave}
+        onDrop={handleGroupDrop}
+      >
+        <ChevronIcon
+          className={`tree-chevron ${isExpanded ? 'tree-chevron--open' : ''}`}
+        />
+        {isRenaming ? (
+          <input
+            ref={renameInputRef}
+            className="tree-rename-input"
+            value={renameValue}
+            onChange={(e) => setRenameValue(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') commitRename()
+              else if (e.key === 'Escape') cancelRename()
+            }}
+            onBlur={() => commitRename()}
+            onClick={(e) => e.stopPropagation()}
+          />
+        ) : (
+          <span className="tree-label tree-label--group">{group.name}</span>
+        )}
+        {!isRenaming && (
+          <button className="tree-item-actions" onClick={handleMoreClick}>
+            <MoreHorizontalIcon />
+          </button>
+        )}
+        <span className="tree-group-count">{visibleProjects.length}</span>
+      </div>
+
+      <div className={`tree-children-wrapper ${isExpanded ? 'tree-children-wrapper--open' : ''}`}>
+        <div className="tree-children">
+          {visibleProjects.map((project, i) => {
+            const globalIndex = allSessions.indexOf(project as any) // We'll use project's index in allProjects
+            const pIdx = useProjectStore.getState().projects.indexOf(project)
+            return (
+              <ProjectItem
+                key={project.id}
+                project={project}
+                staggerClass={`stagger-${Math.min(i + 6, 10)}`}
+                projectIndex={pIdx}
+                onDragStart={projectDragHandlers.onDragStart}
+                onDragOver={projectDragHandlers.onDragOver}
+                onDragEnd={projectDragHandlers.onDragEnd}
+                onDrop={projectDragHandlers.onDrop}
+                dropPosition={dragState.dropTarget?.index === pIdx && dragState.dragIndex !== pIdx ? dragState.dropTarget.position : null}
+              />
+            )
+          })}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+export function ProjectTree() {
+  const { projects, groups, reorderProjects, addGroup, moveProjectToGroup } = useProjectStore()
+  const { sessions } = useSessionStore()
+  const { searchQuery, expandedProjects, expandedSessions, expandedGroups, collapseProjects, openDialog } = useUIStore()
   const [dragIndex, setDragIndex] = useState<number | null>(null)
   const [dropTarget, setDropTarget] = useState<{ index: number; position: 'above' | 'below' } | null>(null)
 
@@ -560,7 +724,9 @@ export function ProjectTree() {
 
   const handleDragStart = (e: React.DragEvent, index: number) => {
     if (!isDragEnabled) { e.preventDefault(); return }
+    const project = projects[index]
     e.dataTransfer.setData('application/x-project-reorder', String(index))
+    e.dataTransfer.setData('application/x-project-id', project.id)
     e.dataTransfer.effectAllowed = 'move'
     setDragIndex(index)
   }
@@ -598,6 +764,14 @@ export function ProjectTree() {
     handleDragEnd()
   }
 
+  const projectDragHandlers = {
+    onDragStart: handleDragStart,
+    onDragOver: handleDragOver,
+    onDragEnd: handleDragEnd,
+    onDrop: handleDrop
+  }
+  const dragState = { dragIndex, dropTarget }
+
   if (filteredProjects.length === 0) {
     return (
       <>
@@ -617,27 +791,68 @@ export function ProjectTree() {
     filteredProjects.some((p) => p.id === s.project_id) && s.status !== 'deleted'
   ).length
 
+  // Split projects into ungrouped and per-group
+  const ungroupedProjects = filteredProjects.filter((p) => !p.group_id)
+  const projectGroupIds = groups.map((g) => g.id)
+  const hasAnyExpanded = expandedProjects.size > 0 || expandedSessions.size > 0 ||
+    projectGroupIds.some((id) => expandedGroups.has(id))
+
+  const handleSectionContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    useUIStore.getState().openContextMenu({ x: e.clientX, y: e.clientY, type: 'projects-header', targetId: '' })
+  }
+
   return (
     <>
-      <div className="section-header stagger-4">
+      <div className="section-header stagger-4" onContextMenu={handleSectionContextMenu}>
         <span className="section-label">Projects</span>
+        {hasAnyExpanded && (
+          <button className="section-collapse-btn" onClick={(e) => { e.stopPropagation(); collapseProjects(projects.map((p) => p.id), projectGroupIds) }} title="Collapse all">
+            <ChevronsCollapseIcon />
+          </button>
+        )}
+        <button className="section-add-btn" onClick={(e) => { e.stopPropagation(); openDialog('add-project') }} title="Add project">
+          <PlusIcon />
+        </button>
         <span className="section-count">{totalSessions}</span>
       </div>
 
       <div className="tree" onDragLeave={() => setDropTarget(null)}>
-        {filteredProjects.map((project, i) => (
-          <ProjectItem
-            key={project.id}
-            project={project}
-            staggerClass={`stagger-${Math.min(i + 5, 10)}`}
-            projectIndex={i}
-            onDragStart={handleDragStart}
-            onDragOver={handleDragOver}
-            onDragEnd={handleDragEnd}
-            onDrop={handleDrop}
-            dropPosition={dropTarget?.index === i && dragIndex !== i ? dropTarget.position : null}
-          />
-        ))}
+        {/* Ungrouped projects */}
+        {ungroupedProjects.map((project) => {
+          const pIdx = projects.indexOf(project)
+          return (
+            <ProjectItem
+              key={project.id}
+              project={project}
+              staggerClass={`stagger-${Math.min(pIdx + 5, 10)}`}
+              projectIndex={pIdx}
+              onDragStart={handleDragStart}
+              onDragOver={handleDragOver}
+              onDragEnd={handleDragEnd}
+              onDrop={handleDrop}
+              dropPosition={dropTarget?.index === pIdx && dragIndex !== pIdx ? dropTarget.position : null}
+            />
+          )
+        })}
+
+        {/* Groups */}
+        {groups.map((group, gi) => {
+          const groupProjects = projects.filter((p) => p.group_id === group.id)
+          return (
+            <GroupItem
+              key={group.id}
+              group={group}
+              groupProjects={groupProjects}
+              filteredProjects={filteredProjects}
+              sessions={sessions}
+              staggerClass={`stagger-${Math.min(gi + 5, 10)}`}
+              projectDragHandlers={projectDragHandlers}
+              dragState={dragState}
+            />
+          )
+        })}
       </div>
     </>
   )
