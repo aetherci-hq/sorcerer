@@ -88,39 +88,11 @@ export function TerminalView({ sessionId, isFocused }: TerminalViewProps) {
   const restartSession = useSessionStore((s) => s.restartSession)
   const restartAgent = useAgentStore((s) => s.restartAgent)
 
-  // Watch for auto-restarted agents — when status flips back to active, re-attach
-  const agentStatus = useAgentStore((s) => s.agents.find((a) => a.id === sessionId)?.status)
-  const sessionStatus = useSessionStore((s) => s.sessions.find((ss) => ss.id === sessionId)?.status)
-  const currentStatus = agentStatus || sessionStatus
-
-  useEffect(() => {
-    if (exited && currentStatus === 'active') {
-      // Agent/session was restarted (auto-restart or manual) — re-attach
-      setExited(false)
-      const cached = terminalCache.get(sessionId)
-      if (cached) {
-        cached.terminal.clear()
-        // Re-subscribe to new PTY data
-        if (cached._ipcCleanup) {
-          cached._ipcCleanup()
-        }
-        const unsubData = getApi().terminal.onData(sessionId, (data: string) => {
-          cached.terminal.write(data)
-        })
-        const unsubExit = getApi().terminal.onExit(sessionId, (exitCode: number) => {
-          cached.terminal.writeln(`\r\n\x1b[90m[Process exited with code ${exitCode}]\x1b[0m`)
-          setExited(true)
-          const sess = useSessionStore.getState().sessions.find((s) => s.id === sessionId)
-          if (sess) {
-            useSessionStore.getState().updateSessionInStore(sessionId, { status: 'idle', pid: null })
-          } else {
-            useAgentStore.getState().updateAgentInStore(sessionId, { status: 'idle', pid: null })
-          }
-        })
-        cached._ipcCleanup = () => { unsubData(); unsubExit() }
-      }
-    }
-  }, [exited, currentStatus, sessionId])
+  // Check if this is an auto-restart agent
+  const autoRestartAgent = useAgentStore((s) => {
+    const a = s.agents.find((a) => a.id === sessionId)
+    return a?.auto_restart && a?.mission ? a : null
+  })
 
   const handleRestart = async () => {
     setExited(false)
@@ -226,6 +198,14 @@ export function TerminalView({ sessionId, isFocused }: TerminalViewProps) {
       })
 
       const unsubExit = getApi().terminal.onExit(sessionId, (exitCode: number) => {
+        // Check if this is an auto-restart agent — if so, don't show exit overlay
+        const agent = useAgentStore.getState().agents.find((a) => a.id === sessionId)
+        if (agent?.auto_restart && agent?.mission) {
+          terminal.writeln(`\r\n\x1b[90m[Process exited with code ${exitCode} — restarting in ${agent.restart_delay}s...]\x1b[0m`)
+          useAgentStore.getState().updateAgentInStore(sessionId, { status: 'idle', pid: null })
+          // Don't set exited=true — terminal stays open, new PTY data will flow in
+          return
+        }
         terminal.writeln(`\r\n\x1b[90m[Process exited with code ${exitCode}]\x1b[0m`)
         setExited(true)
         // Update whichever store owns this ID

@@ -226,6 +226,22 @@ export function ContextMenu() {
       }},
       { type: 'separator' as const },
       { label: 'Rename', icon: <EditIcon className={iconClass} />, shortcut: 'F2', action: () => setRenamingId(contextMenu.targetId) },
+      ...(targetAgent?.mission ? [
+        { label: 'Edit Mission', icon: <EditIcon className={iconClass} />, action: () => {
+          const newMission = prompt('Edit mission:', targetAgent.mission)
+          if (newMission !== null) {
+            getApi().agent.update(contextMenu.targetId, { mission: newMission })
+            useAgentStore.getState().updateAgentInStore(contextMenu.targetId, { mission: newMission })
+            addToast(newMission ? 'Mission updated' : 'Mission cleared', 'success')
+          }
+        }},
+        { label: 'Disable Mission', icon: <StopIcon className={iconClass} />, danger: true, action: async () => {
+          await killAgent(contextMenu.targetId)
+          await getApi().agent.update(contextMenu.targetId, { mission: '', auto_start: 0, auto_restart: 0 })
+          useAgentStore.getState().updateAgentInStore(contextMenu.targetId, { mission: '', auto_start: 0, auto_restart: 0 })
+          addToast('Mission disabled — agent is now interactive', 'info')
+        }}
+      ] : []),
       ...(() => {
         const { groups: agentGroups, moveAgentToGroup } = useAgentStore.getState()
         const currentAgent = agents.find((a) => a.id === contextMenu.targetId)
