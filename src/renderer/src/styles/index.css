@@ -2189,6 +2189,60 @@ select.dialog-input option {
   word-break: break-word;
 }
 
+.land-health {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  font-size: 12.5px;
+  line-height: 1.4;
+  margin: 8px 0;
+}
+
+.land-health--clean {
+  color: #86efac;
+  background: rgba(134, 239, 172, 0.08);
+  border: 1px solid rgba(134, 239, 172, 0.2);
+}
+
+.land-health--info {
+  color: var(--text-secondary);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+}
+
+.land-health--warning {
+  color: #e0af68;
+  background: rgba(224, 175, 104, 0.08);
+  border: 1px solid rgba(224, 175, 104, 0.2);
+}
+
+.land-health--danger {
+  color: #f7768e;
+  background: rgba(247, 118, 142, 0.08);
+  border: 1px solid rgba(247, 118, 142, 0.2);
+}
+
+.land-health-icon {
+  font-weight: 700;
+  font-size: 13px;
+  line-height: 1;
+  flex-shrink: 0;
+  width: 16px;
+  text-align: center;
+}
+
+.land-health-text {
+  font-weight: 500;
+}
+
+.land-health-hint {
+  margin: 3px 0 0;
+  font-size: 11.5px;
+  opacity: 0.8;
+}
+
 /* ============================
    EMPTY STATE
    ============================ */

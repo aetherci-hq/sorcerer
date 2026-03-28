@@ -20,6 +20,7 @@ interface SessionContext {
   gitSummary?: string
   scrollbackTail?: string
   quickNotes?: string
+  divergence?: { behind: number; ahead: number }
 }
 
 interface AgentContext {
@@ -162,10 +163,32 @@ export async function collectGitSummaries(
   sessions: SessionContext[]
 ): Promise<void> {
   const allSessions = db.listSessions()
+  const allProjects = db.listProjects()
   for (const ctx of sessions) {
     const dbSession = allSessions.find((s: any) => s.name === ctx.name && ctx.projectName)
     if (dbSession?.worktree_path) {
       ctx.gitSummary = await getGitSummary(dbSession.worktree_path)
+
+      // Divergence check for worktree sessions
+      const project = allProjects.find((p: any) => p.id === dbSession.project_id)
+      if (project && dbSession.worktree_path !== project.path && dbSession.branch) {
+        try {
+          const git = simpleGit(project.path as string)
+          let defaultBranch = 'main'
+          try {
+            const branches = await git.branch()
+            if (branches.all.includes('master') && !branches.all.includes('main')) defaultBranch = 'master'
+          } catch { /* use main */ }
+
+          const behind = await git.raw(['rev-list', '--count', `${dbSession.branch}..${defaultBranch}`]).catch(() => '0')
+          const ahead = await git.raw(['rev-list', '--count', `${defaultBranch}..${dbSession.branch}`]).catch(() => '0')
+          const b = parseInt(behind.trim()) || 0
+          const a = parseInt(ahead.trim()) || 0
+          if (b > 0 || a > 0) {
+            ctx.divergence = { behind: b, ahead: a }
+          }
+        } catch { /* skip */ }
+      }
     }
   }
 }
@@ -178,6 +201,7 @@ function buildPromptContext(data: BriefingData): string {
     for (const s of data.sessions) {
       lines.push(`- **${s.projectName} / ${s.name}** [${s.status}] (created ${s.age})`)
       if (s.branch) lines.push(`  Branch: ${s.branch}`)
+      if (s.divergence) lines.push(`  Divergence: ${s.divergence.behind} commits behind main, ${s.divergence.ahead} ahead`)
       if (s.gitSummary) lines.push(`  Git: ${s.gitSummary}`)
       if (s.quickNotes) lines.push(`  Notes: ${s.quickNotes}`)
       if (s.scrollbackTail) lines.push(`  Last terminal output:\n  \`\`\`\n  ${s.scrollbackTail}\n  \`\`\``)
@@ -210,6 +234,8 @@ Pick the ONE session or agent that most needs the user's attention right now. Ex
 
 ## Needs Attention
 List any sessions or agents that have issues or loose ends — uncommitted changes, sessions idle for a long time, stale branches, failed processes, or notes that suggest unfinished work. Use bullet points, one per item. If nothing needs attention, write "All clear."
+
+**Branch divergence is critical to flag.** If a session shows "X commits behind main", warn the user — the longer they wait, the harder it will be to land. Branches 10+ commits behind should be called out urgently.
 
 ## Clean & Ready
 Briefly list sessions that are in a good state — clean git status, recently completed work, or idle with nothing pending. Keep this short.
