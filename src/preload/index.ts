@@ -92,6 +92,11 @@ const api = {
       const handler = (_event: any, data: { sessionId: string; reason: string }) => callback(data)
       ipcRenderer.on('session:resume-failed', handler)
       return () => ipcRenderer.removeListener('session:resume-failed', handler)
+    },
+    onAgentRestarted: (callback: (sessionId: string, status: string, pid: number | null) => void) => {
+      const handler = (_event: any, sessionId: string, status: string, pid: number | null) => callback(sessionId, status, pid)
+      ipcRenderer.on('agent:restarted', handler)
+      return () => ipcRenderer.removeListener('agent:restarted', handler)
     }
   },
 

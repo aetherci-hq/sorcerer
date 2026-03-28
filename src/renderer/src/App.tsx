@@ -116,6 +116,11 @@ export function App() {
       useSessionStore.getState().updateSessionInStore(sessionId, { status: status as any, pid })
     })
 
+    // Listen for auto-restarted agents — update store so TerminalView re-attaches
+    const unsubAgentRestarted = getApi().terminal.onAgentRestarted((sessionId: string, status: string, pid: number | null) => {
+      useAgentStore.getState().updateAgentInStore(sessionId, { status: status as any, pid })
+    })
+
     // Track which sessions are popped out to separate windows
     const unsubPopoutOpened = getApi().popout.onOpened((sessionId: string) => {
       useUIStore.getState().addPoppedOut(sessionId)
@@ -202,6 +207,7 @@ export function App() {
       unsubPopoutOpened()
       unsubPopoutClosed()
       unsubResumeFailed()
+      unsubAgentRestarted()
       window.removeEventListener('keydown', briefingKeyHandler)
       window.removeEventListener('mousemove', activityHandler)
       window.removeEventListener('keydown', activityHandler)
