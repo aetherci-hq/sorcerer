@@ -149,9 +149,18 @@ interface ClaudeStats {
   today: { messages: number; sessions: number; toolCalls: number; tokens: number }
   week: { messages: number; toolCalls: number; tokens: number }
   allTime: { totalSessions: number; totalMessages: number; firstSessionDate: string | null }
+  subscription: string
+  rateLimitTier: string
 }
 
-function StatsPopover({ sessions, onClose }: { sessions: any[]; onClose: () => void }) {
+function formatTier(sub: string, tier: string): string {
+  // e.g. "max" + "default_claude_max_5x" → "Max 5x"
+  const label = sub ? sub.charAt(0).toUpperCase() + sub.slice(1) : 'Free'
+  const multiplier = tier.match(/(\d+)x$/)?.[1]
+  return multiplier ? `${label} ${multiplier}x` : label
+}
+
+function StatsPopover({ sessions, onClose, pinned, onTogglePin }: { sessions: any[]; onClose: () => void; pinned: boolean; onTogglePin: () => void }) {
   const popoverRef = useRef<HTMLDivElement>(null)
   const [claudeStats, setClaudeStats] = useState<ClaudeStats | null>(null)
 
@@ -196,7 +205,21 @@ function StatsPopover({ sessions, onClose }: { sessions: any[]; onClose: () => v
 
   return (
     <div className="stats-popover" ref={popoverRef}>
-      <div className="stats-popover-header">Today's Activity</div>
+      <div className="stats-popover-header">
+        Today's Activity
+        <div className="stats-popover-header-actions">
+          {claudeStats?.subscription && (
+            <span className="stats-popover-tier">{formatTier(claudeStats.subscription, claudeStats.rateLimitTier)}</span>
+          )}
+          <button
+            className={`stats-popover-pin ${pinned ? 'stats-popover-pin--active' : ''}`}
+            onClick={onTogglePin}
+            title={pinned ? 'Unpin stats' : 'Pin stats to sidebar'}
+          >
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M4.146.146A.5.5 0 0 1 4.5 0h7a.5.5 0 0 1 .5.5c0 .68-.342 1.174-.646 1.479-.126.125-.25.224-.354.298v4.431l.078.048c.203.127.476.314.751.555C12.36 7.775 13 8.527 13 9.5a.5.5 0 0 1-.5.5h-4v4.5a.5.5 0 0 1-1 0V10h-4a.5.5 0 0 1-.5-.5c0-.973.64-1.725 1.17-2.189A5.921 5.921 0 0 1 5 6.708V2.277a2.77 2.77 0 0 1-.354-.298C4.342 1.674 4 1.179 4 .5a.5.5 0 0 1 .146-.354z"/></svg>
+          </button>
+        </div>
+      </div>
       <div className="stats-popover-grid">
         <div className="stats-popover-stat">
           <span className="stats-popover-value">{activeSessions.length}</span>
@@ -257,12 +280,59 @@ function StatsPopover({ sessions, onClose }: { sessions: any[]; onClose: () => v
   )
 }
 
+function PinnedStats() {
+  const [stats, setStats] = useState<ClaudeStats | null>(null)
+
+  useEffect(() => {
+    let mounted = true
+    const load = () => {
+      getApi().system.claudeStats().then((s) => { if (mounted) setStats(s) }).catch(() => {})
+    }
+    load()
+    const interval = setInterval(load, 30_000)
+    return () => { mounted = false; clearInterval(interval) }
+  }, [])
+
+  if (!stats) return null
+
+  return (
+    <div className="pinned-stats">
+      <div className="pinned-stats-row">
+        <span className="pinned-stats-item">
+          <span className="pinned-stats-value">{stats.today.messages}</span>
+          <span className="pinned-stats-label">msgs</span>
+        </span>
+        <span className="pinned-stats-item">
+          <span className="pinned-stats-value">{stats.today.toolCalls}</span>
+          <span className="pinned-stats-label">tools</span>
+        </span>
+        <span className="pinned-stats-item">
+          <span className="pinned-stats-value">{formatTokenCount(stats.today.tokens)}</span>
+          <span className="pinned-stats-label">tokens</span>
+        </span>
+        {stats.subscription && (
+          <span className="pinned-stats-tier">{formatTier(stats.subscription, stats.rateLimitTier)}</span>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export function SidebarFooter({ collapsed, width = 260 }: { collapsed: boolean; width?: number }) {
   const sessions = useSessionStore((s) => s.sessions)
   const openDialog = useUIStore((s) => s.openDialog)
   const { displayName, initial, avatarSrc } = useUserProfile()
   const { time, date } = useClock()
   const [showStats, setShowStats] = useState(false)
+  const [pinned, setPinned] = useState(() => localStorage.getItem('sorcerer-stats-pinned') === 'true')
+
+  const togglePin = useCallback(() => {
+    setPinned((prev) => {
+      const next = !prev
+      localStorage.setItem('sorcerer-stats-pinned', String(next))
+      return next
+    })
+  }, [])
 
   const activeCount = sessions.filter((s) => s.status === 'active').length
 
@@ -288,7 +358,8 @@ export function SidebarFooter({ collapsed, width = 260 }: { collapsed: boolean; 
 
   return (
     <div className={`sidebar-footer stagger-10${compact ? ' sidebar-footer--compact' : ''}`}>
-      {showStats && <StatsPopover sessions={sessions} onClose={handleCloseStats} />}
+      {pinned && <PinnedStats />}
+      {showStats && <StatsPopover sessions={sessions} onClose={handleCloseStats} pinned={pinned} onTogglePin={togglePin} />}
       <button
         className="avatar-ring-btn"
         data-activity={activityLevel}

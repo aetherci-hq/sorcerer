@@ -145,6 +145,8 @@ const api = {
       today: { messages: number; sessions: number; toolCalls: number; tokens: number }
       week: { messages: number; toolCalls: number; tokens: number }
       allTime: { totalSessions: number; totalMessages: number; firstSessionDate: string | null }
+      subscription: string
+      rateLimitTier: string
     } | null>,
     userInfo: () => ipcRenderer.invoke('system:userInfo'),
     accountPicture: () => ipcRenderer.invoke('system:accountPicture'),

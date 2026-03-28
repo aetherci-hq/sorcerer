@@ -1087,6 +1087,51 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+.stats-popover-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.stats-popover-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.stats-popover-tier {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--accent);
+  background: var(--accent-glow);
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  letter-spacing: 0.02em;
+}
+
+.stats-popover-pin {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: all 0.15s;
+}
+
+.stats-popover-pin:hover {
+  color: var(--text-secondary);
+  background: var(--bg-hover);
+}
+
+.stats-popover-pin--active {
+  color: var(--accent);
+}
+
 .stats-popover-header--sub {
   margin-top: 4px;
   padding-top: 8px;
@@ -1098,6 +1143,46 @@ body {
   color: var(--text-muted);
   padding: 6px 12px 10px;
   text-align: center;
+}
+
+/* Pinned stats strip */
+.pinned-stats {
+  padding: 5px 10px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.pinned-stats-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.pinned-stats-item {
+  display: flex;
+  align-items: baseline;
+  gap: 3px;
+}
+
+.pinned-stats-value {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.pinned-stats-label {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.pinned-stats-tier {
+  margin-left: auto;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--accent);
+  background: var(--accent-glow);
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
 }
 
 .user-info {

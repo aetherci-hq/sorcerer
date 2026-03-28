@@ -678,6 +678,19 @@ export function registerIPC(
         }
       }
 
+      // Read subscription/tier info from credentials
+      let subscriptionType = ''
+      let rateLimitTier = ''
+      try {
+        const credsPath = path.join(os.homedir(), '.claude', '.credentials.json')
+        if (fs.existsSync(credsPath)) {
+          const creds = JSON.parse(fs.readFileSync(credsPath, 'utf8'))
+          const oauth = creds.claudeAiOauth || {}
+          subscriptionType = oauth.subscriptionType || ''
+          rateLimitTier = oauth.rateLimitTier || ''
+        }
+      } catch { /* ignore */ }
+
       return {
         today: {
           messages: todayActivity?.messageCount || 0,
@@ -694,7 +707,9 @@ export function registerIPC(
           totalSessions: data.totalSessions || 0,
           totalMessages: data.totalMessages || 0,
           firstSessionDate: data.firstSessionDate || null
-        }
+        },
+        subscription: subscriptionType,
+        rateLimitTier
       }
     } catch {
       return null
