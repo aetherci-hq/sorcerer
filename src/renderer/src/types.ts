@@ -70,6 +70,11 @@ export interface Agent {
   mcp_config: string
   bypass_permissions: number
   remote_control: number
+  mission: string
+  auto_start: number
+  auto_restart: number
+  restart_delay: number
+  max_restarts: number
   group_id?: string | null
   status: 'active' | 'idle' | 'archived'
   pid: number | null

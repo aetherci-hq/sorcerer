@@ -840,7 +840,7 @@ export function listAgents({ db }: HandlerServices): any[] {
 
 function writeAgentManifest(
   agentId: string,
-  data: { name: string; description?: string; system_prompt?: string; mcp_config?: string; created_at?: number }
+  data: { name: string; description?: string; system_prompt?: string; mcp_config?: string; mission?: string; created_at?: number }
 ): void {
   const dir = path.join(os.homedir(), '.sorcerer', 'agents', agentId)
   fs.mkdirSync(dir, { recursive: true })
@@ -849,6 +849,7 @@ function writeAgentManifest(
     description: data.description || '',
     system_prompt: data.system_prompt || '',
     mcp_config: data.mcp_config || '',
+    mission: data.mission || '',
     created_at: data.created_at || Math.floor(Date.now() / 1000)
   }
   fs.writeFileSync(path.join(dir, 'agent.json'), JSON.stringify(manifest, null, 2), 'utf8')
@@ -856,7 +857,11 @@ function writeAgentManifest(
 
 export function addAgent(
   { db }: HandlerServices,
-  data: { id?: string; name: string; description?: string; system_prompt?: string; mcp_config?: string; bypass_permissions?: boolean; remote_control?: boolean }
+  data: {
+    id?: string; name: string; description?: string; system_prompt?: string; mcp_config?: string;
+    bypass_permissions?: boolean; remote_control?: boolean;
+    mission?: string; auto_start?: boolean; auto_restart?: boolean; restart_delay?: number; max_restarts?: number
+  }
 ): any {
   const id = data.id || uuidv4()
   // Create scratch directory for this agent
@@ -865,7 +870,12 @@ export function addAgent(
   const agent = db.addAgent({
     id, ...data,
     bypass_permissions: (data.bypass_permissions !== false) ? 1 : 0,
-    remote_control: data.remote_control ? 1 : 0
+    remote_control: data.remote_control ? 1 : 0,
+    mission: data.mission || '',
+    auto_start: data.auto_start ? 1 : 0,
+    auto_restart: data.auto_restart ? 1 : 0,
+    restart_delay: data.restart_delay ?? 30,
+    max_restarts: data.max_restarts ?? 10
   })
   writeAgentManifest(id, data)
   return agent
@@ -878,12 +888,13 @@ export function updateAgent(
 ): any {
   const agent = db.updateAgent(id, updates)
   // Keep manifest in sync when metadata changes
-  if (agent && (updates.name || updates.description || updates.system_prompt || updates.mcp_config)) {
+  if (agent && (updates.name || updates.description || updates.system_prompt || updates.mcp_config || updates.mission !== undefined)) {
     writeAgentManifest(id, {
       name: agent.name as string,
       description: agent.description as string,
       system_prompt: agent.system_prompt as string,
       mcp_config: agent.mcp_config as string,
+      mission: agent.mission as string,
       created_at: agent.created_at as number
     })
   }
@@ -929,6 +940,11 @@ export function startAgent(
   if (agent.mcp_config) args.push('--mcp-config', agent.mcp_config as string)
   if (agent.system_prompt) args.push('--append-system-prompt', agent.system_prompt as string)
 
+  // Autonomous mode: run mission non-interactively
+  if (agent.mission) {
+    args.push('-p', agent.mission as string)
+  }
+
   pty.spawn(agentId, cwd, {
     command: resolveClaudeBinary(),
     args,
@@ -937,8 +953,8 @@ export function startAgent(
   const pid = pty.getPid(agentId)
   db.updateAgent(agentId, { status: 'active', pid: pid ?? null })
 
-  // Enable Remote Control if configured
-  if (agent.remote_control) {
+  // Enable Remote Control if configured (only for interactive agents)
+  if (agent.remote_control && !agent.mission) {
     enableRemoteControl(pty, agentId)
   }
 

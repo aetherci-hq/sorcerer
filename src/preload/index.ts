@@ -55,8 +55,11 @@ const api = {
 
   agent: {
     list: () => ipcRenderer.invoke('agent:list'),
-    add: (data: { id?: string; name: string; description?: string; system_prompt?: string; mcp_config?: string; bypass_permissions?: boolean; remote_control?: boolean }) =>
-      ipcRenderer.invoke('agent:add', data),
+    add: (data: {
+      id?: string; name: string; description?: string; system_prompt?: string; mcp_config?: string;
+      bypass_permissions?: boolean; remote_control?: boolean;
+      mission?: string; auto_start?: boolean; auto_restart?: boolean; restart_delay?: number; max_restarts?: number
+    }) => ipcRenderer.invoke('agent:add', data),
     update: (id: string, updates: any) => ipcRenderer.invoke('agent:update', id, updates),
     remove: (id: string) => ipcRenderer.invoke('agent:remove', id),
     start: (id: string) => ipcRenderer.invoke('agent:start', id),

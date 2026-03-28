@@ -11,7 +11,11 @@ interface AgentState {
   loading: boolean
 
   loadAgents: () => Promise<void>
-  addAgent: (data: { id?: string; name: string; description?: string; system_prompt?: string; mcp_config?: string; bypass_permissions?: boolean; remote_control?: boolean }) => Promise<string | null>
+  addAgent: (data: {
+    id?: string; name: string; description?: string; system_prompt?: string; mcp_config?: string;
+    bypass_permissions?: boolean; remote_control?: boolean;
+    mission?: string; auto_start?: boolean; auto_restart?: boolean; restart_delay?: number; max_restarts?: number
+  }) => Promise<string | null>
   updateAgent: (id: string, updates: Partial<Agent>) => Promise<void>
   removeAgent: (id: string) => Promise<void>
   startAgent: (id: string) => Promise<void>

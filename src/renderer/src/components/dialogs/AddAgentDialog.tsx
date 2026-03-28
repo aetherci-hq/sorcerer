@@ -13,21 +13,30 @@ export function AddAgentDialog() {
   const { addToast } = useToastStore()
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
+  const [mission, setMission] = useState('')
   const [systemPrompt, setSystemPrompt] = useState('')
   const [mcpConfig, setMcpConfig] = useState('')
   const [bypassPermissions, setBypassPermissions] = useState(true)
   const [remoteControl, setRemoteControl] = useState(false)
+  const [autoStart, setAutoStart] = useState(false)
+  const [autoRestart, setAutoRestart] = useState(false)
+  const [restartDelay, setRestartDelay] = useState('30')
   const [showAdvanced, setShowAdvanced] = useState(false)
 
   const open = activeDialog === 'add-agent'
+  const isAutonomous = mission.trim().length > 0
 
   const handleClose = () => {
     setName('')
     setDescription('')
+    setMission('')
     setSystemPrompt('')
     setMcpConfig('')
     setBypassPermissions(true)
     setRemoteControl(false)
+    setAutoStart(false)
+    setAutoRestart(false)
+    setRestartDelay('30')
     setShowAdvanced(false)
     closeDialog()
   }
@@ -38,15 +47,19 @@ export function AddAgentDialog() {
     const id = await addAgent({
       name: name.trim(),
       description: description.trim(),
+      mission: mission.trim(),
       system_prompt: systemPrompt.trim(),
       mcp_config: mcpConfig.trim(),
       bypass_permissions: bypassPermissions,
-      remote_control: remoteControl
+      remote_control: remoteControl,
+      auto_start: autoStart,
+      auto_restart: autoRestart,
+      restart_delay: parseInt(restartDelay) || 30
     })
     if (id) {
       await startAgent(id)
       setActiveSession(id)
-      addToast(`Agent "${name.trim()}" created`, 'success')
+      addToast(`Agent "${name.trim()}" created${isAutonomous ? ' — mission started' : ''}`, 'success')
     }
     handleClose()
   }
@@ -58,7 +71,7 @@ export function AddAgentDialog() {
           <input
             className="dialog-input"
             type="text"
-            placeholder='e.g. "Email Assistant", "DevOps Manager"'
+            placeholder='e.g. "Sentry Monitor", "Email Assistant"'
             value={name}
             onChange={(e) => setName(e.target.value)}
             autoFocus
@@ -73,6 +86,23 @@ export function AddAgentDialog() {
             onChange={(e) => setDescription(e.target.value)}
           />
         </DialogField>
+
+        <DialogField label="Mission">
+          <textarea
+            className="dialog-input dialog-textarea"
+            placeholder="Give this agent a task to run autonomously...&#10;&#10;Leave empty for an interactive Claude Code session."
+            value={mission}
+            onChange={(e) => setMission(e.target.value)}
+            rows={4}
+          />
+        </DialogField>
+
+        {isAutonomous && (
+          <div className="dialog-hint" style={{ marginBottom: 8 }}>
+            This agent will run its mission autonomously using <span className="dialog-hint-mono">claude -p</span>.
+          </div>
+        )}
+
         <label className="dialog-checkbox">
           <input
             type="checkbox"
@@ -81,17 +111,55 @@ export function AddAgentDialog() {
           />
           Auto-accept permissions
         </label>
-        <label className="dialog-checkbox">
-          <input
-            type="checkbox"
-            checked={remoteControl}
-            onChange={(e) => setRemoteControl(e.target.checked)}
-          />
-          Enable Session Remote Control
-        </label>
-        <div className="dialog-hint">
-          A standalone Claude Code session — not tied to any git repo.
-        </div>
+        {!isAutonomous && (
+          <label className="dialog-checkbox">
+            <input
+              type="checkbox"
+              checked={remoteControl}
+              onChange={(e) => setRemoteControl(e.target.checked)}
+            />
+            Enable Session Remote Control
+          </label>
+        )}
+        {isAutonomous && (
+          <>
+            <label className="dialog-checkbox">
+              <input
+                type="checkbox"
+                checked={autoStart}
+                onChange={(e) => setAutoStart(e.target.checked)}
+              />
+              Auto-start when Sorcerer launches
+            </label>
+            <label className="dialog-checkbox">
+              <input
+                type="checkbox"
+                checked={autoRestart}
+                onChange={(e) => setAutoRestart(e.target.checked)}
+              />
+              Auto-restart when mission completes
+            </label>
+            {autoRestart && (
+              <DialogField label="Restart delay (seconds)">
+                <input
+                  className="dialog-input"
+                  type="number"
+                  min="5"
+                  max="3600"
+                  value={restartDelay}
+                  onChange={(e) => setRestartDelay(e.target.value)}
+                  style={{ width: 100 }}
+                />
+              </DialogField>
+            )}
+          </>
+        )}
+
+        {!isAutonomous && (
+          <div className="dialog-hint">
+            A standalone Claude Code session — not tied to any git repo.
+          </div>
+        )}
 
         {/* Collapsible advanced options */}
         <button
@@ -134,7 +202,9 @@ export function AddAgentDialog() {
 
         <DialogActions>
           <DialogButton onClick={handleClose}>Cancel</DialogButton>
-          <DialogButton variant="primary" type="submit">Create Agent</DialogButton>
+          <DialogButton variant="primary" type="submit">
+            {isAutonomous ? 'Create & Start Mission' : 'Create Agent'}
+          </DialogButton>
         </DialogActions>
       </form>
     </Dialog>

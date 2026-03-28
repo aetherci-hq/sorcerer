@@ -159,6 +159,11 @@ export function ContextMenu() {
           await killAgent(contextMenu.targetId)
           addToast('Agent stopped', 'info')
         }}
+      ] : targetAgent?.mission ? [
+        { label: 'Start Mission', icon: <PlayIcon className={iconClass} />, action: async () => {
+          await startAgent(contextMenu.targetId)
+          addToast('Agent mission started', 'info')
+        }}
       ] : [
         { label: 'Resume Agent', icon: <PlayIcon className={iconClass} />, action: async () => {
           await resumeAgent(contextMenu.targetId)

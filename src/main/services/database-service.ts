@@ -164,6 +164,13 @@ export class DatabaseService {
       this.db.run(`ALTER TABLE agents ADD COLUMN group_id TEXT REFERENCES agent_groups(id) ON DELETE SET NULL`)
     } catch { /* column already exists */ }
 
+    // Autonomous agent columns (idempotent migrations)
+    try { this.db.run(`ALTER TABLE agents ADD COLUMN mission TEXT DEFAULT ''`) } catch { /* exists */ }
+    try { this.db.run(`ALTER TABLE agents ADD COLUMN auto_start INTEGER NOT NULL DEFAULT 0`) } catch { /* exists */ }
+    try { this.db.run(`ALTER TABLE agents ADD COLUMN auto_restart INTEGER NOT NULL DEFAULT 0`) } catch { /* exists */ }
+    try { this.db.run(`ALTER TABLE agents ADD COLUMN restart_delay INTEGER NOT NULL DEFAULT 30`) } catch { /* exists */ }
+    try { this.db.run(`ALTER TABLE agents ADD COLUMN max_restarts INTEGER NOT NULL DEFAULT 10`) } catch { /* exists */ }
+
     // Add claude_session_id column to sessions (idempotent migration)
     // Pins each Sorcerer session to a specific Claude Code conversation to prevent
     // cross-contamination when multiple sessions share the same working directory.
@@ -458,13 +465,20 @@ export class DatabaseService {
     mcp_config?: string
     bypass_permissions?: number
     remote_control?: number
+    mission?: string
+    auto_start?: number
+    auto_restart?: number
+    restart_delay?: number
+    max_restarts?: number
   }): any {
     if (!this.db) throw new Error('Database not initialized')
     this.db.run(
-      `INSERT INTO agents (id, name, description, system_prompt, mcp_config, bypass_permissions, remote_control)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO agents (id, name, description, system_prompt, mcp_config, bypass_permissions, remote_control, mission, auto_start, auto_restart, restart_delay, max_restarts)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [data.id, data.name, data.description || '', data.system_prompt || '', data.mcp_config || '',
-       data.bypass_permissions ?? 1, data.remote_control ?? 0]
+       data.bypass_permissions ?? 1, data.remote_control ?? 0,
+       data.mission || '', data.auto_start ?? 0, data.auto_restart ?? 0,
+       data.restart_delay ?? 30, data.max_restarts ?? 10]
     )
     this.save()
     return this.getAgent(data.id)

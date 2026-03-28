@@ -77,39 +77,63 @@ function IdleQuickTerminalPanel({ session }: { session: Session }) {
 function IdleAgentPanel({ agent }: { agent: Agent }) {
   const resumeAgent = useAgentStore((s) => s.resumeAgent)
   const restartAgent = useAgentStore((s) => s.restartAgent)
+  const startAgent = useAgentStore((s) => s.startAgent)
   const [hasConversation, setHasConversation] = useState<boolean | null>(null)
+  const isAutonomous = !!agent.mission
 
   useEffect(() => {
-    getApi().agent.hasConversation(agent.id).then(setHasConversation)
-  }, [agent.id])
+    if (!isAutonomous) {
+      getApi().agent.hasConversation(agent.id).then(setHasConversation)
+    }
+  }, [agent.id, isAutonomous])
 
   return (
     <div className="terminal-placeholder">
       <BotIcon className="terminal-placeholder-icon" />
       <div className="terminal-placeholder-text">
-        Agent <strong>{agent.name}</strong> has ended.
+        Agent <strong>{agent.name}</strong> has {isAutonomous ? 'stopped' : 'ended'}.
       </div>
-      {hasConversation === false && (
+      {isAutonomous && agent.auto_restart ? (
+        <div className="terminal-placeholder-hint">
+          Auto-restart is enabled — agent will restart in {agent.restart_delay}s.
+        </div>
+      ) : isAutonomous ? (
+        <div className="terminal-placeholder-hint">
+          Mission completed. Restart to run again.
+        </div>
+      ) : hasConversation === false ? (
         <div className="terminal-placeholder-hint">
           No conversation history found — conversation data may have expired.
         </div>
-      )}
+      ) : null}
       <div className="terminal-action-row">
-        {hasConversation !== false && (
-          <button className="terminal-restart-btn terminal-restart-btn--primary" onClick={() => resumeAgent(agent.id)}>
+        {isAutonomous ? (
+          <button className="terminal-restart-btn terminal-restart-btn--primary" onClick={() => startAgent(agent.id)}>
             <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
-              <path d="M6 3.5a.5.5 0 0 1 .795-.404l6 4.5a.5.5 0 0 1 0 .808l-6 4.5A.5.5 0 0 1 6 12.5v-9z" />
+              <path d="M11.534 7h3.932a.25.25 0 0 1 .192.41l-1.966 2.36a.25.25 0 0 1-.384 0l-1.966-2.36a.25.25 0 0 1 .192-.41zm-11 2h3.932a.25.25 0 0 0 .192-.41L2.692 6.23a.25.25 0 0 0-.384 0L.342 8.59A.25.25 0 0 0 .534 9z" />
+              <path fillRule="evenodd" d="M8 3c-1.552 0-2.94.707-3.857 1.818a.5.5 0 1 1-.771-.636A6.002 6.002 0 0 1 13.917 7H12.9A5.002 5.002 0 0 0 8 3zM3.1 9a5.002 5.002 0 0 0 8.757 2.182.5.5 0 1 1 .771.636A6.002 6.002 0 0 1 2.083 9H3.1z" />
             </svg>
-            Resume
+            Restart Mission
           </button>
+        ) : (
+          <>
+            {hasConversation !== false && (
+              <button className="terminal-restart-btn terminal-restart-btn--primary" onClick={() => resumeAgent(agent.id)}>
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+                  <path d="M6 3.5a.5.5 0 0 1 .795-.404l6 4.5a.5.5 0 0 1 0 .808l-6 4.5A.5.5 0 0 1 6 12.5v-9z" />
+                </svg>
+                Resume
+              </button>
+            )}
+            <button className={`terminal-restart-btn${hasConversation === false ? ' terminal-restart-btn--primary' : ''}`} onClick={() => restartAgent(agent.id)}>
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+                <path d="M11.534 7h3.932a.25.25 0 0 1 .192.41l-1.966 2.36a.25.25 0 0 1-.384 0l-1.966-2.36a.25.25 0 0 1 .192-.41zm-11 2h3.932a.25.25 0 0 0 .192-.41L2.692 6.23a.25.25 0 0 0-.384 0L.342 8.59A.25.25 0 0 0 .534 9z" />
+                <path fillRule="evenodd" d="M8 3c-1.552 0-2.94.707-3.857 1.818a.5.5 0 1 1-.771-.636A6.002 6.002 0 0 1 13.917 7H12.9A5.002 5.002 0 0 0 8 3zM3.1 9a5.002 5.002 0 0 0 8.757 2.182.5.5 0 1 1 .771.636A6.002 6.002 0 0 1 2.083 9H3.1z" />
+              </svg>
+              New Session
+            </button>
+          </>
         )}
-        <button className={`terminal-restart-btn${hasConversation === false ? ' terminal-restart-btn--primary' : ''}`} onClick={() => restartAgent(agent.id)}>
-          <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
-            <path d="M11.534 7h3.932a.25.25 0 0 1 .192.41l-1.966 2.36a.25.25 0 0 1-.384 0l-1.966-2.36a.25.25 0 0 1 .192-.41zm-11 2h3.932a.25.25 0 0 0 .192-.41L2.692 6.23a.25.25 0 0 0-.384 0L.342 8.59A.25.25 0 0 0 .534 9z" />
-            <path fillRule="evenodd" d="M8 3c-1.552 0-2.94.707-3.857 1.818a.5.5 0 1 1-.771-.636A6.002 6.002 0 0 1 13.917 7H12.9A5.002 5.002 0 0 0 8 3zM3.1 9a5.002 5.002 0 0 0 8.757 2.182.5.5 0 1 1 .771.636A6.002 6.002 0 0 1 2.083 9H3.1z" />
-          </svg>
-          New Session
-        </button>
       </div>
     </div>
   )
