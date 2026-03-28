@@ -141,6 +141,11 @@ const api = {
 
   system: {
     checkUpdate: () => ipcRenderer.invoke('system:check-update') as Promise<{ version: string; url: string } | null>,
+    claudeStats: () => ipcRenderer.invoke('system:claude-stats') as Promise<{
+      today: { messages: number; sessions: number; toolCalls: number; tokens: number }
+      week: { messages: number; toolCalls: number; tokens: number }
+      allTime: { totalSessions: number; totalMessages: number; firstSessionDate: string | null }
+    } | null>,
     userInfo: () => ipcRenderer.invoke('system:userInfo'),
     accountPicture: () => ipcRenderer.invoke('system:accountPicture'),
     networkIp: () => ipcRenderer.invoke('system:networkIp') as Promise<string>,

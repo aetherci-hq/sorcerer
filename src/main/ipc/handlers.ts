@@ -635,6 +635,72 @@ export function registerIPC(
     }
   })
 
+  // ── Claude Code stats ──────────────────────────────────────
+
+  ipcMain.handle('system:claude-stats', () => {
+    const statsPath = path.join(os.homedir(), '.claude', 'stats-cache.json')
+    if (!fs.existsSync(statsPath)) return null
+    try {
+      const raw = fs.readFileSync(statsPath, 'utf8')
+      const data = JSON.parse(raw)
+
+      const today = new Date().toISOString().slice(0, 10)
+      const todayActivity = data.dailyActivity?.find((d: any) => d.date === today)
+      const todayTokens = data.dailyModelTokens?.find((d: any) => d.date === today)
+
+      // Sum tokens across all models for today
+      let todayTotalTokens = 0
+      if (todayTokens?.tokensByModel) {
+        for (const count of Object.values(todayTokens.tokensByModel)) {
+          todayTotalTokens += count as number
+        }
+      }
+
+      // 7-day totals
+      const sevenDaysAgo = new Date()
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
+      const sevenDayStr = sevenDaysAgo.toISOString().slice(0, 10)
+
+      let weekMessages = 0
+      let weekToolCalls = 0
+      let weekTokens = 0
+      for (const day of (data.dailyActivity || [])) {
+        if (day.date >= sevenDayStr) {
+          weekMessages += day.messageCount
+          weekToolCalls += day.toolCallCount
+        }
+      }
+      for (const day of (data.dailyModelTokens || [])) {
+        if (day.date >= sevenDayStr && day.tokensByModel) {
+          for (const count of Object.values(day.tokensByModel)) {
+            weekTokens += count as number
+          }
+        }
+      }
+
+      return {
+        today: {
+          messages: todayActivity?.messageCount || 0,
+          sessions: todayActivity?.sessionCount || 0,
+          toolCalls: todayActivity?.toolCallCount || 0,
+          tokens: todayTotalTokens
+        },
+        week: {
+          messages: weekMessages,
+          toolCalls: weekToolCalls,
+          tokens: weekTokens
+        },
+        allTime: {
+          totalSessions: data.totalSessions || 0,
+          totalMessages: data.totalMessages || 0,
+          firstSessionDate: data.firstSessionDate || null
+        }
+      }
+    } catch {
+      return null
+    }
+  })
+
   // ── System info ─────────────────────────────────────────────
 
   ipcMain.handle('system:userInfo', () => {

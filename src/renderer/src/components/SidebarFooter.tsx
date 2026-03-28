@@ -139,8 +139,21 @@ function formatTime(timestamp: number): string {
   return new Date(timestamp * 1000).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
 }
 
+function formatTokenCount(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`
+  return String(n)
+}
+
+interface ClaudeStats {
+  today: { messages: number; sessions: number; toolCalls: number; tokens: number }
+  week: { messages: number; toolCalls: number; tokens: number }
+  allTime: { totalSessions: number; totalMessages: number; firstSessionDate: string | null }
+}
+
 function StatsPopover({ sessions, onClose }: { sessions: any[]; onClose: () => void }) {
   const popoverRef = useRef<HTMLDivElement>(null)
+  const [claudeStats, setClaudeStats] = useState<ClaudeStats | null>(null)
 
   // Today boundary (midnight local time) in unix seconds
   const todayStart = Math.floor(new Date().setHours(0, 0, 0, 0) / 1000)
@@ -153,6 +166,11 @@ function StatsPopover({ sessions, onClose }: { sessions: any[]; onClose: () => v
     .filter((s) => s.created_at && s.created_at >= todayStart)
     .sort((a, b) => (a.created_at || 0) - (b.created_at || 0))[0]
 
+  // Load Claude Code stats
+  useEffect(() => {
+    getApi().system.claudeStats().then(setClaudeStats).catch(() => {})
+  }, [])
+
   // Close on click outside
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -160,7 +178,6 @@ function StatsPopover({ sessions, onClose }: { sessions: any[]; onClose: () => v
         onClose()
       }
     }
-    // Delay listener to avoid immediate close from the click that opened it
     const timer = setTimeout(() => document.addEventListener('mousedown', handler), 0)
     return () => {
       clearTimeout(timer)
@@ -189,6 +206,22 @@ function StatsPopover({ sessions, onClose }: { sessions: any[]; onClose: () => v
           <span className="stats-popover-value">{todaySessions.length}</span>
           <span className="stats-popover-label">Created today</span>
         </div>
+        {claudeStats && (
+          <>
+            <div className="stats-popover-stat">
+              <span className="stats-popover-value">{claudeStats.today.messages}</span>
+              <span className="stats-popover-label">Messages</span>
+            </div>
+            <div className="stats-popover-stat">
+              <span className="stats-popover-value">{claudeStats.today.toolCalls}</span>
+              <span className="stats-popover-label">Tool calls</span>
+            </div>
+            <div className="stats-popover-stat">
+              <span className="stats-popover-value">{formatTokenCount(claudeStats.today.tokens)}</span>
+              <span className="stats-popover-label">Tokens</span>
+            </div>
+          </>
+        )}
       </div>
       {earliestActive && (
         <div className="stats-popover-uptime">
@@ -197,6 +230,28 @@ function StatsPopover({ sessions, onClose }: { sessions: any[]; onClose: () => v
             {formatTime(earliestActive.created_at)} ({formatUptime(earliestActive.created_at)})
           </span>
         </div>
+      )}
+      {claudeStats && (
+        <>
+          <div className="stats-popover-header stats-popover-header--sub">Last 7 Days</div>
+          <div className="stats-popover-grid">
+            <div className="stats-popover-stat">
+              <span className="stats-popover-value">{claudeStats.week.messages.toLocaleString()}</span>
+              <span className="stats-popover-label">Messages</span>
+            </div>
+            <div className="stats-popover-stat">
+              <span className="stats-popover-value">{claudeStats.week.toolCalls.toLocaleString()}</span>
+              <span className="stats-popover-label">Tool calls</span>
+            </div>
+            <div className="stats-popover-stat">
+              <span className="stats-popover-value">{formatTokenCount(claudeStats.week.tokens)}</span>
+              <span className="stats-popover-label">Tokens</span>
+            </div>
+          </div>
+          <div className="stats-popover-footer">
+            {claudeStats.allTime.totalSessions.toLocaleString()} sessions · {claudeStats.allTime.totalMessages.toLocaleString()} messages all time
+          </div>
+        </>
       )}
     </div>
   )

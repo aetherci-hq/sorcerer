@@ -1087,6 +1087,19 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+.stats-popover-header--sub {
+  margin-top: 4px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.stats-popover-footer {
+  font-size: 10.5px;
+  color: var(--text-muted);
+  padding: 6px 12px 10px;
+  text-align: center;
+}
+
 .user-info {
   flex: 1;
   min-width: 0;
