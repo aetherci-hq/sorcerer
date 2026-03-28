@@ -27,11 +27,7 @@
       "target": [
         "nsis"
       ],
-      "icon": "build/icon.ico",
-      "signingHashAlgorithms": [
-        "sha256"
-      ],
-      "sign": "./scripts/sign-windows.js"
+      "icon": "build/icon.ico"
     },
     "mac": {
       "target": [
