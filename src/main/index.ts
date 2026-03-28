@@ -339,6 +339,7 @@ ipcMain.on('window:maximize', () => {
 })
 ipcMain.on('window:close', () => mainWindow?.close())
 ipcMain.handle('window:isMaximized', () => mainWindow?.isMaximized() ?? false)
+ipcMain.handle('window:openExternal', (_e, url: string) => shell.openExternal(url))
 ipcMain.on('window:setTitleBarOverlay', (_e, options: { color: string; symbolColor: string }) => {
   if (process.platform !== 'darwin') {
     // Update main window

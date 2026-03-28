@@ -513,9 +513,15 @@ function RemoteTab() {
 
 function GeneralTab() {
   const { addToast } = useToastStore()
+  const [checkUpdates, setCheckUpdates] = useSetting('checkForUpdates', 'true')
 
   return (
     <>
+      <SectionTitle>Updates</SectionTitle>
+      <SettingRow label="Check for updates" description="Periodically check GitHub for new releases">
+        <Toggle checked={checkUpdates !== 'false'} onChange={(v) => setCheckUpdates(v ? 'true' : 'false')} />
+      </SettingRow>
+
       <SectionTitle>Keyboard Shortcuts</SectionTitle>
       <div className="settings-shortcuts">
         {SHORTCUTS.map((s) => (

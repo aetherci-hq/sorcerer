@@ -255,6 +255,29 @@ export function registerIPC(
     dbService.reorderProjects(projectIds)
   })
 
+  // ── Project group operations ───────────────────────────────
+
+  ipcMain.handle('project-group:list', () => {
+    return dbService.listProjectGroups()
+  })
+
+  ipcMain.handle('project-group:add', (_event, name: string) => {
+    const id = uuidv4()
+    return dbService.addProjectGroup(id, name)
+  })
+
+  ipcMain.handle('project-group:update', (_event, id: string, updates: { name?: string }) => {
+    return dbService.updateProjectGroup(id, updates)
+  })
+
+  ipcMain.handle('project-group:remove', (_event, id: string) => {
+    dbService.removeProjectGroup(id)
+  })
+
+  ipcMain.handle('project-group:reorder', (_event, groupIds: string[]) => {
+    dbService.reorderProjectGroups(groupIds)
+  })
+
   ipcMain.handle('project:update', (_event, id: string, updates: any) => {
     return updateProject(services, id, updates)
   })
@@ -559,6 +582,34 @@ export function registerIPC(
 
   ipcMain.handle('briefing:delete', (_event, id: string) => {
     dbService.deleteBriefing(id)
+  })
+
+  // ── Update check ───────────────────────────────────────────
+
+  ipcMain.handle('system:check-update', async () => {
+    try {
+      const res = await fetch('https://api.github.com/repos/aetherci-hq/sorcerer/releases/latest', {
+        headers: { 'Accept': 'application/vnd.github.v3+json', 'User-Agent': 'Sorcerer' }
+      })
+      if (!res.ok) return null
+      const data = await res.json()
+      const latest = (data.tag_name || '').replace(/^v/, '')
+      const current = app.getVersion()
+      if (!latest) return null
+
+      // Simple semver compare
+      const toNum = (v: string) => v.split('.').map(Number)
+      const [cMaj, cMin, cPat] = toNum(current)
+      const [lMaj, lMin, lPat] = toNum(latest)
+      const isNewer = lMaj > cMaj || (lMaj === cMaj && lMin > cMin) || (lMaj === cMaj && lMin === cMin && lPat > cPat)
+
+      if (isNewer) {
+        return { version: latest, url: data.html_url }
+      }
+      return null
+    } catch {
+      return null
+    }
   })
 
   // ── System info ─────────────────────────────────────────────

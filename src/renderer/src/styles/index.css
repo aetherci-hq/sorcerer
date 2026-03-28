@@ -430,6 +430,34 @@ body {
   color: var(--text-primary);
 }
 
+.section-collapse-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  padding: 0;
+  opacity: 0;
+  transition: opacity 0.15s, background 0.15s, color 0.15s;
+  margin-left: 4px;
+}
+.section-collapse-btn svg {
+  width: 12px;
+  height: 12px;
+}
+.section-header:hover .section-collapse-btn {
+  opacity: 1;
+}
+.section-collapse-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
 .agent-tree-section {
   flex-shrink: 0;
   padding-bottom: 8px;
@@ -469,6 +497,27 @@ body {
 
 .tree-project {
   margin-bottom: 2px;
+}
+
+.tree-group {
+  margin-bottom: 2px;
+}
+
+.tree-item--group {
+  padding-left: 14px;
+}
+
+.tree-label--group {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  flex: 1;
+}
+
+.tree-group .tree-children .tree-project {
+  /* Indent projects inside groups slightly */
 }
 
 .tree-item {
@@ -765,12 +814,28 @@ body {
   opacity: 0.4;
 }
 
-.tree-item--drop-above {
-  box-shadow: 0 -2px 0 0 var(--accent);
+.tree-item--drop-above,
+.tree-item--drop-below {
+  position: relative;
 }
 
-.tree-item--drop-below {
-  box-shadow: 0 2px 0 0 var(--accent);
+.tree-item--drop-above::after,
+.tree-item--drop-below::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--accent);
+  pointer-events: none;
+}
+
+.tree-item--drop-above::after {
+  top: -1px;
+}
+
+.tree-item--drop-below::after {
+  bottom: -1px;
 }
 
 .tree-item--drop-inside {
@@ -1239,6 +1304,19 @@ body {
   font-family: var(--font-mono);
   font-size: 11px;
   opacity: 0.7;
+}
+
+.status-bar-update {
+  color: var(--accent);
+  font-size: 11px;
+  text-decoration: none;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.status-bar-update:hover {
+  opacity: 0.8;
+  text-decoration: underline;
 }
 
 /* ============================

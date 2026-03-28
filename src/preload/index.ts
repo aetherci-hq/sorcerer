@@ -13,6 +13,14 @@ const api = {
     checkGit: (projectId: string) => ipcRenderer.invoke('project:check-git', projectId) as Promise<{ hasGit: boolean; hasCommits: boolean }>
   },
 
+  projectGroup: {
+    list: () => ipcRenderer.invoke('project-group:list'),
+    add: (name: string) => ipcRenderer.invoke('project-group:add', name),
+    update: (id: string, updates: { name?: string }) => ipcRenderer.invoke('project-group:update', id, updates),
+    remove: (id: string) => ipcRenderer.invoke('project-group:remove', id),
+    reorder: (groupIds: string[]) => ipcRenderer.invoke('project-group:reorder', groupIds)
+  },
+
   session: {
     list: (projectId?: string) => ipcRenderer.invoke('session:list', projectId),
     create: (projectId: string, name: string, useMainRepo?: boolean, bypassPermissions?: boolean, remoteControl?: boolean) => ipcRenderer.invoke('session:create', projectId, name, useMainRepo, bypassPermissions, remoteControl),
@@ -124,6 +132,7 @@ const api = {
   },
 
   system: {
+    checkUpdate: () => ipcRenderer.invoke('system:check-update') as Promise<{ version: string; url: string } | null>,
     userInfo: () => ipcRenderer.invoke('system:userInfo'),
     accountPicture: () => ipcRenderer.invoke('system:accountPicture'),
     networkIp: () => ipcRenderer.invoke('system:networkIp') as Promise<string>,
@@ -151,7 +160,8 @@ const api = {
     maximize: () => ipcRenderer.send('window:maximize'),
     close: () => ipcRenderer.send('window:close'),
     isMaximized: () => ipcRenderer.invoke('window:isMaximized'),
-    setTitleBarOverlay: (options: { color: string; symbolColor: string }) => ipcRenderer.send('window:setTitleBarOverlay', options)
+    setTitleBarOverlay: (options: { color: string; symbolColor: string }) => ipcRenderer.send('window:setTitleBarOverlay', options),
+    openExternal: (url: string) => ipcRenderer.invoke('window:openExternal', url)
   },
 
   popout: {
