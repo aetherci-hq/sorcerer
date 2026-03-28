@@ -10,6 +10,7 @@ import { StatusDot } from './StatusDot'
 import { TerminalView } from './TerminalView'
 import { QuickNotesPanel, parseQuickNotesPanelId } from './QuickNotesPanel'
 import { useQuickNotesStore } from '../stores/useQuickNotesStore'
+import { MissionPanel } from './MissionPanel'
 import type { Session, Agent, SplitNode } from '../types'
 
 function IdleSessionPanel({ session }: { session: Session }) {
@@ -164,6 +165,11 @@ function TerminalPanel({ session, agent }: { session: Session | undefined; agent
         </div>
       </div>
     )
+  }
+
+  // Scheduled mission agents get a run history panel, not a terminal
+  if (agent?.mission && agent?.schedule_minutes > 0) {
+    return <MissionPanel agent={agent} />
   }
 
   if (activeItem.status === 'idle') {
