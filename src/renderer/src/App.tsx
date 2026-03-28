@@ -121,6 +121,12 @@ export function App() {
       useAgentStore.getState().updateAgentInStore(sessionId, { status: status as any, pid })
     })
 
+    // Listen for completed agent runs — show toast with findings
+    const unsubAgentRunComplete = getApi().terminal.onAgentRunComplete((agentId: string, agentName: string, preview: string, level: string) => {
+      const type = level === 'error' ? 'error' : level === 'warning' ? 'info' : 'success'
+      useToastStore.getState().addToast(`${agentName}: ${preview}`, type as any)
+    })
+
     // Track which sessions are popped out to separate windows
     const unsubPopoutOpened = getApi().popout.onOpened((sessionId: string) => {
       useUIStore.getState().addPoppedOut(sessionId)
@@ -208,6 +214,7 @@ export function App() {
       unsubPopoutClosed()
       unsubResumeFailed()
       unsubAgentRestarted()
+      unsubAgentRunComplete()
       window.removeEventListener('keydown', briefingKeyHandler)
       window.removeEventListener('mousemove', activityHandler)
       window.removeEventListener('keydown', activityHandler)

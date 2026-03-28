@@ -170,6 +170,22 @@ export class DatabaseService {
     try { this.db.run(`ALTER TABLE agents ADD COLUMN auto_restart INTEGER NOT NULL DEFAULT 0`) } catch { /* exists */ }
     try { this.db.run(`ALTER TABLE agents ADD COLUMN restart_delay INTEGER NOT NULL DEFAULT 30`) } catch { /* exists */ }
     try { this.db.run(`ALTER TABLE agents ADD COLUMN max_restarts INTEGER NOT NULL DEFAULT 10`) } catch { /* exists */ }
+    // Schedule: cron-like interval in minutes (0 = disabled, >0 = run every N minutes)
+    try { this.db.run(`ALTER TABLE agents ADD COLUMN schedule_minutes INTEGER NOT NULL DEFAULT 0`) } catch { /* exists */ }
+    try { this.db.run(`ALTER TABLE agents ADD COLUMN last_run_at INTEGER`) } catch { /* exists */ }
+
+    // Agent run log — stores output from each scheduled/autonomous run
+    this.db.run(`
+      CREATE TABLE IF NOT EXISTS agent_runs (
+        id TEXT PRIMARY KEY,
+        agent_id TEXT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+        output TEXT NOT NULL,
+        exit_code INTEGER NOT NULL DEFAULT 0,
+        started_at INTEGER NOT NULL,
+        completed_at INTEGER NOT NULL,
+        duration_ms INTEGER NOT NULL DEFAULT 0
+      );
+    `)
 
     // Add claude_session_id column to sessions (idempotent migration)
     // Pins each Sorcerer session to a specific Claude Code conversation to prevent
@@ -470,15 +486,16 @@ export class DatabaseService {
     auto_restart?: number
     restart_delay?: number
     max_restarts?: number
+    schedule_minutes?: number
   }): any {
     if (!this.db) throw new Error('Database not initialized')
     this.db.run(
-      `INSERT INTO agents (id, name, description, system_prompt, mcp_config, bypass_permissions, remote_control, mission, auto_start, auto_restart, restart_delay, max_restarts)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO agents (id, name, description, system_prompt, mcp_config, bypass_permissions, remote_control, mission, auto_start, auto_restart, restart_delay, max_restarts, schedule_minutes)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [data.id, data.name, data.description || '', data.system_prompt || '', data.mcp_config || '',
        data.bypass_permissions ?? 1, data.remote_control ?? 0,
        data.mission || '', data.auto_start ?? 0, data.auto_restart ?? 0,
-       data.restart_delay ?? 30, data.max_restarts ?? 10]
+       data.restart_delay ?? 30, data.max_restarts ?? 10, data.schedule_minutes ?? 0]
     )
     this.save()
     return this.getAgent(data.id)
@@ -493,6 +510,11 @@ export class DatabaseService {
     pid: number | null
     team_name: string | null
     remote_control: number
+    mission: string
+    auto_start: number
+    auto_restart: number
+    schedule_minutes: number
+    last_run_at: number | null
   }>): any {
     if (!this.db) return undefined
     const setClauses: string[] = []
@@ -518,6 +540,35 @@ export class DatabaseService {
     if (!this.db) return
     this.db.run('DELETE FROM agents WHERE id = ?', [id])
     this.save()
+  }
+
+  // Agent run log operations
+  saveAgentRun(data: { id: string; agent_id: string; output: string; exit_code: number; started_at: number; completed_at: number; duration_ms: number }): void {
+    if (!this.db) return
+    this.db.run(
+      'INSERT INTO agent_runs (id, agent_id, output, exit_code, started_at, completed_at, duration_ms) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [data.id, data.agent_id, data.output, data.exit_code, data.started_at, data.completed_at, data.duration_ms]
+    )
+    this.save()
+  }
+
+  listAgentRuns(agentId: string, limit: number = 20): any[] {
+    if (!this.db) return []
+    const stmt = this.db.prepare('SELECT * FROM agent_runs WHERE agent_id = ? ORDER BY completed_at DESC LIMIT ?')
+    stmt.bind([agentId, limit])
+    const results: any[] = []
+    while (stmt.step()) results.push(stmt.getAsObject())
+    stmt.free()
+    return results
+  }
+
+  getLatestAgentRun(agentId: string): any | undefined {
+    if (!this.db) return undefined
+    const stmt = this.db.prepare('SELECT * FROM agent_runs WHERE agent_id = ? ORDER BY completed_at DESC LIMIT 1')
+    stmt.bind([agentId])
+    const result = stmt.step() ? stmt.getAsObject() : undefined
+    stmt.free()
+    return result
   }
 
   // Agent group operations

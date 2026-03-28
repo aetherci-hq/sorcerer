@@ -22,8 +22,7 @@ export function AddAgentDialog() {
   const [bypassPermissions, setBypassPermissions] = useState(true)
   const [remoteControl, setRemoteControl] = useState(false)
   const [autoStart, setAutoStart] = useState(false)
-  const [autoRestart, setAutoRestart] = useState(false)
-  const [restartDelay, setRestartDelay] = useState('30')
+  const [scheduleMinutes, setScheduleMinutes] = useState('0')
   const [showAdvanced, setShowAdvanced] = useState(false)
 
   const open = activeDialog === 'add-agent'
@@ -38,8 +37,7 @@ export function AddAgentDialog() {
     setBypassPermissions(true)
     setRemoteControl(false)
     setAutoStart(false)
-    setAutoRestart(false)
-    setRestartDelay('30')
+    setScheduleMinutes('0')
     setShowAdvanced(false)
     closeDialog()
   }
@@ -57,8 +55,8 @@ export function AddAgentDialog() {
       bypass_permissions: bypassPermissions,
       remote_control: mode === 'interactive' ? remoteControl : false,
       auto_start: mode === 'autonomous' ? autoStart : false,
-      auto_restart: mode === 'autonomous' ? autoRestart : false,
-      restart_delay: parseInt(restartDelay) || 30
+      auto_restart: mode === 'autonomous' && parseInt(scheduleMinutes) > 0,
+      schedule_minutes: mode === 'autonomous' ? parseInt(scheduleMinutes) || 0 : 0
     })
     if (id) {
       await startAgent(id)
@@ -133,27 +131,28 @@ export function AddAgentDialog() {
                 rows={4}
               />
             </DialogField>
+            <DialogField label="Run Schedule">
+              <select
+                className="dialog-input"
+                value={scheduleMinutes}
+                onChange={(e) => setScheduleMinutes(e.target.value)}
+                style={{ width: 200 }}
+              >
+                <option value="0">Run once (manual)</option>
+                <option value="5">Every 5 minutes</option>
+                <option value="15">Every 15 minutes</option>
+                <option value="30">Every 30 minutes</option>
+                <option value="60">Every hour</option>
+                <option value="120">Every 2 hours</option>
+                <option value="360">Every 6 hours</option>
+                <option value="720">Every 12 hours</option>
+                <option value="1440">Daily</option>
+              </select>
+            </DialogField>
             <label className="dialog-checkbox">
               <input type="checkbox" checked={autoStart} onChange={(e) => setAutoStart(e.target.checked)} />
               Auto-start when Sorcerer launches
             </label>
-            <label className="dialog-checkbox">
-              <input type="checkbox" checked={autoRestart} onChange={(e) => setAutoRestart(e.target.checked)} />
-              Auto-restart when mission completes
-            </label>
-            {autoRestart && (
-              <DialogField label="Restart delay (seconds)">
-                <input
-                  className="dialog-input"
-                  type="number"
-                  min="5"
-                  max="3600"
-                  value={restartDelay}
-                  onChange={(e) => setRestartDelay(e.target.value)}
-                  style={{ width: 100 }}
-                />
-              </DialogField>
-            )}
           </>
         )}
 

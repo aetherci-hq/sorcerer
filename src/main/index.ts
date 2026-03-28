@@ -8,7 +8,8 @@ import { WorktreeService } from './services/worktree-service'
 import { FileWatcherService } from './services/file-watcher-service'
 import { PopoutService } from './services/popout-service'
 import { registerIPC } from './ipc/handlers'
-import { syncWorktrees, checkResumeFailed } from './ipc/shared-handlers'
+import { syncWorktrees, checkResumeFailed, resolveClaudeBinary } from './ipc/shared-handlers'
+import { AgentOrchestrator } from './services/agent-orchestrator'
 
 // On macOS/Linux, Electron doesn't inherit the user's shell PATH.
 // Fix process.env.PATH so spawned processes (e.g. 'claude') can be found.
@@ -216,20 +217,21 @@ async function createWindow(): Promise<void> {
   // Register IPC handlers
   registerIPC(ptyService, dbService, worktreeService, fileWatcherService)
 
-  // Auto-start agents configured for auto_start
+  // Start the agent orchestrator — handles scheduled runs, output capture, decisions
+  const orchestrator = new AgentOrchestrator(dbService, ptyService, mainWindow, resolveClaudeBinary)
+  orchestrator.start()
+
+  // Auto-start agents configured for auto_start (immediate, outside of schedule)
   const autoStartAgents = dbService.listAgents().filter((a: any) => a.auto_start === 1 && a.mission)
   if (autoStartAgents.length > 0) {
-    import('./ipc/shared-handlers').then(({ startAgent }) => {
-      const services = { db: dbService, pty: ptyService, worktree: worktreeService, fileWatcher: fileWatcherService }
-      for (const agent of autoStartAgents) {
-        try {
-          startAgent(services, agent.id)
-          console.log(`[startup] Auto-started agent: ${agent.name}`)
-        } catch (err) {
-          console.error(`[startup] Failed to auto-start agent ${agent.name}:`, err)
-        }
+    for (const agent of autoStartAgents) {
+      try {
+        orchestrator.runNow(agent.id)
+        console.log(`[startup] Auto-started agent: ${agent.name}`)
+      } catch (err) {
+        console.error(`[startup] Failed to auto-start agent ${agent.name}:`, err)
       }
-    })
+    }
   }
 
   // Detect failed resumes (e.g. "No conversation found to continue")

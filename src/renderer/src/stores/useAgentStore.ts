@@ -14,7 +14,7 @@ interface AgentState {
   addAgent: (data: {
     id?: string; name: string; description?: string; system_prompt?: string; mcp_config?: string;
     bypass_permissions?: boolean; remote_control?: boolean;
-    mission?: string; auto_start?: boolean; auto_restart?: boolean; restart_delay?: number; max_restarts?: number
+    mission?: string; auto_start?: boolean; auto_restart?: boolean; restart_delay?: number; max_restarts?: number; schedule_minutes?: number
   }) => Promise<string | null>
   updateAgent: (id: string, updates: Partial<Agent>) => Promise<void>
   removeAgent: (id: string) => Promise<void>

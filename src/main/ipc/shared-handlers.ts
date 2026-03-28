@@ -26,7 +26,7 @@ let _claudeBinary: string | null = null
  * Checks well-known install locations so we don't depend on PATH ordering
  * (the native installer puts claude.exe in ~/.local/bin which Electron may not see).
  */
-function resolveClaudeBinary(): string {
+export function resolveClaudeBinary(): string {
   if (_claudeBinary) return _claudeBinary
 
   const home = os.homedir()
@@ -860,7 +860,7 @@ export function addAgent(
   data: {
     id?: string; name: string; description?: string; system_prompt?: string; mcp_config?: string;
     bypass_permissions?: boolean; remote_control?: boolean;
-    mission?: string; auto_start?: boolean; auto_restart?: boolean; restart_delay?: number; max_restarts?: number
+    mission?: string; auto_start?: boolean; auto_restart?: boolean; restart_delay?: number; max_restarts?: number; schedule_minutes?: number
   }
 ): any {
   const id = data.id || uuidv4()
@@ -875,7 +875,8 @@ export function addAgent(
     auto_start: data.auto_start ? 1 : 0,
     auto_restart: data.auto_restart ? 1 : 0,
     restart_delay: data.restart_delay ?? 30,
-    max_restarts: data.max_restarts ?? 10
+    max_restarts: data.max_restarts ?? 10,
+    schedule_minutes: data.schedule_minutes ?? 0
   })
   writeAgentManifest(id, data)
   return agent

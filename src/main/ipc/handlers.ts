@@ -567,6 +567,14 @@ export function registerIPC(
     return setAgentRemoteControl(services, agentId, enabled)
   })
 
+  ipcMain.handle('agent:list-runs', (_event, agentId: string, limit?: number) => {
+    return dbService.listAgentRuns(agentId, limit || 20)
+  })
+
+  ipcMain.handle('agent:latest-run', (_event, agentId: string) => {
+    return dbService.getLatestAgentRun(agentId)
+  })
+
   // ── Terminal I/O ────────────────────────────────────────────
 
   ipcMain.on('terminal:write', (_event, sessionId: string, data: string) => {

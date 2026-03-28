@@ -58,7 +58,7 @@ const api = {
     add: (data: {
       id?: string; name: string; description?: string; system_prompt?: string; mcp_config?: string;
       bypass_permissions?: boolean; remote_control?: boolean;
-      mission?: string; auto_start?: boolean; auto_restart?: boolean; restart_delay?: number; max_restarts?: number
+      mission?: string; auto_start?: boolean; auto_restart?: boolean; restart_delay?: number; max_restarts?: number; schedule_minutes?: number
     }) => ipcRenderer.invoke('agent:add', data),
     update: (id: string, updates: any) => ipcRenderer.invoke('agent:update', id, updates),
     remove: (id: string) => ipcRenderer.invoke('agent:remove', id),
@@ -68,7 +68,9 @@ const api = {
     kill: (id: string) => ipcRenderer.invoke('agent:kill', id),
     createQuickTerminal: (agentId: string) => ipcRenderer.invoke('agent:create-quick-terminal', agentId),
     setRemoteControl: (agentId: string, enabled: boolean) => ipcRenderer.invoke('agent:set-remote-control', agentId, enabled),
-    hasConversation: (agentId: string) => ipcRenderer.invoke('agent:has-conversation', agentId) as Promise<boolean>
+    hasConversation: (agentId: string) => ipcRenderer.invoke('agent:has-conversation', agentId) as Promise<boolean>,
+    listRuns: (agentId: string, limit?: number) => ipcRenderer.invoke('agent:list-runs', agentId, limit) as Promise<any[]>,
+    latestRun: (agentId: string) => ipcRenderer.invoke('agent:latest-run', agentId) as Promise<any>
   },
 
   terminal: {
@@ -97,6 +99,11 @@ const api = {
       const handler = (_event: any, sessionId: string, status: string, pid: number | null) => callback(sessionId, status, pid)
       ipcRenderer.on('agent:restarted', handler)
       return () => ipcRenderer.removeListener('agent:restarted', handler)
+    },
+    onAgentRunComplete: (callback: (agentId: string, agentName: string, preview: string, level: string) => void) => {
+      const handler = (_event: any, agentId: string, agentName: string, preview: string, level: string) => callback(agentId, agentName, preview, level)
+      ipcRenderer.on('agent:run-complete', handler)
+      return () => ipcRenderer.removeListener('agent:run-complete', handler)
     }
   },
 

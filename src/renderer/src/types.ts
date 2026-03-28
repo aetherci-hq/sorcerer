@@ -75,6 +75,8 @@ export interface Agent {
   auto_restart: number
   restart_delay: number
   max_restarts: number
+  schedule_minutes: number
+  last_run_at: number | null
   group_id?: string | null
   status: 'active' | 'idle' | 'archived'
   pid: number | null
