@@ -257,55 +257,8 @@ async function createWindow(): Promise<void> {
     }
   })
 
-  // Auto-restart autonomous agents on exit
-  const agentRestartCounts = new Map<string, { count: number; date: string }>()
-  ptyService.onExit((sessionId, exitCode) => {
-    const agent = dbService.getAgent(sessionId)
-    if (!agent || !agent.auto_restart || !agent.mission) return
-
-    // Check daily restart budget
-    const today = new Date().toISOString().slice(0, 10)
-    let tracker = agentRestartCounts.get(sessionId)
-    if (!tracker || tracker.date !== today) {
-      tracker = { count: 0, date: today }
-      agentRestartCounts.set(sessionId, tracker)
-    }
-
-    if (tracker.count >= (agent.max_restarts || 10)) {
-      console.log(`[agent-restart] ${agent.name} hit max restarts (${tracker.count}) for today, stopping`)
-      dbService.updateAgent(sessionId, { status: 'idle', pid: null })
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('session:resume-failed', {
-          sessionId,
-          reason: `Agent "${agent.name}" hit restart limit (${agent.max_restarts}/day). Restart manually tomorrow.`
-        })
-      }
-      return
-    }
-
-    const delay = (agent.restart_delay || 30) * 1000
-    console.log(`[agent-restart] ${agent.name} exited (code ${exitCode}), restarting in ${delay / 1000}s (restart ${tracker.count + 1}/${agent.max_restarts})`)
-    dbService.updateAgent(sessionId, { status: 'idle', pid: null })
-
-    setTimeout(async () => {
-      // Re-check agent still exists and auto_restart is still on
-      const current = dbService.getAgent(sessionId)
-      if (!current || !current.auto_restart) return
-
-      try {
-        const { startAgent } = await import('./ipc/shared-handlers')
-        const restarted = startAgent({ db: dbService, pty: ptyService, worktree: worktreeService, fileWatcher: fileWatcherService }, sessionId)
-        tracker!.count++
-        console.log(`[agent-restart] ${current.name} restarted successfully`)
-        // Notify renderer so TerminalView re-attaches
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.webContents.send('agent:restarted', sessionId, restarted.status, restarted.pid)
-        }
-      } catch (err) {
-        console.error(`[agent-restart] Failed to restart ${current.name}:`, err)
-      }
-    }, delay)
-  })
+  // Note: Scheduled agents are managed by the AgentOrchestrator (schedule-based).
+  // The old auto-restart handler was removed — orchestrator handles all scheduling.
 
   // Auto-start remote access if previously enabled
   const remoteEnabled = dbService.getSetting('remoteEnabled')

@@ -198,12 +198,14 @@ export function TerminalView({ sessionId, isFocused }: TerminalViewProps) {
       })
 
       const unsubExit = getApi().terminal.onExit(sessionId, (exitCode: number) => {
-        // Check if this is an auto-restart agent — if so, don't show exit overlay
+        // Check if this is a scheduled agent — if so, don't show exit overlay
         const agent = useAgentStore.getState().agents.find((a) => a.id === sessionId)
-        if (agent?.auto_restart && agent?.mission) {
-          terminal.writeln(`\r\n\x1b[90m[Process exited with code ${exitCode} — restarting in ${agent.restart_delay}s...]\x1b[0m`)
+        if (agent?.mission && agent?.schedule_minutes > 0) {
+          const mins = agent.schedule_minutes
+          const label = mins < 60 ? `${mins}m` : mins < 1440 ? `${Math.floor(mins / 60)}h` : 'tomorrow'
+          terminal.writeln(`\r\n\x1b[90m[Mission complete (exit ${exitCode}) — next run in ~${label}]\x1b[0m`)
           useAgentStore.getState().updateAgentInStore(sessionId, { status: 'idle', pid: null })
-          // Don't set exited=true — terminal stays open, new PTY data will flow in
+          // Don't set exited=true — terminal stays open, orchestrator will respawn
           return
         }
         terminal.writeln(`\r\n\x1b[90m[Process exited with code ${exitCode}]\x1b[0m`)

@@ -513,6 +513,7 @@ export class DatabaseService {
     mission: string
     auto_start: number
     auto_restart: number
+    max_restarts: number
     schedule_minutes: number
     last_run_at: number | null
   }>): any {

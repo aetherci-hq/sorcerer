@@ -13,6 +13,7 @@ export function EditMissionDialog() {
   const [mission, setMission] = useState('')
   const [scheduleMinutes, setScheduleMinutes] = useState('0')
   const [autoStart, setAutoStart] = useState(false)
+  const [maxRestarts, setMaxRestarts] = useState('10')
   const [systemPrompt, setSystemPrompt] = useState('')
   const [mcpConfig, setMcpConfig] = useState('')
   const [bypassPermissions, setBypassPermissions] = useState(true)
@@ -26,6 +27,7 @@ export function EditMissionDialog() {
       setMission(agent.mission || '')
       setScheduleMinutes(String(agent.schedule_minutes || 0))
       setAutoStart(agent.auto_start === 1)
+      setMaxRestarts(String(agent.max_restarts || 10))
       setSystemPrompt(agent.system_prompt || '')
       setMcpConfig(agent.mcp_config || '')
       setBypassPermissions(agent.bypass_permissions !== 0)
@@ -45,6 +47,7 @@ export function EditMissionDialog() {
       schedule_minutes: parseInt(scheduleMinutes) || 0,
       auto_start: autoStart ? 1 : 0,
       auto_restart: parseInt(scheduleMinutes) > 0 ? 1 : 0,
+      max_restarts: parseInt(maxRestarts) || 10,
       system_prompt: systemPrompt.trim(),
       mcp_config: mcpConfig.trim(),
       bypass_permissions: bypassPermissions ? 1 : 0
@@ -91,6 +94,17 @@ export function EditMissionDialog() {
               <option value="720">Every 12 hours</option>
               <option value="1440">Daily</option>
             </select>
+          </DialogField>
+          <DialogField label="Max runs per day">
+            <input
+              className="dialog-input"
+              type="number"
+              min="1"
+              max="100"
+              value={maxRestarts}
+              onChange={(e) => setMaxRestarts(e.target.value)}
+              style={{ width: 80 }}
+            />
           </DialogField>
           <label className="dialog-checkbox">
             <input type="checkbox" checked={autoStart} onChange={(e) => setAutoStart(e.target.checked)} />
