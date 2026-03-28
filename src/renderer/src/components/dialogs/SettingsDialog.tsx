@@ -11,13 +11,13 @@ import { gravatarUrl } from '../SidebarFooter'
 type SettingsTab = 'profile' | 'appearance' | 'sessions' | 'git' | 'remote' | 'briefing' | 'general'
 
 const TABS: { id: SettingsTab; label: string; icon: React.ReactNode }[] = [
+  { id: 'general', label: 'General', icon: <SettingsIcon /> },
   { id: 'profile', label: 'Profile', icon: <UserIcon /> },
   { id: 'appearance', label: 'Appearance', icon: <PaletteIcon /> },
   { id: 'sessions', label: 'Sessions', icon: <TerminalIcon /> },
   { id: 'git', label: 'Git', icon: <GitBranchIcon /> },
   { id: 'remote', label: 'Remote', icon: <WifiIcon /> },
-  { id: 'briefing', label: 'Briefing', icon: <BotIcon /> },
-  { id: 'general', label: 'General', icon: <SettingsIcon /> }
+  { id: 'briefing', label: 'Briefing', icon: <BotIcon /> }
 ]
 
 const SHORTCUTS = [
@@ -747,7 +747,7 @@ const TAB_CONTENT: Record<SettingsTab, () => React.JSX.Element> = {
 export function SettingsDialog() {
   const { activeDialog, dialogClosing, closeDialog } = useUIStore()
   const overlayRef = useRef<HTMLDivElement>(null)
-  const [activeTab, setActiveTab] = useState<SettingsTab>('profile')
+  const [activeTab, setActiveTab] = useState<SettingsTab>('general')
 
   const open = activeDialog === 'settings'
 
