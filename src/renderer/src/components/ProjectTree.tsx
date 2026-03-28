@@ -321,27 +321,22 @@ function SessionItem({
           ? <ShellPromptIcon className="tree-icon tree-icon--quick-terminal" />
           : <TerminalIcon className="tree-icon" />
         }
-        <div className="tree-label-group">
-          {isRenaming ? (
-            <input
-              ref={renameInputRef}
-              className="tree-rename-input"
-              value={renameValue}
-              onChange={(e) => setRenameValue(e.target.value)}
-              onKeyDown={handleRenameKeyDown}
-              onBlur={commitRename}
-              onClick={(e) => e.stopPropagation()}
-            />
-          ) : (
-            <span className="tree-label" onDoubleClick={handleDoubleClick}>{session.name}</span>
-          )}
-          {isMainRepo && session.branch && !isRenaming && (
-            <span className="tree-hint">direct</span>
-          )}
-        </div>
-        {!isRenaming && (
-          <>
-            {divergence && divergence.behind > 0 && (
+        <div className="tree-label-group tree-label-group--stacked">
+          <div className="tree-label-group">
+            {isRenaming ? (
+              <input
+                ref={renameInputRef}
+                className="tree-rename-input"
+                value={renameValue}
+                onChange={(e) => setRenameValue(e.target.value)}
+                onKeyDown={handleRenameKeyDown}
+                onBlur={commitRename}
+                onClick={(e) => e.stopPropagation()}
+              />
+            ) : (
+              <span className="tree-label" onDoubleClick={handleDoubleClick}>{session.name}</span>
+            )}
+            {!isRenaming && divergence && divergence.behind > 0 && (
               <Tooltip label={`${divergence.behind} commit${divergence.behind !== 1 ? 's' : ''} behind main${divergence.ahead > 0 ? `, ${divergence.ahead} ahead` : ''}`}>
                 <span className={`tree-divergence ${divergence.behind >= 10 ? 'tree-divergence--danger' : divergence.behind >= 3 ? 'tree-divergence--warning' : ''}`}>
                   {divergence.behind}
@@ -349,10 +344,17 @@ function SessionItem({
                 </span>
               </Tooltip>
             )}
-            {hasSavedNotes && <NotesIcon className="tree-icon tree-notes-indicator" />}
-            {remoteSessionIds.has(session.id) && (
+            {!isRenaming && hasSavedNotes && <NotesIcon className="tree-icon tree-notes-indicator" />}
+            {!isRenaming && remoteSessionIds.has(session.id) && (
               <WifiIcon className="tree-icon tree-remote-indicator" />
             )}
+          </div>
+          {isMainRepo && session.branch && !isRenaming && (
+            <span className="tree-hint">direct</span>
+          )}
+        </div>
+        {!isRenaming && (
+          <>
             <button className="tree-item-actions" onClick={handleMoreClick}>
               <MoreHorizontalIcon />
             </button>

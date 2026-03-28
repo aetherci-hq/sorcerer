@@ -243,7 +243,7 @@ function AgentItem({ agent, staggerClass }: { agent: Agent; staggerClass?: strin
           />
         )}
         <BotIcon className="tree-icon tree-icon--agent" />
-        <div className="tree-label-group">
+        <div className="tree-label-group tree-label-group--stacked">
           {isRenaming ? (
             <input
               ref={renameInputRef}

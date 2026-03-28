@@ -624,7 +624,13 @@ body {
   flex: 1;
   min-width: 0;
   display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tree-label-group--stacked {
   flex-direction: column;
+  align-items: flex-start;
   gap: 1px;
 }
 
@@ -2529,7 +2535,7 @@ button:focus-visible,
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
+  width: 0;
   height: 22px;
   border: none;
   border-radius: var(--radius-sm);
@@ -2537,9 +2543,10 @@ button:focus-visible,
   color: var(--text-muted);
   cursor: pointer;
   opacity: 0;
-  transition: all 0.15s var(--ease-out);
-  flex-shrink: 0;
+  overflow: visible;
+  transition: opacity 0.15s var(--ease-out), width 0s, background 0.15s var(--ease-out), color 0.15s var(--ease-out);
   padding: 0;
+  flex-shrink: 0;
 }
 
 .tree-item-actions svg {
@@ -2549,6 +2556,7 @@ button:focus-visible,
 
 .tree-item:hover .tree-item-actions {
   opacity: 1;
+  width: 22px;
 }
 
 .tree-item-actions:hover {
