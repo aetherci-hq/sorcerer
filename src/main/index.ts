@@ -292,9 +292,13 @@ async function createWindow(): Promise<void> {
 
       try {
         const { startAgent } = await import('./ipc/shared-handlers')
-        startAgent({ db: dbService, pty: ptyService, worktree: worktreeService, fileWatcher: fileWatcherService }, sessionId)
+        const restarted = startAgent({ db: dbService, pty: ptyService, worktree: worktreeService, fileWatcher: fileWatcherService }, sessionId)
         tracker!.count++
         console.log(`[agent-restart] ${current.name} restarted successfully`)
+        // Notify renderer so TerminalView re-attaches
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('agent:restarted', sessionId, restarted.status, restarted.pid)
+        }
       } catch (err) {
         console.error(`[agent-restart] Failed to restart ${current.name}:`, err)
       }

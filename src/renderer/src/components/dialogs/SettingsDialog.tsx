@@ -15,7 +15,7 @@ const TABS: { id: SettingsTab; label: string; icon: React.ReactNode }[] = [
   { id: 'appearance', label: 'Appearance', icon: <PaletteIcon /> },
   { id: 'sessions', label: 'Sessions', icon: <TerminalIcon /> },
   { id: 'git', label: 'Git', icon: <GitBranchIcon /> },
-  { id: 'remote', label: 'Remote Desktop', icon: <WifiIcon /> },
+  { id: 'remote', label: 'Remote', icon: <WifiIcon /> },
   { id: 'briefing', label: 'Briefing', icon: <BotIcon /> },
   { id: 'general', label: 'General', icon: <SettingsIcon /> }
 ]
@@ -383,7 +383,8 @@ function RemoteTab() {
     addToast('Token copied to clipboard', 'success')
   }
 
-  const accessUrl = `http://${bindAddress === '0.0.0.0' ? 'localhost' : bindAddress}:${port}`
+  const host = bindAddress === '0.0.0.0' ? 'localhost' : bindAddress
+  const accessUrl = `http://${host}:${port}?token=${token}`
   const rcHost = bindAddress === '0.0.0.0' ? lanIp : bindAddress
   const rcUrl = `http://${rcHost}:${port}/rc?token=${token}`
 
@@ -412,7 +413,7 @@ function RemoteTab() {
               <span>Server running</span>
             </div>
             <div className="settings-remote-preview-url-row">
-              <code className="settings-remote-preview-url">{accessUrl}</code>
+              <code className="settings-remote-preview-url">{`http://${host}:${port}?token=${tokenVisible ? token : '\u2022'.repeat(8)}`}</code>
               <button className="settings-copy-inline-btn" type="button" onClick={handleCopyUrl} title="Copy URL">
                 <CopyIcon style={{ width: 13, height: 13 }} />
               </button>

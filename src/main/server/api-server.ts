@@ -44,9 +44,12 @@ import {
   loadQuickNote,
   saveQuickNote,
   deleteQuickNote,
+  listQuickNoteParents,
   setSessionRemoteControl,
-  setAgentRemoteControl
+  setAgentRemoteControl,
+  hasClaudeConversation
 } from '../ipc/shared-handlers'
+import os from 'os'
 import { ScrollbackBuffer } from './scrollback'
 import { WebSocketHandler } from './ws-handler'
 // In dev, read from disk for live reloading. In production, use inlined copy.
@@ -297,6 +300,15 @@ export class ApiServer {
         // Remote clients should navigate via browser — no shell.openExternal available
         return { opened: false, error: 'Use browser navigation for remote clients' }
       },
+      'session:has-conversation': (sessionId: string) => {
+        const session = s.db.getSession(sessionId)
+        if (!session) return false
+        const cwd = fs.existsSync(session.worktree_path as string)
+          ? (session.worktree_path as string)
+          : (s.db.getProject(session.project_id as string)?.path as string)
+        if (!cwd) return false
+        return hasClaudeConversation(cwd)
+      },
 
       // Agent
       'agent:list': () => listAgents(s),
@@ -304,6 +316,11 @@ export class ApiServer {
       'agent:update': (id: string, updates: any) => updateAgent(s, id, updates),
       'agent:remove': (id: string) => removeAgent(s, id),
       'agent:start': (id: string) => startAgent(s, id),
+      'agent:has-conversation': (agentId: string) => {
+        const cwd = path.join(os.homedir(), '.sorcerer', 'agents', agentId)
+        if (!fs.existsSync(cwd)) return false
+        return hasClaudeConversation(cwd)
+      },
       'agent:resume': (id: string) => resumeAgent(s, id),
       'agent:restart': (id: string) => restartAgent(s, id),
       'agent:kill': (id: string) => killAgent(s, id),
@@ -320,6 +337,20 @@ export class ApiServer {
       'quick-notes:load': (parentId: string, parentType: string) => loadQuickNote(s, parentId, parentType),
       'quick-notes:save': (id: string, parentId: string, parentType: string, content: string) => saveQuickNote(s, id, parentId, parentType, content),
       'quick-notes:delete': (parentId: string, parentType: string) => deleteQuickNote(s, parentId, parentType),
+      'quick-notes:list-parents': () => listQuickNoteParents(s),
+
+      // Briefing
+      'briefing:generate': async () => {
+        const { v4: uuidv4 } = require('uuid')
+        const { generateBriefing } = await import('../services/briefing-service')
+        const result = await generateBriefing(s.db, s.pty)
+        if (result.text && !result.error) {
+          s.db.saveBriefing(uuidv4(), result.text, result.provider, result.model)
+        }
+        return result
+      },
+      'briefing:list': (limit?: number) => s.db.listBriefings(limit || 20),
+      'briefing:delete': (id: string) => s.db.deleteBriefing(id),
 
       // Settings
       'settings:get': (key: string) => getSetting(s, key),
@@ -391,7 +422,7 @@ export class ApiServer {
 
   private serveStatic(pathname: string, res: http.ServerResponse): void {
     // Resolve to renderer output directory
-    const rendererDir = path.join(__dirname, '../../renderer')
+    const rendererDir = path.join(__dirname, '../renderer')
     let filePath = path.join(rendererDir, pathname === '/' ? 'index.html' : pathname)
 
     // Security: prevent directory traversal

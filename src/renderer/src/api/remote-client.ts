@@ -191,7 +191,9 @@ export function createRemoteClient(baseUrl: string, token: string): SorcererAPI 
       createQuickTerminal: (sourceSessionId: string) => rpc('session:create-quick-terminal', sourceSessionId),
       rename: (sessionId: string, name: string) => rpc('session:rename', sessionId, name),
       landOnMain: (sessionId: string) => rpc('session:land-on-main', sessionId),
-      setRemoteControl: (sessionId: string, enabled: boolean) => rpc('session:set-remote-control', sessionId, enabled)
+      setRemoteControl: (sessionId: string, enabled: boolean) => rpc('session:set-remote-control', sessionId, enabled),
+      divergence: async () => null,
+      hasConversation: (sessionId: string) => rpc('session:has-conversation', sessionId)
     },
 
     agentGroup: {
@@ -213,7 +215,8 @@ export function createRemoteClient(baseUrl: string, token: string): SorcererAPI 
       restart: (id: string) => rpc('agent:restart', id),
       kill: (id: string) => rpc('agent:kill', id),
       createQuickTerminal: (agentId: string) => rpc('agent:create-quick-terminal', agentId),
-      setRemoteControl: (agentId: string, enabled: boolean) => rpc('agent:set-remote-control', agentId, enabled)
+      setRemoteControl: (agentId: string, enabled: boolean) => rpc('agent:set-remote-control', agentId, enabled),
+      hasConversation: (agentId: string) => rpc('agent:has-conversation', agentId)
     },
 
     terminal: {
@@ -232,7 +235,8 @@ export function createRemoteClient(baseUrl: string, token: string): SorcererAPI 
         return ws.subscribe(`terminal:exit:${sessionId}`, (payload) => {
           callback(payload.exitCode)
         })
-      }
+      },
+      onResumeFailed: () => () => {}
     },
 
     teams: {
@@ -270,10 +274,32 @@ export function createRemoteClient(baseUrl: string, token: string): SorcererAPI 
       set: (key: string, value: string) => rpc('settings:set', key, value)
     },
 
+    briefing: {
+      generate: () => rpc('briefing:generate'),
+      list: (limit?: number) => rpc('briefing:list', limit),
+      delete: (id: string) => rpc('briefing:delete', id)
+    },
+
     system: {
       userInfo: () => rpc('system:userInfo'),
       accountPicture: async () => null,
+      memoryUsage: async () => ({ totalMB: 0, breakdown: [], processCount: 0 }),
+      networkIp: async () => '0.0.0.0',
+      checkUpdate: async () => null,
       platform: 'unknown' as string
+    },
+
+    popout: {
+      open: async () => ({ opened: false }),
+      close: async () => ({ closed: false }),
+      isOpen: async () => false,
+      getScrollback: async () => '',
+      broadcastTheme: () => {},
+      onOpened: () => () => {},
+      onClosed: () => () => {},
+      onThemeUpdate: () => () => {},
+      notifySessionUpdated: () => {},
+      onSessionUpdated: () => () => {}
     },
 
     remote: {
