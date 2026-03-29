@@ -21,7 +21,7 @@ const TABS: { id: SettingsTab; label: string; icon: React.ReactNode }[] = [
 ]
 
 const SHORTCUTS = [
-  { keys: 'Ctrl + K', action: 'Search sessions' },
+  { keys: 'Ctrl + K', action: 'Search' },
   { keys: 'Ctrl + N', action: 'New session' },
   { keys: 'Ctrl + B', action: 'Cycle sidebar (expand / collapse / hide)' },
   { keys: 'Ctrl + ,', action: 'Open settings' },

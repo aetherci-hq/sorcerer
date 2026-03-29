@@ -14,7 +14,7 @@ export function SearchBar() {
           ref={inputRef}
           className="search-input"
           type="text"
-          placeholder="Search sessions..."
+          placeholder="Search..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
         />
