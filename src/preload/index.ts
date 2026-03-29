@@ -192,7 +192,8 @@ const api = {
     close: () => ipcRenderer.send('window:close'),
     isMaximized: () => ipcRenderer.invoke('window:isMaximized'),
     setTitleBarOverlay: (options: { color: string; symbolColor: string }) => ipcRenderer.send('window:setTitleBarOverlay', options),
-    openExternal: (url: string) => ipcRenderer.invoke('window:openExternal', url)
+    openExternal: (url: string) => ipcRenderer.invoke('window:openExternal', url),
+    openPath: (p: string) => ipcRenderer.invoke('window:openPath', p)
   },
 
   popout: {

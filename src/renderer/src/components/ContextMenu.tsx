@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { getApi } from '../api/client'
 import { useUIStore, findLeaf, findLeafBySession } from '../stores/useUIStore'
 import { useProjectStore } from '../stores/useProjectStore'
@@ -22,12 +22,12 @@ export function ContextMenu() {
   const { agents, startAgent, resumeAgent, restartAgent, killAgent } = useAgentStore()
   const { addToast } = useToastStore()
   const menuRef = useRef<HTMLDivElement>(null)
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null)
 
-  // Clamp menu position to viewport
-  useEffect(() => {
-    if (!contextMenu || !menuRef.current) return
-    const menu = menuRef.current
-    const rect = menu.getBoundingClientRect()
+  // Clamp menu position to viewport before paint
+  useLayoutEffect(() => {
+    if (!contextMenu || !menuRef.current) { setPos(null); return }
+    const rect = menuRef.current.getBoundingClientRect()
     const pad = 8
 
     let top = contextMenu.y
@@ -41,9 +41,8 @@ export function ContextMenu() {
     if (left < pad) left = pad
     if (top < pad) top = pad
 
-    menu.style.top = `${top}px`
-    menu.style.left = `${left}px`
-  })
+    setPos({ top, left })
+  }, [contextMenu])
 
   // Focus first item when menu opens
   useEffect(() => {
@@ -453,6 +452,9 @@ export function ContextMenu() {
       { label: 'Copy Worktree Path', icon: <CopyIcon className={iconClass} />, action: () => {
         if (targetSession) copyToClipboard(targetSession.worktree_path, 'Worktree path')
       }},
+      { label: 'Open Worktree Path', icon: <FolderIcon className={iconClass} />, action: () => {
+        if (targetSession) window.sorcerer?.window.openPath(targetSession.worktree_path)
+      }},
       { type: 'separator' },
       { label: 'Delete Session', icon: <TrashIcon className={iconClass} />, danger: true, action: () => openDialog('delete-session', contextMenu.targetId) }
     ]
@@ -519,6 +521,9 @@ export function ContextMenu() {
       { label: targetSession?.branch ? 'Copy Worktree Path' : 'Copy Path', icon: <CopyIcon className={iconClass} />, action: () => {
         if (targetSession) copyToClipboard(targetSession.worktree_path, 'Path')
       }},
+      { label: targetSession?.branch ? 'Open Worktree Path' : 'Open Path', icon: <FolderIcon className={iconClass} />, action: () => {
+        if (targetSession) window.sorcerer?.window.openPath(targetSession.worktree_path)
+      }},
       ...(targetSession?.branch ? [
         { type: 'separator' as const },
         { label: 'Push Branch', icon: <UploadIcon className={iconClass} />, action: async () => {
@@ -555,7 +560,7 @@ export function ContextMenu() {
     <div
       className="context-menu"
       ref={menuRef}
-      style={{ top: contextMenu.y, left: contextMenu.x }}
+      style={{ top: pos?.top ?? contextMenu.y, left: pos?.left ?? contextMenu.x }}
     >
       {items.map((item, i) =>
         'type' in item ? (
