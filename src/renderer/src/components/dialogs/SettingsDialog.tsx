@@ -532,9 +532,23 @@ function GeneralTab() {
   return (
     <>
       <SectionTitle>Updates</SectionTitle>
+      <SettingRow label="Version" description="Sorcerer">
+        <span className="settings-version">{__APP_VERSION__}</span>
+      </SettingRow>
       <SettingRow label="Check for updates" description="Periodically check GitHub for new releases">
         <Toggle checked={checkUpdates !== 'false'} onChange={(v) => setCheckUpdates(v ? 'true' : 'false')} />
       </SettingRow>
+      {update && (
+        <SettingRow label="Update available" description={`Version ${update.version} is available`}>
+          <button
+            className="settings-action-btn"
+            type="button"
+            onClick={() => window.open(update.url, '_blank')}
+          >
+            Download
+          </button>
+        </SettingRow>
+      )}
 
       <SectionTitle>Keyboard Shortcuts</SectionTitle>
       <div className="settings-shortcuts">
@@ -587,21 +601,6 @@ function GeneralTab() {
         </button>
       </SettingRow>
 
-      <SectionTitle>About</SectionTitle>
-      <SettingRow label="Version" description="Sorcerer">
-        <span className="settings-version">{__APP_VERSION__}</span>
-      </SettingRow>
-      {update && (
-        <SettingRow label="Update available" description={`Version ${update.version} is available`}>
-          <button
-            className="settings-action-btn"
-            type="button"
-            onClick={() => window.open(update.url, '_blank')}
-          >
-            Download
-          </button>
-        </SettingRow>
-      )}
     </>
   )
 }
