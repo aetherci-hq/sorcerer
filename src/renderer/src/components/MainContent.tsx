@@ -6,7 +6,6 @@ import { useAgentStore } from '../stores/useAgentStore'
 import { useUIStore, findLeaf, findLeafBySession } from '../stores/useUIStore'
 import { OrphanWorkspaceBanner } from './OrphanWorkspaceBanner'
 import { GitBranchIcon, TerminalIcon, BotIcon, NotesIcon, SplitHorizontalIcon, SplitVerticalIcon, MaximizeIcon, MinimizeIcon } from './icons'
-import { StatusDot } from './StatusDot'
 import { TerminalView } from './TerminalView'
 import { QuickNotesPanel, parseQuickNotesPanelId } from './QuickNotesPanel'
 import { useQuickNotesStore } from '../stores/useQuickNotesStore'
@@ -538,27 +537,6 @@ function SplitNodeView({ node }: { node: SplitNode }) {
   )
 }
 
-function useMemoryUsage() {
-  const [memoryMB, setMemoryMB] = useState<number | null>(null)
-  useEffect(() => {
-    let mounted = true
-    const poll = () => {
-      getApi().system.memoryUsage().then((m) => {
-        if (mounted) setMemoryMB(m.totalMB)
-      }).catch(() => {})
-    }
-    poll()
-    const interval = setInterval(poll, 10_000)
-    return () => { mounted = false; clearInterval(interval) }
-  }, [])
-  return memoryMB
-}
-
-function formatMemory(mb: number): string {
-  if (mb >= 1024) return `${(mb / 1024).toFixed(1)} GB`
-  return `${mb} MB`
-}
-
 function useUpdateCheck() {
   const [update, setUpdate] = useState<{ version: string; url: string } | null>(null)
   useEffect(() => {
@@ -583,7 +561,6 @@ export function MainContent() {
   const { projects } = useProjectStore()
   const { agents: agentsList } = useAgentStore()
   const { splitRoot, splitRight, splitDown, maximizedPanelId } = useUIStore()
-  const memoryMB = useMemoryUsage()
   const updateAvailable = useUpdateCheck()
 
   const activeSession = sessions.find((s) => s.id === activeSessionId)
@@ -595,7 +572,21 @@ export function MainContent() {
   return (
     <div className="main-content">
       {/* Titlebar — minimal drag region */}
-      <div className="main-titlebar" />
+      <div className="main-titlebar">
+        {updateAvailable && (
+          <a
+            className="titlebar-update"
+            href="#"
+            onClick={(e) => {
+              e.preventDefault()
+              window.sorcerer?.window.openExternal(updateAvailable.url)
+            }}
+            title={`Download v${updateAvailable.version}`}
+          >
+            Update available: v{updateAvailable.version}
+          </a>
+        )}
+      </div>
 
       <OrphanWorkspaceBanner />
 
@@ -734,39 +725,6 @@ export function MainContent() {
         <TerminalPanel session={activeSession} agent={activeAgent} />
       )}
 
-      {/* Status bar */}
-      <div className="status-bar">
-        <div className="status-bar-right">
-          <div className="status-bar-item">
-            <StatusDot status={sessions.filter((s) => s.status === 'active').length > 0 ? 'active' : 'idle'} />
-            <span>{sessions.filter((s) => s.status === 'active').length} active</span>
-          </div>
-          {memoryMB !== null && (
-            <>
-              <div className="status-bar-separator" />
-              <div className="status-bar-item status-bar-memory">
-                <span>{formatMemory(memoryMB)}</span>
-              </div>
-            </>
-          )}
-          {updateAvailable && (
-            <>
-              <div className="status-bar-separator" />
-              <a
-                className="status-bar-item status-bar-update"
-                href="#"
-                onClick={(e) => {
-                  e.preventDefault()
-                  window.sorcerer?.window.openExternal(updateAvailable.url)
-                }}
-                title={`Download v${updateAvailable.version}`}
-              >
-                Update available: v{updateAvailable.version}
-              </a>
-            </>
-          )}
-        </div>
-      </div>
     </div>
   )
 }

@@ -236,10 +236,32 @@ function formatTier(sub: string, tier: string): string {
   return multiplier ? `${label} ${multiplier}x` : label
 }
 
+function useMemoryUsage() {
+  const [memoryMB, setMemoryMB] = useState<number | null>(null)
+  useEffect(() => {
+    let mounted = true
+    const poll = () => {
+      getApi().system.memoryUsage().then((m) => {
+        if (mounted) setMemoryMB(m.totalMB)
+      }).catch(() => {})
+    }
+    poll()
+    const interval = setInterval(poll, 10_000)
+    return () => { mounted = false; clearInterval(interval) }
+  }, [])
+  return memoryMB
+}
+
+function formatMemory(mb: number): string {
+  if (mb >= 1024) return `${(mb / 1024).toFixed(1)} GB`
+  return `${mb} MB`
+}
+
 function StatsPopover({ sessions, onClose, pinned, onTogglePin }: { sessions: any[]; onClose: () => void; pinned: boolean; onTogglePin: () => void }) {
   const popoverRef = useRef<HTMLDivElement>(null)
   const [claudeStats, setClaudeStats] = useState<ClaudeStats | null>(null)
   const rateLimits = useRateLimits()
+  const memoryMB = useMemoryUsage()
 
   // Today boundary (midnight local time) in unix seconds
   const todayStart = Math.floor(new Date().setHours(0, 0, 0, 0) / 1000)
@@ -351,8 +373,14 @@ function StatsPopover({ sessions, onClose, pinned, onTogglePin }: { sessions: an
           </div>
           <div className="stats-popover-footer">
             {claudeStats.allTime.totalSessions.toLocaleString()} sessions · {claudeStats.allTime.totalMessages.toLocaleString()} messages all time
+            {memoryMB !== null && <> · {formatMemory(memoryMB)}</>}
           </div>
         </>
+      )}
+      {!claudeStats && memoryMB !== null && (
+        <div className="stats-popover-footer">
+          {formatMemory(memoryMB)}
+        </div>
       )}
     </div>
   )
