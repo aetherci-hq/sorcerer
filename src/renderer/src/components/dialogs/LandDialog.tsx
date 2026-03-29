@@ -117,16 +117,23 @@ export function LandDialog() {
           </svg>
         </div>
         {landing ? (
-          <p className="dialog-confirm-text">
+          <div className="dialog-confirm-text" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span className="btn-spinner" />
             Landing <strong>{sessionName}</strong> onto main...
-          </p>
+          </div>
         ) : (
           <>
             <p className="dialog-confirm-text">
-              Land <strong>{sessionName}</strong> onto main? This will squash-merge all commits into a single commit on main.
+              Land <strong>{sessionName}</strong> onto main?
             </p>
             <HealthCheckInfo health={health} />
-            <p className="dialog-confirm-subtext">The worktree and branch will be cleaned up after merging.</p>
+            <ul className="land-steps">
+              <li>Auto-commit any uncommitted changes</li>
+              {!health.loading && health.behind > 0 && <li>Rebase onto latest main</li>}
+              <li>Squash-merge all commits into one on main</li>
+              <li>Remove worktree, local branch, and remote branch</li>
+              <li>Delete session</li>
+            </ul>
           </>
         )}
         {error && (

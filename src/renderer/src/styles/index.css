@@ -2326,6 +2326,14 @@ select.dialog-input option {
   opacity: 0.8;
 }
 
+.land-steps {
+  margin: 8px 0 0;
+  padding: 0 0 0 18px;
+  font-size: 12.5px;
+  color: var(--text-muted);
+  line-height: 1.7;
+}
+
 /* ============================
    EMPTY STATE
    ============================ */
