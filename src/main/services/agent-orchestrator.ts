@@ -106,6 +106,10 @@ export class AgentOrchestrator {
     const cwd = path.join(os.homedir(), '.sorcerer', 'agents', agentId)
     fs.mkdirSync(cwd, { recursive: true })
 
+    // Pre-trust the workspace so Claude Code doesn't show an interactive trust prompt
+    const encoded = cwd.replace(/[^a-zA-Z0-9]/g, '-')
+    fs.mkdirSync(path.join(os.homedir(), '.claude', 'projects', encoded), { recursive: true })
+
     const args: string[] = []
     if (agent.bypass_permissions) args.push('--dangerously-skip-permissions')
     if (agent.mcp_config) args.push('--mcp-config', agent.mcp_config as string)

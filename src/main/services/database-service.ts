@@ -425,6 +425,7 @@ export class DatabaseService {
     team_name: string | null
     archived_at: number | null
     remote_control: number
+    claude_session_id: string
   }>): any {
     if (!this.db) return undefined
     const setClauses: string[] = []

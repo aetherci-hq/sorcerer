@@ -85,6 +85,17 @@ export function hasClaudeConversation(cwd: string): boolean {
   }
 }
 
+/**
+ * Pre-trust a directory for Claude Code by ensuring its project directory exists.
+ * Claude Code shows an interactive trust prompt when entering a directory for the
+ * first time. Creating the project directory ahead of time skips that prompt.
+ */
+function ensureClaudeTrust(cwd: string): void {
+  const encoded = cwd.replace(/[^a-zA-Z0-9]/g, '-')
+  const projectDir = path.join(os.homedir(), '.claude', 'projects', encoded)
+  fs.mkdirSync(projectDir, { recursive: true })
+}
+
 // ── Resume failure detection ────────────────────────────────
 //
 // Tracks sessions spawned via --continue so we can detect early exits
@@ -589,8 +600,12 @@ export async function restartSession(
     // Quick terminal: spawn plain shell
     pty.spawn(sessionId, cwd)
   } else {
-    // Re-spawn Claude Code directly in the worktree (fresh session)
-    const args: string[] = []
+    // Re-spawn Claude Code with a fresh, pinned conversation ID.
+    // Without --session-id, Claude picks the most recent conversation in the cwd,
+    // which can collide with external Claude instances or other Sorcerer sessions.
+    const newClaudeSessionId = uuidv4()
+    db.updateSession(sessionId, { claude_session_id: newClaudeSessionId })
+    const args: string[] = ['--session-id', newClaudeSessionId]
     if (session.bypass_permissions !== 0) args.push('--dangerously-skip-permissions')
     pty.spawn(sessionId, cwd, {
       command: resolveClaudeBinary(),
@@ -935,11 +950,16 @@ export function startAgent(
 
   const cwd = path.join(os.homedir(), '.sorcerer', 'agents', agentId)
   fs.mkdirSync(cwd, { recursive: true })
+  ensureClaudeTrust(cwd)
 
   const args: string[] = []
   if (agent.bypass_permissions !== 0) args.push('--dangerously-skip-permissions')
   if (agent.mcp_config) args.push('--mcp-config', agent.mcp_config as string)
   if (agent.system_prompt) args.push('--append-system-prompt', agent.system_prompt as string)
+
+  // Pin each agent run to a unique conversation ID to prevent cross-contamination
+  const claudeSessionId = uuidv4()
+  args.push('--session-id', claudeSessionId)
 
   // Autonomous mode: run mission non-interactively
   if (agent.mission) {
@@ -975,6 +995,7 @@ export function resumeAgent(
 
   const cwd = path.join(os.homedir(), '.sorcerer', 'agents', agentId)
   fs.mkdirSync(cwd, { recursive: true })
+  ensureClaudeTrust(cwd)
 
   const args = ['--continue']
   if (agent.bypass_permissions !== 0) args.push('--dangerously-skip-permissions')
@@ -1011,8 +1032,11 @@ export function restartAgent(
 
   const cwd = path.join(os.homedir(), '.sorcerer', 'agents', agentId)
   fs.mkdirSync(cwd, { recursive: true })
+  ensureClaudeTrust(cwd)
 
-  const args: string[] = []
+  // Pin to a fresh conversation ID to avoid picking up stale conversations
+  const claudeSessionId = uuidv4()
+  const args: string[] = ['--session-id', claudeSessionId]
   if (agent.bypass_permissions !== 0) args.push('--dangerously-skip-permissions')
   if (agent.mcp_config) args.push('--mcp-config', agent.mcp_config as string)
   if (agent.system_prompt) args.push('--append-system-prompt', agent.system_prompt as string)
