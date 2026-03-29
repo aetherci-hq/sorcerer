@@ -4,6 +4,13 @@ import { useSessionStore } from '../stores/useSessionStore'
 import { useAgentStore } from '../stores/useAgentStore'
 import { useProjectStore } from '../stores/useProjectStore'
 import { useQuickNotesStore } from '../stores/useQuickNotesStore'
+import { focusTerminal } from '../components/TerminalView'
+
+/** Refocus the active session's terminal */
+function focusActiveTerminal(): void {
+  const id = useSessionStore.getState().activeSessionId
+  if (id) requestAnimationFrame(() => focusTerminal(id))
+}
 
 /**
  * Build a flat ordered list of navigable session/agent IDs matching sidebar order:
@@ -144,7 +151,7 @@ export function useKeyboardShortcuts() {
         }
       }
 
-      // Escape — unmaximize, clear search if focused, or blur
+      // Escape — unmaximize, clear search, or refocus terminal
       if (e.key === 'Escape') {
         const searchInput = document.querySelector('.search-input') as HTMLInputElement | null
         if (document.activeElement === searchInput) {
@@ -153,11 +160,14 @@ export function useKeyboardShortcuts() {
             setSearchQuery('')
           } else {
             searchInput?.blur()
+            focusActiveTerminal()
           }
         } else {
           const { maximizedPanelId, unmaximizePanel } = useUIStore.getState()
           if (maximizedPanelId) {
             unmaximizePanel()
+          } else {
+            focusActiveTerminal()
           }
         }
       }

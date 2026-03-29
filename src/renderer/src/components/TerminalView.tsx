@@ -81,6 +81,12 @@ window.addEventListener('sorcerer:themeChange', (e: Event) => {
   }
 })
 
+/** Focus a terminal by session ID (used by keyboard shortcuts) */
+export function focusTerminal(sessionId: string): void {
+  const cached = terminalCache.get(sessionId)
+  if (cached) cached.terminal.focus()
+}
+
 export function TerminalView({ sessionId, isFocused }: TerminalViewProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const cleanupRef = useRef<(() => void) | null>(null)

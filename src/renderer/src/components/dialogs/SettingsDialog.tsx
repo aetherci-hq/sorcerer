@@ -28,8 +28,10 @@ const SHORTCUTS = [
   { keys: 'Ctrl + \\', action: 'Split right' },
   { keys: 'Ctrl + Shift + \\', action: 'Split down' },
   { keys: 'Ctrl + W', action: 'Close focused panel' },
-  { keys: 'Escape', action: 'Clear search / close dialog' },
+  { keys: 'Ctrl + Shift + M', action: 'Maximize focused panel' },
+  { keys: 'Escape', action: 'Clear search / refocus terminal' },
   { keys: 'Alt + ↑ / ↓', action: 'Navigate sessions' },
+  { keys: 'Ctrl + Shift + N', action: 'Toggle quick notes' },
   { keys: 'F2', action: 'Rename selected item' },
   { keys: 'Ctrl + Shift + B', action: 'Toggle briefing panel' }
 ]
