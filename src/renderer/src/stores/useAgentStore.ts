@@ -117,6 +117,7 @@ export const useAgentStore = create<AgentState>((set) => ({
 
   resumeAgent: async (id) => {
     try {
+      disposeTerminal(id)
       const agent = await getApi().agent.resume(id)
       if (agent) {
         set((state) => ({
@@ -130,6 +131,7 @@ export const useAgentStore = create<AgentState>((set) => ({
 
   restartAgent: async (id) => {
     try {
+      disposeTerminal(id)
       const agent = await getApi().agent.restart(id)
       if (agent) {
         set((state) => ({

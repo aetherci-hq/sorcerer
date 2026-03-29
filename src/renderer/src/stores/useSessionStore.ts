@@ -134,6 +134,9 @@ export const useSessionStore = create<SessionState>((set, get) => ({
 
   restartSession: async (sessionId) => {
     try {
+      // Dispose cached terminal so the restarted session gets a fresh terminal
+      disposeTerminal(sessionId)
+
       const session = await getApi().session.restart(sessionId)
       if (session) {
         set((state) => ({
@@ -147,6 +150,10 @@ export const useSessionStore = create<SessionState>((set, get) => ({
 
   resumeSession: async (sessionId) => {
     try {
+      // Dispose cached terminal so the resumed session gets a fresh terminal
+      // with clean IPC listeners — prevents stale output from prior run
+      disposeTerminal(sessionId)
+
       const session = await getApi().session.resume(sessionId)
       if (session) {
         set((state) => ({

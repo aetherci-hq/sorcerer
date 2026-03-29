@@ -112,7 +112,7 @@ export function ensureClaudeTrust(cwd: string): void {
 
 // ── Resume failure detection ────────────────────────────────
 //
-// Tracks sessions spawned via --continue so we can detect early exits
+// Tracks sessions/agents spawned via --continue or --resume so we can detect early exits
 // (e.g. "No conversation found to continue") and notify the renderer.
 
 /** Map of sessionId → timestamp when resume was initiated */
@@ -130,7 +130,7 @@ const RESUME_FAILURE_PATTERNS = [
 ]
 
 /**
- * Mark a session as having just been resumed via --continue.
+ * Mark a session as having just been resumed via --resume/--continue.
  * Called from resumeSession/resumeAgent.
  */
 function trackResume(sessionId: string): void {
@@ -660,13 +660,22 @@ export async function resumeSession(
     pty.spawn(sessionId, cwd)
   } else {
     // Resume the Claude Code conversation pinned to this session.
-    // Use --resume <id> for sessions with a stored claude_session_id (prevents
-    // cross-contamination when multiple sessions share the same cwd).
-    // Fall back to --continue for legacy sessions created before conversation pinning.
-    const claudeSessionId = session.claude_session_id as string | undefined
-    const args = claudeSessionId
-      ? ['--resume', claudeSessionId]
-      : ['--continue']
+    // Use --resume <id> for sessions with a stored claude_session_id.
+    // If no claude_session_id exists (legacy session), start a fresh conversation
+    // with a new pinned ID. NEVER use --continue — it picks up the most recent
+    // conversation in the cwd, which causes cross-session pollution when multiple
+    // sessions share the same working directory.
+    let claudeSessionId = session.claude_session_id as string | undefined
+    let args: string[]
+    if (claudeSessionId) {
+      args = ['--resume', claudeSessionId]
+    } else {
+      // Legacy session without a pinned conversation — start fresh with a new ID
+      claudeSessionId = uuidv4()
+      db.updateSession(sessionId, { claude_session_id: claudeSessionId })
+      args = ['--session-id', claudeSessionId]
+      console.log(`[session:resume] No claude_session_id for ${sessionId}, starting fresh with ${claudeSessionId}`)
+    }
     if (session.bypass_permissions !== 0) args.push('--dangerously-skip-permissions')
     trackResume(sessionId)
     pty.spawn(sessionId, cwd, {
