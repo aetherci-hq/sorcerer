@@ -2,7 +2,7 @@ import simpleGit, { SimpleGit } from 'simple-git'
 import path from 'path'
 import os from 'os'
 import fs from 'fs'
-import { execSync } from 'child_process'
+import { execFileSync } from 'child_process'
 
 /**
  * Safely remove a directory that may contain Windows reserved filenames (nul, con, aux, etc).
@@ -57,7 +57,7 @@ function cleanReservedFiles(dirPath: string): void {
         } catch {
           // Last resort: use cmd.exe del which can also handle these
           try {
-            execSync(`cmd.exe /c del /f /q "\\\\?\\${fullPath}"`, { stdio: 'ignore', windowsHide: true })
+            execFileSync('cmd.exe', ['/c', 'del', '/f', '/q', `\\\\?\\${fullPath}`], { stdio: 'ignore', windowsHide: true })
           } catch { /* best effort */ }
         }
       }

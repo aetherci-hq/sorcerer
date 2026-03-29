@@ -402,9 +402,13 @@ export class ApiServer {
     req: http.IncomingMessage,
     res: http.ServerResponse
   ): void {
-    const viteUrl = new URL(req.url || '/', process.env.ELECTRON_RENDERER_URL!)
+    // Only forward the pathname+query to the Vite dev server, never an arbitrary host
+    const base = new URL(process.env.ELECTRON_RENDERER_URL!)
+    const incoming = new URL(req.url || '/', base)
+    incoming.protocol = base.protocol
+    incoming.host = base.host
     const proxyReq = http.request(
-      viteUrl,
+      incoming,
       { method: req.method, headers: req.headers },
       (proxyRes) => {
         res.writeHead(proxyRes.statusCode ?? 502, proxyRes.headers)
