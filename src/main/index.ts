@@ -1,6 +1,7 @@
 import { app, BrowserWindow, ipcMain, shell } from 'electron'
 import path from 'path'
 import fs from 'fs'
+import os from 'os'
 import { execSync } from 'child_process'
 import { PTYService } from './services/pty-service'
 import { DatabaseService } from './services/database-service'
@@ -295,6 +296,74 @@ async function createWindow(): Promise<void> {
     }).catch((err) => {
       console.error('[remote-access] Auto-start failed:', err)
     })
+  }
+
+  // ── Statusline: auto-configure + watch rate limits ────────
+  // Install the statusline script and configure Claude Code to use it.
+  // Claude Code calls this script after every response with rate limit data.
+  const sorcererDir = path.join(os.homedir(), '.sorcerer')
+  const statuslineScript = path.join(sorcererDir, 'statusline.cjs')
+  try {
+    // Embed the script inline — avoids asset bundling concerns
+    const src = [
+      '// Sorcerer statusline script for Claude Code.',
+      '// Claude Code pipes JSON on stdin after every response.',
+      'const fs = require("fs"), path = require("path");',
+      'let input = "";',
+      'process.stdin.setEncoding("utf8");',
+      'process.stdin.on("data", (c) => { input += c });',
+      'process.stdin.on("end", () => {',
+      '  try {',
+      '    const d = JSON.parse(input), out = {};',
+      '    if (d.rate_limits) out.rateLimits = d.rate_limits;',
+      '    if (d.cost) out.cost = d.cost;',
+      '    out.model = (d.model && (d.model.display_name || d.model.id)) || "";',
+      '    out.timestamp = Date.now();',
+      '    const dir = path.join(require("os").homedir(), ".sorcerer");',
+      '    fs.mkdirSync(dir, { recursive: true });',
+      '    fs.writeFileSync(path.join(dir, "rate-limits.json"), JSON.stringify(out));',
+      '  } catch {}',
+      '});',
+    ].join('\n')
+    fs.mkdirSync(sorcererDir, { recursive: true })
+    // Only write if changed (avoid unnecessary fs events)
+    const existing = fs.existsSync(statuslineScript) ? fs.readFileSync(statuslineScript, 'utf8') : ''
+    if (src !== existing) fs.writeFileSync(statuslineScript, src)
+
+    // Auto-configure Claude Code settings to use our statusline
+    const claudeSettingsPath = path.join(os.homedir(), '.claude', 'settings.json')
+    if (fs.existsSync(claudeSettingsPath)) {
+      const settings = JSON.parse(fs.readFileSync(claudeSettingsPath, 'utf8'))
+      const expectedCmd = `node "${statuslineScript.replace(/\\/g, '/')}"`
+      if (!settings.statusLine || settings.statusLine.command !== expectedCmd) {
+        settings.statusLine = { type: 'command', command: expectedCmd }
+        fs.writeFileSync(claudeSettingsPath, JSON.stringify(settings, null, 2))
+        console.log('[statusline] Configured Claude Code to use Sorcerer statusline')
+      }
+    }
+  } catch (err) {
+    console.log('[statusline] Setup failed (non-fatal):', err)
+  }
+
+  // Watch rate-limits.json for changes pushed by the statusline script
+  const rateLimitsPath = path.join(sorcererDir, 'rate-limits.json')
+  try {
+    // Ensure the file exists so fs.watch has something to watch
+    if (!fs.existsSync(rateLimitsPath)) fs.writeFileSync(rateLimitsPath, '{}')
+    let debounce: ReturnType<typeof setTimeout> | null = null
+    fs.watch(rateLimitsPath, () => {
+      if (debounce) clearTimeout(debounce)
+      debounce = setTimeout(() => {
+        try {
+          const data = JSON.parse(fs.readFileSync(rateLimitsPath, 'utf8'))
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('rate-limits:updated', data)
+          }
+        } catch { /* ignore parse errors */ }
+      }, 200)
+    })
+  } catch (err) {
+    console.log('[statusline] Rate limit watcher failed (non-fatal):', err)
   }
 
   // Save window bounds on resize/move

@@ -1204,6 +1204,62 @@ body {
   color: var(--text-muted);
 }
 
+/* ============================
+   RATE LIMIT BARS
+   ============================ */
+.rate-limit-bars {
+  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.rate-limit-bar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 3px;
+}
+
+.rate-limit-bar-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.rate-limit-bar-value {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+}
+
+.rate-limit-bar-track {
+  height: 4px;
+  background: var(--bg-active);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.rate-limit-bar-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.3s var(--ease-out), background 0.3s;
+}
+
+.rate-limit-bar-reset {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.pinned-stats-period {
+  font-size: 10px;
+  color: var(--text-muted);
+  opacity: 0.6;
+}
+
 .pinned-stats-tier {
   margin-left: auto;
   font-size: 10px;

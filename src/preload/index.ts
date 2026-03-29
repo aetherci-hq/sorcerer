@@ -172,7 +172,12 @@ const api = {
       breakdown: { type: string; pid: number; mb: number }[]
       processCount: number
     }>,
-    platform: process.platform
+    platform: process.platform,
+    onRateLimits: (callback: (data: any) => void) => {
+      const handler = (_event: any, data: any) => callback(data)
+      ipcRenderer.on('rate-limits:updated', handler)
+      return () => ipcRenderer.removeListener('rate-limits:updated', handler)
+    }
   },
 
   remote: {
