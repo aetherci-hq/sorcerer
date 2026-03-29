@@ -7,14 +7,14 @@ import { SidebarFooter, PinnedStats, useStatsPinned } from './SidebarFooter'
 import { StatusDot } from './StatusDot'
 import { Tooltip } from './Tooltip'
 import { PanelLeftCloseIcon, PanelLeftOpenIcon, BotIcon, TerminalIcon, ShellPromptIcon } from './icons'
-import { useUIStore } from '../stores/useUIStore'
+import { useUIStore, getAllSessionIds } from '../stores/useUIStore'
 import { useProjectStore } from '../stores/useProjectStore'
 import { useSessionStore } from '../stores/useSessionStore'
 import { useAgentStore } from '../stores/useAgentStore'
 
 export function Sidebar() {
   const {
-    sidebarCollapsed, sidebarHidden, toggleSidebar,
+    sidebarCollapsed, sidebarHidden, toggleSidebarCollapse,
     sidebarWidth, setSidebarWidth
   } = useUIStore()
   const { pinned, togglePin } = useStatsPinned()
@@ -55,7 +55,7 @@ export function Sidebar() {
         sidebarRef.current.style.opacity = ''
       }
       if (e.clientX < SNAP_THRESHOLD && !sidebarCollapsed) {
-        toggleSidebar()
+        toggleSidebarCollapse()
       }
     }
     window.addEventListener('mousemove', onMouseMove)
@@ -64,7 +64,7 @@ export function Sidebar() {
       window.removeEventListener('mousemove', onMouseMove)
       window.removeEventListener('mouseup', onMouseUp)
     }
-  }, [setSidebarWidth, sidebarCollapsed, toggleSidebar])
+  }, [setSidebarWidth, sidebarCollapsed, toggleSidebarCollapse])
 
   /* ---- Hidden view ---- */
   if (sidebarHidden) {
@@ -79,7 +79,7 @@ export function Sidebar() {
           <div className="titlebar-logo" />
         </div>
 
-        <button className="sidebar-toggle-btn" onClick={toggleSidebar}>
+        <button className="sidebar-toggle-btn" onClick={toggleSidebarCollapse}>
           <PanelLeftOpenIcon />
         </button>
 
@@ -102,7 +102,7 @@ export function Sidebar() {
       <div className="titlebar stagger-1">
         <div className="titlebar-logo" />
         <span className="titlebar-text">Sorcerer</span>
-        <button className="sidebar-toggle-btn" onClick={toggleSidebar}>
+        <button className="sidebar-toggle-btn" onClick={toggleSidebarCollapse}>
           <PanelLeftCloseIcon />
         </button>
       </div>
@@ -125,6 +125,14 @@ function CollapsedTree() {
   const { projects } = useProjectStore()
   const { sessions, activeSessionId, setActiveSession } = useSessionStore()
   const { agents } = useAgentStore()
+  const splitRoot = useUIStore((s) => s.splitRoot)
+  const splitIds = splitRoot ? getAllSessionIds(splitRoot) : []
+
+  const btnClass = (id: string) => {
+    const isActive = id === activeSessionId
+    const isInSplit = !isActive && splitIds.includes(id)
+    return `collapsed-session-btn${isActive ? ' collapsed-session-btn--active' : ''}${isInSplit ? ' collapsed-session-btn--split' : ''}`
+  }
 
   return (
     <div className="collapsed-tree">
@@ -134,7 +142,7 @@ function CollapsedTree() {
           {agents.map((a) => (
             <Tooltip key={a.id} label={a.name} position="right">
               <button
-                className={`collapsed-session-btn ${a.id === activeSessionId ? 'collapsed-session-btn--active' : ''}`}
+                className={btnClass(a.id)}
                 onClick={() => setActiveSession(a.id)}
               >
                 <BotIcon className="collapsed-btn-icon" />
@@ -153,7 +161,7 @@ function CollapsedTree() {
             {projectSessions.map((s) => (
               <Tooltip key={s.id} label={s.name} position="right">
                 <button
-                  className={`collapsed-session-btn ${s.id === activeSessionId ? 'collapsed-session-btn--active' : ''}`}
+                  className={btnClass(s.id)}
                   onClick={() => setActiveSession(s.id)}
                 >
                   {s.type === 'quick-terminal'

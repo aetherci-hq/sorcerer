@@ -176,6 +176,10 @@ export function TerminalView({ sessionId, isFocused }: TerminalViewProps) {
           }).catch(() => {})
           return false
         }
+        // Let Ctrl+B bubble up to the window handler for sidebar toggle
+        if (e.ctrlKey && e.key === 'b' && e.type === 'keydown') {
+          return false
+        }
         return true
       })
 

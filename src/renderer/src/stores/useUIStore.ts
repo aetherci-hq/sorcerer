@@ -43,6 +43,7 @@ interface UIState {
   sidebarCollapsed: boolean
   sidebarHidden: boolean
   toggleSidebar: () => void
+  toggleSidebarCollapse: () => void
   sidebarWidth: number
   setSidebarWidth: (width: number) => void
   searchQuery: string
@@ -299,6 +300,10 @@ export const useUIStore = create<UIState>()(
           return { sidebarCollapsed: false, sidebarHidden: false }
         }
       }),
+      toggleSidebarCollapse: () => set((state) => ({
+        sidebarCollapsed: !state.sidebarCollapsed,
+        sidebarHidden: false
+      })),
 
       sidebarWidth: SIDEBAR_DEFAULT,
       setSidebarWidth: (width) => set({
@@ -463,7 +468,6 @@ export const useUIStore = create<UIState>()(
         expandedSessions: state.expandedSessions,
         expandedGroups: state.expandedGroups,
         sidebarCollapsed: state.sidebarCollapsed,
-        sidebarHidden: state.sidebarHidden,
         sidebarWidth: state.sidebarWidth
       })
     }
