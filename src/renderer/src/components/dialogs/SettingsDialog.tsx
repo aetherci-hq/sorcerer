@@ -32,6 +32,7 @@ const SHORTCUTS = [
   { keys: 'Escape', action: 'Clear search / refocus terminal' },
   { keys: 'Alt + ↑ / ↓', action: 'Navigate sessions' },
   { keys: 'Ctrl + Shift + N', action: 'Toggle quick notes' },
+  { keys: 'Ctrl + I', action: 'Dictation input overlay' },
   { keys: 'F2', action: 'Rename selected item' },
   { keys: 'Ctrl + Shift + B', action: 'Toggle briefing panel' }
 ]
