@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Dialog, DialogActions, DialogButton } from '../Dialog'
 import { useUIStore } from '../../stores/useUIStore'
 import { useProjectStore } from '../../stores/useProjectStore'
@@ -9,6 +10,7 @@ export function DeleteDialog() {
   const { projects, removeProject } = useProjectStore()
   const { sessions, deleteSession } = useSessionStore()
   const { addToast } = useToastStore()
+  const [deleting, setDeleting] = useState(false)
 
   const open = activeDialog === 'delete-session'
 
@@ -31,7 +33,9 @@ export function DeleteDialog() {
   }
 
   const handleConfirm = async () => {
-    if (dialogTargetId) {
+    if (!dialogTargetId) return
+    setDeleting(true)
+    try {
       if (targetType === 'project') {
         await removeProject(dialogTargetId)
         addToast(`Project "${targetName}" removed`, 'success')
@@ -39,12 +43,18 @@ export function DeleteDialog() {
         await deleteSession(dialogTargetId)
         addToast(`Session "${targetName}" deleted`, 'success')
       }
+      closeDialog()
+    } finally {
+      setDeleting(false)
     }
-    closeDialog()
+  }
+
+  const handleClose = () => {
+    if (!deleting) closeDialog()
   }
 
   return (
-    <Dialog open={open} onClose={closeDialog} title={`Delete ${targetType}`} variant="danger">
+    <Dialog open={open} onClose={handleClose} title={`Delete ${targetType}`} variant="danger">
       <div className="dialog-confirm-body">
         <div className="dialog-confirm-icon dialog-confirm-icon--danger">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
@@ -62,8 +72,10 @@ export function DeleteDialog() {
         <p className="dialog-confirm-subtext">Changes will be auto-committed and pushed before deletion.</p>
       </div>
       <DialogActions>
-        <DialogButton onClick={closeDialog}>Cancel</DialogButton>
-        <DialogButton variant="danger" onClick={handleConfirm}>Delete</DialogButton>
+        <DialogButton onClick={handleClose} disabled={deleting}>Cancel</DialogButton>
+        <DialogButton variant="danger" onClick={handleConfirm} disabled={deleting}>
+          {deleting ? <span className="btn-spinner" /> : 'Delete'}
+        </DialogButton>
       </DialogActions>
     </Dialog>
   )

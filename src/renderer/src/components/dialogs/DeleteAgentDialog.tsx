@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Dialog, DialogActions, DialogButton } from '../Dialog'
 import { useUIStore } from '../../stores/useUIStore'
 import { useAgentStore } from '../../stores/useAgentStore'
@@ -9,23 +10,33 @@ export function DeleteAgentDialog() {
   const { agents, removeAgent } = useAgentStore()
   const { activeSessionId } = useSessionStore()
   const { addToast } = useToastStore()
+  const [deleting, setDeleting] = useState(false)
 
   const open = activeDialog === 'delete-agent'
   const agent = dialogTargetId ? agents.find((a) => a.id === dialogTargetId) : undefined
 
   const handleDelete = async () => {
     if (!agent) return
-    await removeAgent(agent.id)
-    // Clear active session if it was the deleted agent
-    if (activeSessionId === agent.id) {
-      useSessionStore.setState({ activeSessionId: null })
+    setDeleting(true)
+    try {
+      await removeAgent(agent.id)
+      // Clear active session if it was the deleted agent
+      if (activeSessionId === agent.id) {
+        useSessionStore.setState({ activeSessionId: null })
+      }
+      addToast(`Agent "${agent.name}" deleted`, 'info')
+      closeDialog()
+    } finally {
+      setDeleting(false)
     }
-    addToast(`Agent "${agent.name}" deleted`, 'info')
-    closeDialog()
+  }
+
+  const handleClose = () => {
+    if (!deleting) closeDialog()
   }
 
   return (
-    <Dialog open={open} onClose={closeDialog} title="Delete Agent" variant="danger">
+    <Dialog open={open} onClose={handleClose} title="Delete Agent" variant="danger">
       <div className="dialog-confirm-body">
         <div className="dialog-confirm-icon dialog-confirm-icon--danger">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
@@ -40,8 +51,10 @@ export function DeleteAgentDialog() {
         </p>
       </div>
       <DialogActions>
-        <DialogButton onClick={closeDialog}>Cancel</DialogButton>
-        <DialogButton variant="danger" onClick={handleDelete}>Delete</DialogButton>
+        <DialogButton onClick={handleClose} disabled={deleting}>Cancel</DialogButton>
+        <DialogButton variant="danger" onClick={handleDelete} disabled={deleting}>
+          {deleting ? <span className="btn-spinner" /> : 'Delete'}
+        </DialogButton>
       </DialogActions>
     </Dialog>
   )
