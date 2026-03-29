@@ -10,6 +10,7 @@ import { TerminalView } from './TerminalView'
 import { QuickNotesPanel, parseQuickNotesPanelId } from './QuickNotesPanel'
 import { useQuickNotesStore } from '../stores/useQuickNotesStore'
 import { MissionPanel } from './MissionPanel'
+import { ParticleCanvas } from './ParticleCanvas'
 import type { Session, Agent, SplitNode } from '../types'
 
 function IdleSessionPanel({ session }: { session: Session }) {
@@ -145,6 +146,7 @@ function TerminalPanel({ session, agent }: { session: Session | undefined; agent
   if (!activeItem) {
     return (
       <div className="terminal-placeholder">
+        <ParticleCanvas />
         <TerminalIcon className="terminal-placeholder-icon" />
         <div className="terminal-placeholder-text">
           Select a session to connect to its terminal<br />
@@ -573,6 +575,7 @@ export function MainContent() {
     <div className="main-content">
       {/* Titlebar — minimal drag region */}
       <div className="main-titlebar">
+        <ParticleCanvas count={15} />
         {updateAvailable && (
           <a
             className="titlebar-update"
