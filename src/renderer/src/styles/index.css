@@ -274,7 +274,7 @@ body {
 }
 
 /* Hide label when sidebar is narrow — button becomes icon-only */
-@container sidebar (max-width: 180px) {
+@container sidebar (max-width: 220px) {
   .action-btn--primary span {
     display: none;
   }
@@ -886,18 +886,28 @@ body {
 
 /* Children indent */
 .tree-children {
-  padding-left: 16px;
+  padding-left: 8px;
   position: relative;
 }
 
 .tree-children::before {
   content: '';
   position: absolute;
-  left: 18px;
+  left: 10px;
   top: 0;
   bottom: 8px;
   width: 1px;
   background: var(--border-subtle);
+}
+
+/* Reduce padding for items nested inside tree-children */
+.tree-children .tree-item {
+  padding-left: 16px;
+}
+
+/* Child QTs/notes should match sibling session indentation */
+.tree-children .tree-item.tree-item--child-qt {
+  padding-left: 16px;
 }
 
 /* Teammate sub-items */
@@ -923,7 +933,7 @@ body {
 }
 
 .tree-teammate-task {
-  padding: 2px 12px 2px 36px;
+  padding: 2px 12px 2px 24px;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -939,7 +949,7 @@ body {
 }
 
 .tree-team-summary {
-  padding: 4px 12px 4px 36px;
+  padding: 4px 12px 4px 24px;
   font-size: 11px;
   font-family: var(--font-mono);
   color: var(--text-tertiary);
