@@ -86,14 +86,28 @@ export function hasClaudeConversation(cwd: string): boolean {
 }
 
 /**
- * Pre-trust a directory for Claude Code by ensuring its project directory exists.
- * Claude Code shows an interactive trust prompt when entering a directory for the
- * first time. Creating the project directory ahead of time skips that prompt.
+ * Pre-trust a directory for Claude Code so it skips the interactive trust prompt.
+ * Claude Code stores trust in ~/.claude.json under projects[path].hasTrustDialogAccepted.
  */
-function ensureClaudeTrust(cwd: string): void {
-  const encoded = cwd.replace(/[^a-zA-Z0-9]/g, '-')
-  const projectDir = path.join(os.homedir(), '.claude', 'projects', encoded)
-  fs.mkdirSync(projectDir, { recursive: true })
+export function ensureClaudeTrust(cwd: string): void {
+  // Use forward slashes — Claude Code normalises to this on all platforms
+  const key = cwd.replace(/\\/g, '/')
+  const claudeJsonPath = path.join(os.homedir(), '.claude.json')
+  try {
+    const data = fs.existsSync(claudeJsonPath)
+      ? JSON.parse(fs.readFileSync(claudeJsonPath, 'utf8'))
+      : {}
+    if (!data.projects) data.projects = {}
+    if (data.projects[key]?.hasTrustDialogAccepted) return // already trusted
+    data.projects[key] = {
+      ...(data.projects[key] || {}),
+      allowedTools: [],
+      hasTrustDialogAccepted: true
+    }
+    fs.writeFileSync(claudeJsonPath, JSON.stringify(data, null, 2))
+  } catch {
+    // Best effort — don't block agent launch if we can't write
+  }
 }
 
 // ── Resume failure detection ────────────────────────────────

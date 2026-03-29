@@ -17,6 +17,7 @@ import os from 'os'
 import fs from 'fs'
 import { DatabaseService } from './database-service'
 import { PTYService } from './pty-service'
+import { ensureClaudeTrust } from '../ipc/shared-handlers'
 
 interface RunningAgent {
   agentId: string
@@ -106,9 +107,7 @@ export class AgentOrchestrator {
     const cwd = path.join(os.homedir(), '.sorcerer', 'agents', agentId)
     fs.mkdirSync(cwd, { recursive: true })
 
-    // Pre-trust the workspace so Claude Code doesn't show an interactive trust prompt
-    const encoded = cwd.replace(/[^a-zA-Z0-9]/g, '-')
-    fs.mkdirSync(path.join(os.homedir(), '.claude', 'projects', encoded), { recursive: true })
+    ensureClaudeTrust(cwd)
 
     const args: string[] = []
     if (agent.bypass_permissions) args.push('--dangerously-skip-permissions')
