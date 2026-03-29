@@ -2,7 +2,53 @@ import { useEffect } from 'react'
 import { useUIStore } from '../stores/useUIStore'
 import { useSessionStore } from '../stores/useSessionStore'
 import { useAgentStore } from '../stores/useAgentStore'
+import { useProjectStore } from '../stores/useProjectStore'
 import { useQuickNotesStore } from '../stores/useQuickNotesStore'
+
+/**
+ * Build a flat ordered list of navigable session/agent IDs matching sidebar order:
+ * ungrouped agents → grouped agents → projects with their visible sessions.
+ */
+function getNavigableIds(): string[] {
+  const { agents, groups } = useAgentStore.getState()
+  const { projects } = useProjectStore.getState()
+  const { sessions } = useSessionStore.getState()
+  const { searchQuery, expandedGroups } = useUIStore.getState()
+
+  const query = searchQuery.toLowerCase().trim()
+  const ids: string[] = []
+
+  // Agents (same order as AgentTree)
+  const filteredAgents = query
+    ? agents.filter((a) => a.name.toLowerCase().includes(query) || a.description.toLowerCase().includes(query))
+    : agents
+
+  const ungrouped = filteredAgents.filter((a) => !a.group_id)
+  ungrouped.forEach((a) => ids.push(a.id))
+
+  for (const group of groups) {
+    if (!expandedGroups.has(group.id)) continue
+    const groupAgents = agents.filter((a) => a.group_id === group.id)
+    const visible = groupAgents.filter((a) => filteredAgents.includes(a))
+    visible.forEach((a) => ids.push(a.id))
+  }
+
+  // Projects + sessions (same order as ProjectTree)
+  const filteredProjects = query
+    ? projects.filter((p) => {
+        const ps = sessions.filter((s) => s.project_id === p.id && s.status !== 'deleted')
+        return ps.some((s) => s.name.toLowerCase().includes(query) || s.branch.toLowerCase().includes(query)) ||
+          p.name.toLowerCase().includes(query)
+      })
+    : projects
+
+  for (const project of filteredProjects) {
+    const projectSessions = sessions.filter((s) => s.project_id === project.id && s.status !== 'deleted' && s.status !== 'archived')
+    projectSessions.forEach((s) => ids.push(s.id))
+  }
+
+  return ids
+}
 
 export function useKeyboardShortcuts() {
   const { openDialog, activeDialog } = useUIStore()
@@ -11,6 +57,22 @@ export function useKeyboardShortcuts() {
     const handler = (e: KeyboardEvent) => {
       // Don't fire shortcuts when a dialog is open
       if (activeDialog) return
+
+      // Alt+↑ / Alt+↓ — navigate sessions/agents
+      if (e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+        e.preventDefault()
+        const ids = getNavigableIds()
+        if (ids.length === 0) return
+        const { activeSessionId, setActiveSession } = useSessionStore.getState()
+        const currentIndex = activeSessionId ? ids.indexOf(activeSessionId) : -1
+        let nextIndex: number
+        if (e.key === 'ArrowDown') {
+          nextIndex = currentIndex < ids.length - 1 ? currentIndex + 1 : 0
+        } else {
+          nextIndex = currentIndex > 0 ? currentIndex - 1 : ids.length - 1
+        }
+        setActiveSession(ids[nextIndex])
+      }
 
       // Ctrl+K — focus search
       if (e.ctrlKey && e.key === 'k') {

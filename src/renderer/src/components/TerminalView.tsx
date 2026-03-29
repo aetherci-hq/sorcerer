@@ -180,6 +180,10 @@ export function TerminalView({ sessionId, isFocused }: TerminalViewProps) {
         if (e.ctrlKey && e.key === 'b' && e.type === 'keydown') {
           return false
         }
+        // Let Alt+Arrow keys bubble up for session navigation
+        if (e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown') && e.type === 'keydown') {
+          return false
+        }
         return true
       })
 

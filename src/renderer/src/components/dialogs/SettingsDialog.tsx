@@ -29,6 +29,7 @@ const SHORTCUTS = [
   { keys: 'Ctrl + Shift + \\', action: 'Split down' },
   { keys: 'Ctrl + W', action: 'Close focused panel' },
   { keys: 'Escape', action: 'Clear search / close dialog' },
+  { keys: 'Alt + ↑ / ↓', action: 'Navigate sessions' },
   { keys: 'F2', action: 'Rename selected item' },
   { keys: 'Ctrl + Shift + B', action: 'Toggle briefing panel' }
 ]
