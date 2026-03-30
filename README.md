@@ -73,4 +73,4 @@ Before adding any feature, ask: *"Does this help someone orchestrate AI coding a
 
 ## License
 
-[MIT](LICENSE) — Built by [AetherCI](https://aetherci.com)
+[Apache-2.0](LICENSE) — Built by [AetherCI](https://aetherci.com)
