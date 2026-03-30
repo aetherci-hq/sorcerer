@@ -1,4 +1,5 @@
 import initSqlJs, { Database as SqlJsDatabase } from 'sql.js'
+import { safeStorage } from 'electron'
 import path from 'path'
 import os from 'os'
 import fs from 'fs'
@@ -625,18 +626,49 @@ export class DatabaseService {
   }
 
   // Settings operations
+  private isSecret(key: string): boolean {
+    return key.startsWith('apiKey_') || key === 'remoteAuthToken'
+  }
+
   getSetting(key: string): string | undefined {
     if (!this.db) return undefined
     const stmt = this.db.prepare('SELECT value FROM settings WHERE key = ?')
     stmt.bind([key])
-    const result = stmt.step() ? (stmt.getAsObject() as { value: string }).value : undefined
+    const row = stmt.step() ? (stmt.getAsObject() as { value: string }) : undefined
     stmt.free()
-    return result
+
+    if (!row) return undefined
+
+    if (this.isSecret(key)) {
+      try {
+        const buffer = Buffer.from(row.value, 'base64')
+        if (safeStorage.isEncryptionAvailable()) {
+          return safeStorage.decryptString(buffer)
+        }
+      } catch (e) {
+        // If decryption fails, it's likely plaintext from a previous version.
+        // We return it as-is so it can be used, and it will be encrypted on next save.
+        return row.value
+      }
+    }
+
+    return row.value
   }
 
   setSetting(key: string, value: string): void {
     if (!this.db) return
-    this.db.run('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', [key, value])
+
+    let valueToStore = value
+    if (this.isSecret(key) && value && safeStorage.isEncryptionAvailable()) {
+      try {
+        const encrypted = safeStorage.encryptString(value)
+        valueToStore = encrypted.toString('base64')
+      } catch (e) {
+        console.error(`[db] Failed to encrypt secret key ${key}`, e)
+      }
+    }
+
+    this.db.run('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', [key, valueToStore])
     this.save()
   }
 
