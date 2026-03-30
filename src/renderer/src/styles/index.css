@@ -984,17 +984,17 @@ body {
   pointer-events: none;
 }
 
-/* Low activity: gentle green pulse */
+/* Low activity: gentle accent pulse */
 .avatar-ring-btn[data-activity="1"] .avatar-ring {
-  border-color: var(--status-active);
-  box-shadow: 0 0 6px rgba(94, 194, 105, 0.25);
+  border-color: var(--accent);
+  box-shadow: 0 0 6px var(--accent-glow-strong);
   animation: presence-pulse 3s ease-in-out infinite;
 }
 
-/* High activity: brighter, faster pulse */
+/* High activity: brighter, faster accent pulse */
 .avatar-ring-btn[data-activity="2"] .avatar-ring {
-  border-color: var(--status-active);
-  box-shadow: 0 0 10px rgba(94, 194, 105, 0.4);
+  border-color: var(--accent);
+  box-shadow: 0 0 10px var(--accent-glow-strong);
   animation: presence-pulse 1.5s ease-in-out infinite;
 }
 
