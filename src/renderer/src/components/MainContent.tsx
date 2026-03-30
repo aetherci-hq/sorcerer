@@ -140,13 +140,13 @@ function IdleAgentPanel({ agent }: { agent: Agent }) {
   )
 }
 
-function TerminalPanel({ session, agent }: { session: Session | undefined; agent: Agent | undefined }) {
+function TerminalPanel({ session, agent, particlesEnabled }: { session: Session | undefined; agent: Agent | undefined; particlesEnabled?: boolean }) {
   const activeItem = session || agent
 
   if (!activeItem) {
     return (
       <div className="terminal-placeholder">
-        <ParticleCanvas />
+        {particlesEnabled && <ParticleCanvas />}
         <TerminalIcon className="terminal-placeholder-icon" />
         <div className="terminal-placeholder-text">
           Select a session to connect to its terminal<br />
@@ -539,6 +539,30 @@ function SplitNodeView({ node }: { node: SplitNode }) {
   )
 }
 
+function useParticleSettings() {
+  const [enabled, setEnabled] = useState(true)
+  const [intensity, setIntensity] = useState(0.5)
+  useEffect(() => {
+    getApi().settings.get('particlesEnabled').then((v) => {
+      if (v !== undefined) setEnabled(v !== 'false')
+    })
+    getApi().settings.get('particleIntensity').then((v) => {
+      if (v !== undefined) setIntensity(parseFloat(v) || 0.5)
+    })
+    const handler = () => {
+      getApi().settings.get('particlesEnabled').then((v) => {
+        if (v !== undefined) setEnabled(v !== 'false')
+      })
+      getApi().settings.get('particleIntensity').then((v) => {
+        if (v !== undefined) setIntensity(parseFloat(v) || 0.5)
+      })
+    }
+    window.addEventListener('sorcerer:settings-updated', handler)
+    return () => window.removeEventListener('sorcerer:settings-updated', handler)
+  }, [])
+  return { enabled, intensity }
+}
+
 function useUpdateCheck() {
   const [update, setUpdate] = useState<{ version: string; url: string } | null>(null)
   useEffect(() => {
@@ -564,18 +588,24 @@ export function MainContent() {
   const { agents: agentsList } = useAgentStore()
   const { splitRoot, splitRight, splitDown, maximizedPanelId } = useUIStore()
   const updateAvailable = useUpdateCheck()
+  const particles = useParticleSettings()
 
   const activeSession = sessions.find((s) => s.id === activeSessionId)
   const activeAgent = !activeSession && activeSessionId
     ? agentsList.find((a) => a.id === activeSessionId)
     : undefined
 
+  const hasActiveSessions = sessions.some((s) => s.status === 'active')
+  // Empty state = no split layout and no active item selected
+  const showingEmptyState = !splitRoot && !activeSession && !activeAgent
 
   return (
     <div className="main-content">
       {/* Titlebar — minimal drag region */}
       <div className="main-titlebar">
-        <ParticleCanvas count={15} />
+        {particles.enabled && hasActiveSessions && !showingEmptyState && (
+          <ParticleCanvas count={15} brightness={particles.intensity} />
+        )}
         {updateAvailable && (
           <a
             className="titlebar-update"
@@ -722,10 +752,10 @@ export function MainContent() {
               }}>&times;</button>
             </div>
           </div>
-          <TerminalPanel session={activeSession} agent={activeAgent} />
+          <TerminalPanel session={activeSession} agent={activeAgent} particlesEnabled={particles.enabled} />
         </div>
       ) : (
-        <TerminalPanel session={activeSession} agent={activeAgent} />
+        <TerminalPanel session={activeSession} agent={activeAgent} particlesEnabled={particles.enabled} />
       )}
 
     </div>

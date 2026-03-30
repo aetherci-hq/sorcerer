@@ -608,12 +608,16 @@ function GeneralTab() {
 
 function AppearanceTab() {
   const [themeId, setThemeId] = useSetting('theme', 'default')
+  const [particlesEnabled, setParticlesEnabled] = useSetting('particlesEnabled', 'true')
+  const [particleIntensity, setParticleIntensity] = useSetting('particleIntensity', '0.5')
   const themes = Object.values(THEMES)
 
   const selectTheme = (id: string) => {
     setThemeId(id)
     applyTheme(getThemeById(id))
   }
+
+  const notifyParticles = () => window.dispatchEvent(new CustomEvent('sorcerer:settings-updated'))
 
   return (
     <>
@@ -638,6 +642,27 @@ function AppearanceTab() {
           </button>
         ))}
       </div>
+
+      <SectionTitle>Particles</SectionTitle>
+      <SettingRow label="Particle animation" description="Show rising particle effect in the titlebar and empty panels">
+        <Toggle checked={particlesEnabled !== 'false'} onChange={(v) => { setParticlesEnabled(v ? 'true' : 'false'); notifyParticles() }} />
+      </SettingRow>
+      {particlesEnabled !== 'false' && (
+        <SettingRow label="Titlebar intensity" description="Brightness of particles in the titlebar">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <input
+              type="range"
+              min="0.1"
+              max="1"
+              step="0.1"
+              value={particleIntensity}
+              onChange={(e) => { setParticleIntensity(e.target.value); notifyParticles() }}
+              style={{ width: 120, accentColor: 'var(--accent)' }}
+            />
+            <span style={{ fontSize: 12, color: 'var(--text-tertiary)', minWidth: 32 }}>{Math.round(parseFloat(particleIntensity) * 100)}%</span>
+          </div>
+        </SettingRow>
+      )}
     </>
   )
 }

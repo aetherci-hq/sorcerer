@@ -5,11 +5,15 @@ interface ParticleCanvasProps {
   count?: number
   /** Particle color — defaults to CSS --accent, updates on theme change */
   color?: string
+  /** Brightness multiplier for particle opacity (0–1, default: 1) */
+  brightness?: number
   className?: string
 }
 
-export function ParticleCanvas({ count, color, className }: ParticleCanvasProps) {
+export function ParticleCanvas({ count, color, brightness = 1, className }: ParticleCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const brightnessRef = useRef(brightness)
+  brightnessRef.current = brightness
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -74,11 +78,12 @@ export function ParticleCanvas({ count, color, className }: ParticleCanvasProps)
       }
 
       draw(ctx: CanvasRenderingContext2D) {
+        const b = brightnessRef.current
         ctx.save()
-        ctx.globalAlpha = Math.max(0, this.opacity)
+        ctx.globalAlpha = Math.max(0, this.opacity * b)
         ctx.fillStyle = activeColor
         ctx.shadowColor = activeColor
-        ctx.shadowBlur = this.size * 3
+        ctx.shadowBlur = this.size * 3 * b
         ctx.beginPath()
         ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2)
         ctx.fill()
