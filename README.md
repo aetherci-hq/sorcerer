@@ -31,6 +31,14 @@ Requires an AI CLI tool like [Claude Code](https://docs.anthropic.com/en/docs/cl
 
 By default, Sorcerer runs Claude Code with `--dangerously-skip-permissions` to enable unattended multi-session workflows. This can be toggled per-session and per-agent at creation time. Review [Anthropic's documentation](https://docs.anthropic.com/en/docs/claude-code) to understand the implications.
 
+## Terms of Service & Licensing
+
+Sorcerer is an independent orchestration workbench. It operates as a wrapper around existing CLI-based AI agents (such as Claude Code, Gemini CLI, etc.). 
+
+- **Independent Tool**: Sorcerer is not affiliated with, endorsed by, or sponsored by Anthropic, Google, or any other AI service provider.
+- **No Circumvention**: Sorcerer does not bypass, modify, or multiplex user authentication or subscriptions. It relies entirely on the user's own local installation and valid authentication for these CLI tools.
+- **Compliance**: Users are responsible for ensuring their use of underlying CLI tools through Sorcerer complies with the respective providers' Terms of Service. Sorcerer interacts with these tools via standard terminal interfaces (PTY) and does not modify their binary code or internal logic.
+
 ## How it works
 
 Sorcerer wraps Claude Code CLI sessions in native pseudo-terminals (node-pty + xterm.js), manages git worktrees for branch isolation, and watches `~/.claude/teams/` to detect team activity. All session data is stored locally in SQLite.
