@@ -50,6 +50,7 @@ export class FileWatcherService {
   private dbService: DatabaseService
   private teamsWatcher: any = null
   private tasksWatcher: any = null
+  private projectWatchers: Map<string, any> = new Map()
   private claudeDirWatcher: any = null
   private claudeDir: string
   private debounceTimers: Map<string, NodeJS.Timeout> = new Map()
@@ -61,6 +62,7 @@ export class FileWatcherService {
     this.dbService = dbService
     this.claudeDir = path.join(os.homedir(), '.claude')
     this.startWatching()
+    this.watchProjects()
   }
 
   /** Register a listener for all file watcher events (used by API server) */
@@ -105,6 +107,65 @@ export class FileWatcherService {
           }
         })
       }
+    }
+  }
+
+  private watchProjects(): void {
+    const projects = this.dbService.listProjects()
+    for (const project of projects) {
+      this.watchProject(project)
+    }
+  }
+
+  private watchProject(project: any): void {
+    if (this.projectWatchers.has(project.id)) return
+    if (!fs.existsSync(project.path)) return
+
+    const watcher = chokidar.watch(project.path, {
+      persistent: true,
+      ignoreInitial: true,
+      ignored: [
+        '**/node_modules/**',
+        '**/.git/**',
+        '**/dist/**',
+        '**/out/**',
+        '**/.sorcerer/**'
+      ],
+      depth: 5
+    })
+
+    watcher.on('all', (event, filePath) => {
+      this.handleProjectFileChange(project.id, event, filePath)
+    })
+
+    this.projectWatchers.set(project.id, watcher)
+  }
+
+  private handleProjectFileChange(projectId: string, event: string, filePath: string): void {
+    // Determine if this change was likely made by an agent or human
+    // We do this by checking if the path is inside any known session worktree
+    const sessions = this.dbService.listSessions(projectId)
+    const isInsideWorktree = sessions.some(s => {
+      if (!s.worktree_path) return false
+      // If project path is same as worktree path, it's the main repo session
+      // In that case, we can't easily distinguish without more telemetry
+      // For now, we only flag 'human' if it's NOT in a specialized worktree
+      return filePath.toLowerCase().startsWith(path.resolve(s.worktree_path).toLowerCase() + path.sep)
+    })
+
+    const source = isInsideWorktree ? 'agent' : 'human'
+
+    // Only log significant events for Shadow Mode
+    if (event === 'change' || event === 'add' || event === 'unlink') {
+      this.dbService.saveActivity({
+        project_id: projectId,
+        type: 'file_change',
+        source,
+        data: {
+          event,
+          path: path.relative(this.dbService.getProject(projectId).path, filePath)
+        }
+      })
     }
   }
 
