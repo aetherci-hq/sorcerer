@@ -49,27 +49,9 @@ Electron, React 19, TypeScript, electron-vite, xterm.js, node-pty, sql.js, Zusta
 
 ## Project Charter
 
-Sorcerer exists for people who build with AI. Not people who happen to use AI inside their editor — people whose primary workflow *is* the AI.
+Sorcerer is a mission control for AI-first development. It is explicitly not an IDE; it is the orchestration layer above, managing the agents that do the work. While editors focus on typing code, Sorcerer focuses on directing it—handling concurrent sessions, git worktrees, and cross-project context so you can scale your AI workforce.
 
-**Sorcerer is not an IDE.** While it's tempting to add features like a code editor, file tree, syntax highlighting, or debugger. Those tools already exist and they're excellent. Sorcerer is the layer above: it manages the AI sessions, the branching, the orchestration, and the context — so you can focus on directing the work, not typing the code.
-
-### Guiding Principles
-
-1. **AI-first, always.** Every feature should make AI-driven development better. If a feature doesn't involve AI sessions, agents, or their orchestration, it probably doesn't belong here.
-
-2. **Direct, don't type.** Sorcerer users are directors, not typists. Features should help users give better instructions, monitor progress, and manage multiple streams of AI work — not manually edit files.
-
-3. **Stay out of the IDE's lane.** No code editor. No file browser. No terminal emulator for general use. If VS Code, Cursor, or Zed already does it well, we don't rebuild it.
-
-4. **Multi-agent is the default.** The whole point is running several AI sessions at once. Single-session convenience is fine, but features should scale to many concurrent agents.
-
-5. **Tools, not opinions.** Support Claude Code, Codex, Gemini CLI, Aider, and whatever comes next. Sorcerer is the workbench, not the tool on it.
-
-6. **Simple over powerful.** Resist feature creep. A clean interface with five things done well beats a cluttered one with fifty. When in doubt, leave it out.
-
-### The Litmus Test
-
-Before adding any feature, ask: *"Does this help someone orchestrate AI coding agents, or does this turn Sorcerer into an IDE?"* If the answer is the latter, stop.
+We believe in staying out of the IDE's lane. If a feature doesn't help orchestrate coding agents, it doesn't belong here. Sorcerer is designed for developers whose primary workflow *is* the AI, providing a professional workbench for directing work rather than manually editing files.
 
 ## Contributing
 
