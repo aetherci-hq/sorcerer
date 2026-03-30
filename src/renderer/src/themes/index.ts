@@ -300,7 +300,7 @@ export function applyTheme(theme: SorcererTheme): void {
   }
   // Update native title bar buttons to match the theme (Windows/Linux)
   window.sorcerer?.window.setTitleBarOverlay({
-    color: theme.colors['bg-titlebar'],
+    color: theme.colors['bg-root'],
     symbolColor: theme.colors['text-secondary']
   })
   // Broadcast theme to pop-out windows

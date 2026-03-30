@@ -98,7 +98,7 @@ async function createWindow(): Promise<void> {
       ? { trafficLightPosition: { x: 12, y: 10 } }
       : {
           titleBarOverlay: {
-            color: '#1a1714',
+            color: '#0f0e0c',
             symbolColor: '#a69e8e',
             height: 36
           }
