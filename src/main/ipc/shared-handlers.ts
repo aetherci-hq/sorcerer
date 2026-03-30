@@ -86,6 +86,44 @@ export function hasClaudeConversation(cwd: string): boolean {
 }
 
 /**
+ * Get the Claude projects directory for a given working directory.
+ */
+function getConvDir(cwd: string): string {
+  const encoded = cwd.replace(/[^a-zA-Z0-9]/g, '-')
+  return path.join(os.homedir(), '.claude', 'projects', encoded)
+}
+
+/**
+ * Check whether a specific claude_session_id has a conversation file on disk.
+ */
+function conversationFileExists(cwd: string, claudeSessionId: string): boolean {
+  const convDir = getConvDir(cwd)
+  const filePath = path.join(convDir, `${claudeSessionId}.jsonl`)
+  return fs.existsSync(filePath)
+}
+
+/**
+ * Find the most recent conversation file in a project directory.
+ * Returns the session ID (filename without .jsonl) or null if none found.
+ */
+function findMostRecentConversation(cwd: string): string | null {
+  const convDir = getConvDir(cwd)
+  if (!fs.existsSync(convDir)) return null
+  try {
+    const entries = fs.readdirSync(convDir)
+      .filter((e) => e.endsWith('.jsonl'))
+      .map((e) => ({
+        id: e.replace('.jsonl', ''),
+        mtime: fs.statSync(path.join(convDir, e)).mtimeMs
+      }))
+      .sort((a, b) => b.mtime - a.mtime)
+    return entries.length > 0 ? entries[0].id : null
+  } catch {
+    return null
+  }
+}
+
+/**
  * Pre-trust a directory for Claude Code so it skips the interactive trust prompt.
  * Claude Code stores trust in ~/.claude.json under projects[path].hasTrustDialogAccepted.
  */
@@ -661,20 +699,34 @@ export async function resumeSession(
   } else {
     // Resume the Claude Code conversation pinned to this session.
     // Use --resume <id> for sessions with a stored claude_session_id.
-    // If no claude_session_id exists (legacy session), start a fresh conversation
-    // with a new pinned ID. NEVER use --continue — it picks up the most recent
-    // conversation in the cwd, which causes cross-session pollution when multiple
-    // sessions share the same working directory.
+    // If the stored ID doesn't have a conversation file on disk (e.g. session was
+    // created outside Sorcerer, or the file expired), fall back to the most recent
+    // conversation in the project directory. If nothing exists, start fresh.
     let claudeSessionId = session.claude_session_id as string | undefined
     let args: string[]
+
+    // Validate stored ID against actual conversation files
+    if (claudeSessionId && !conversationFileExists(cwd, claudeSessionId)) {
+      console.log(`[session:resume] Stored claude_session_id ${claudeSessionId} not found on disk, searching for conversation...`)
+      const actual = findMostRecentConversation(cwd)
+      if (actual) {
+        console.log(`[session:resume] Found conversation on disk: ${actual}`)
+        claudeSessionId = actual
+        db.updateSession(sessionId, { claude_session_id: claudeSessionId })
+      } else {
+        console.log(`[session:resume] No conversation files found for cwd: ${cwd}`)
+        claudeSessionId = undefined
+      }
+    }
+
     if (claudeSessionId) {
       args = ['--resume', claudeSessionId]
     } else {
-      // Legacy session without a pinned conversation — start fresh with a new ID
+      // No conversation found — start fresh with a new pinned ID
       claudeSessionId = uuidv4()
       db.updateSession(sessionId, { claude_session_id: claudeSessionId })
       args = ['--session-id', claudeSessionId]
-      console.log(`[session:resume] No claude_session_id for ${sessionId}, starting fresh with ${claudeSessionId}`)
+      console.log(`[session:resume] Starting fresh session with ${claudeSessionId}`)
     }
     if (session.bypass_permissions !== 0) args.push('--dangerously-skip-permissions')
     trackResume(sessionId)
