@@ -3,7 +3,7 @@ import { useRef, useEffect } from 'react'
 interface ParticleCanvasProps {
   /** Number of particles (default: scaled to container area) */
   count?: number
-  /** Particle color — defaults to CSS --accent */
+  /** Particle color — defaults to CSS --accent, updates on theme change */
   color?: string
   className?: string
 }
@@ -20,9 +20,15 @@ export function ParticleCanvas({ count, color, className }: ParticleCanvasProps)
 
     let raf: number
     let particles: Particle[] = []
+    let activeColor = color || getComputedStyle(canvas).getPropertyValue('--accent').trim() || '#e2a445'
 
-    // Resolve color from CSS variable if not provided
-    const resolvedColor = color || getComputedStyle(canvas).getPropertyValue('--accent').trim() || '#e2a445'
+    // Re-read --accent when the theme changes
+    const onThemeChange = () => {
+      if (!color) {
+        activeColor = getComputedStyle(canvas).getPropertyValue('--accent').trim() || '#e2a445'
+      }
+    }
+    window.addEventListener('sorcerer:themeChange', onThemeChange)
 
     function resize() {
       const rect = canvas!.getBoundingClientRect()
@@ -70,8 +76,8 @@ export function ParticleCanvas({ count, color, className }: ParticleCanvasProps)
       draw(ctx: CanvasRenderingContext2D) {
         ctx.save()
         ctx.globalAlpha = Math.max(0, this.opacity)
-        ctx.fillStyle = resolvedColor
-        ctx.shadowColor = resolvedColor
+        ctx.fillStyle = activeColor
+        ctx.shadowColor = activeColor
         ctx.shadowBlur = this.size * 3
         ctx.beginPath()
         ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2)
@@ -119,6 +125,7 @@ export function ParticleCanvas({ count, color, className }: ParticleCanvasProps)
     return () => {
       cancelAnimationFrame(raf)
       ro.disconnect()
+      window.removeEventListener('sorcerer:themeChange', onThemeChange)
     }
   }, [count, color])
 
