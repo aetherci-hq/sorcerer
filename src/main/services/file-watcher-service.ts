@@ -147,9 +147,7 @@ export class FileWatcherService {
     const sessions = this.dbService.listSessions(projectId)
     const isInsideWorktree = sessions.some(s => {
       if (!s.worktree_path) return false
-      // If project path is same as worktree path, it's the main repo session
-      // In that case, we can't easily distinguish without more telemetry
-      // For now, we only flag 'human' if it's NOT in a specialized worktree
+      // Check if file is inside a specialized worktree (which means an agent is working there)
       return filePath.toLowerCase().startsWith(path.resolve(s.worktree_path).toLowerCase() + path.sep)
     })
 
@@ -157,13 +155,16 @@ export class FileWatcherService {
 
     // Only log significant events for Shadow Mode
     if (event === 'change' || event === 'add' || event === 'unlink') {
+      const project = this.dbService.getProject(projectId)
+      if (!project) return
+      
       this.dbService.saveActivity({
         project_id: projectId,
         type: 'file_change',
         source,
         data: {
           event,
-          path: path.relative(this.dbService.getProject(projectId).path, filePath)
+          path: path.relative(project.path, filePath)
         }
       })
     }
