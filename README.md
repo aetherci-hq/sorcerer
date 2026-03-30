@@ -71,6 +71,10 @@ Sorcerer exists for people who build with AI. Not people who happen to use AI in
 
 Before adding any feature, ask: *"Does this help someone orchestrate AI coding agents, or does this turn Sorcerer into an IDE?"* If the answer is the latter, stop.
 
+## Contributing
+
+We welcome your help in making Sorcerer better! Please read our [Contributing Guidelines](CONTRIBUTING.md) to get started.
+
 ## License
 
 [Apache-2.0](LICENSE) — Built by [AetherCI](https://aetherci.com)
