@@ -1,0 +1,100 @@
+Shadow Mode — Activity Tracking for Context-Aware Briefings
+============================================================
+
+STATUS: Tabled (2026-04-02)
+  Partial implementation exists in working tree but is uncommitted.
+  Revisit after multi-provider support lands and stabilizes.
+
+────────────────────────────────────────────────────────────
+
+1. Concept
+
+  "Shadow" Mode solves the "Prompt Tax" — the 2–5 minutes a developer
+  spends explaining current context to an AI before it can help.
+
+  While competitors wait for you to talk to them, a Shadow agent listens
+  to your manual work in the background. It turns Sorcerer from a reactive
+  tool into a proactive partner.
+
+2. How It Works (Technically)
+
+  Sorcerer already has a FileWatcherService and a DatabaseService. Shadow
+  Mode leverages these to build a "Live Project Timeline":
+
+  * Git-Diff Observer: Watches project directories. Every file save
+    generates a tiny "Shadow Diff." It knows which lines you've been
+    struggling with for the last 20 minutes.
+
+  * Shell Plugin (The "Spy"): A tiny zsh/bash/fish/PowerShell shim. Every
+    command run in the user's main terminal (outside Sorcerer) is logged to
+    SQLite via Sorcerer's local HTTP server.
+    Example: captures `npm test` failures with specific errors before the
+    user even opens Sorcerer.
+
+  * LSP Bridge (Optional / Future): A lightweight VS Code extension that
+    sends cursor location and active file data to Sorcerer's local server.
+
+3. User Experience
+
+  When a user hits a wall and opens Sorcerer, the experience changes from
+  "Chat" to "Direction":
+
+  * Shadow Greeting: Instead of an empty prompt, Sorcerer says:
+    "I see you've spent 40 minutes refactoring auth.ts and just hit a
+    JWT_EXPIRED error in your terminal. Want me to fix the validation
+    logic for the new provider you just added?"
+
+  * Rewind: "I messed up the last 15 minutes of manual work. Revert the
+    logic but keep the new interface changes."
+
+  * Ghost Code Review: A sidebar silently lists potential bugs in code
+    you just typed manually — a silent peer reviewer that doesn't interrupt.
+
+4. Why It Stands Out
+
+  * Context Fidelity: IDE plugins only see the current state; Shadow Mode
+    sees the process (commands, intermediate errors, deleted attempts).
+  * Tool Agnostic: Works regardless of editor — watches filesystem + shell.
+  * Privacy: Activity stays in local SQLite. Data never leaves the machine
+    until the user explicitly asks an agent to process it.
+
+5. Integration with Briefings
+
+  Shadow Mode transforms Briefings from "Summary of Agents" to
+  "Summary of the Human":
+    Section: "Where You Left Off (Manual Work)"
+    Content: "You were halfway through migrating the database schema.
+    The migration is currently failing due to a missing foreign key."
+
+6. Implementation Progress (Uncommitted)
+
+  The following work exists in the working tree but has NOT been committed:
+
+  Backend:
+  - database-service.ts: `saveActivity()` and `listActivity()` methods
+    with an `activity` table (project_id, type, source, data, timestamp)
+  - api-server.ts: `POST /activity` endpoint with Bearer auth, auto-resolves
+    project from cwd path
+  - file-watcher-service.ts: Conditional startup — only watches projects
+    when shadowModeEnabled setting is not 'false'
+
+  Frontend:
+  - SettingsDialog.tsx: Shadow Mode toggle in Briefing tab, shell snippet
+    display (zsh/bash + PowerShell) with copy buttons
+  - ActivityLogDialog.tsx (new): Dialog to view captured activity log
+  - BriefingPanel.tsx: Shadow badge indicator when mode is active
+  - useUIStore.ts: 'activity-log' dialog type
+  - styles/index.css: `.briefing-shadow-badge` styles
+
+7. Incremental Ship Plan
+
+  v1 (The Watcher): FileWatcherService creates "Recent Changes" log in DB.
+  v2 (The Narrator): Briefing service includes "Recent Manual Activity."
+  v3 (The Listener): Shell plugin captures terminal errors from user's shell.
+
+8. Open Questions
+
+  - Should shadow mode be opt-in or opt-out?
+  - How aggressively should file diffs be captured (every save vs. debounced)?
+  - How long should activity data be retained before pruning?
+  - Should briefings auto-generate when shadow detects a "stuck" pattern?
