@@ -920,6 +920,20 @@ body {
   flex-shrink: 0;
 }
 
+/* Invert badge when tree item is active (focused panel) */
+.tree-item--active .teammate-badge {
+  background: var(--accent);
+  color: var(--bg-root);
+  border-color: var(--accent);
+}
+
+/* Semi-inverted badge when tree item is a split member (unfocused panel) */
+.tree-item--split .teammate-badge {
+  background: var(--border-medium);
+  color: var(--text-primary);
+  border-color: var(--border-medium);
+}
+
 .tree-teammate-task {
   padding: 2px 12px 2px 24px;
   display: flex;
@@ -2740,14 +2754,15 @@ button:focus-visible,
 
 .split-panel-project {
   color: var(--text-tertiary);
-  font-size: 11.5px;
+  font-size: 12px;
+  font-weight: 400;
   flex-shrink: 0;
 }
 
 .split-panel-sep {
-  color: var(--text-muted);
-  opacity: 0.5;
+  color: var(--text-tertiary);
   flex-shrink: 0;
+  font-weight: 400;
 }
 
 .split-panel-branch {

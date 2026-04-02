@@ -13,7 +13,7 @@ export function EmptyState() {
         </svg>
       </div>
       <p className="empty-state-title">No projects yet</p>
-      <p className="empty-state-text">Add a project to start orchestrating Claude Code sessions.</p>
+      <p className="empty-state-text">Add a project to start orchestrating AI agent sessions.</p>
       <button
         className="empty-state-btn"
         onClick={() => openDialog('add-project')}

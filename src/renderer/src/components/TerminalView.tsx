@@ -55,7 +55,7 @@ window.addEventListener('sorcerer:themeChange', (e: Event) => {
   const termBg = theme.colors['terminal-bg']
   for (const [, cached] of terminalCache) {
     cached.terminal.options.theme = {
-      background: termBg,
+      background: 'transparent',
       foreground: theme.colors['text-primary'],
       cursor: theme.colors['accent'],
       cursorAccent: termBg,
@@ -129,6 +129,8 @@ export function TerminalView({ sessionId, isFocused }: TerminalViewProps) {
 
       const terminal = new Terminal({
         cursorBlink: true,
+        cursorStyle: 'bar',
+        cursorInactiveStyle: 'none',
         fontSize: terminalFontSize,
         fontFamily: "'JetBrains Mono', 'Cascadia Code', 'Consolas', monospace",
         theme: {

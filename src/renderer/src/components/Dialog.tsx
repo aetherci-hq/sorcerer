@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from 'react'
+import React, { useEffect, useRef, type ReactNode } from 'react'
 import { useUIStore } from '../stores/useUIStore'
 
 interface DialogProps {
@@ -49,9 +49,9 @@ export function Dialog({ open, onClose, title, children, variant = 'default' }: 
 }
 
 /* Reusable form pieces */
-export function DialogField({ label, children }: { label: string; children: ReactNode }) {
+export function DialogField({ label, children, style }: { label: string; children: ReactNode; style?: React.CSSProperties }) {
   return (
-    <div className="dialog-field">
+    <div className="dialog-field" style={style}>
       <label className="dialog-label">{label}</label>
       {children}
     </div>

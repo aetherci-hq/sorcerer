@@ -141,7 +141,7 @@ export function EditMissionDialog() {
           <DialogField label="System Prompt">
             <textarea
               className="dialog-input dialog-textarea"
-              placeholder="Custom instructions appended to Claude's system prompt..."
+              placeholder="Custom instructions appended to the agent's system prompt..."
               value={systemPrompt}
               onChange={(e) => setSystemPrompt(e.target.value)}
               rows={4}
