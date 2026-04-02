@@ -319,6 +319,11 @@ function StatsPopover({ sessions, onClose, pinned, onTogglePin }: { sessions: an
           </button>
         </div>
       </div>
+      {claudeStats?.subscription && (
+        <div style={{ padding: '8px 12px', background: '#78350f22', borderBottom: '1px solid #92400e44', color: '#fbbf24', fontSize: 11, lineHeight: 1.4 }}>
+          Subscription auth detected. Sorcerer is designed for API key usage — consider switching to an API key for multi-session workflows.
+        </div>
+      )}
       <div className="stats-popover-grid">
         <div className="stats-popover-stat">
           <span className="stats-popover-value">{activeSessions.length}</span>

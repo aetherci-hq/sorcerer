@@ -13,6 +13,8 @@ Grab the latest release for your platform:
 
 Requires an AI CLI tool like [Claude Code](https://docs.anthropic.com/en/docs/claude-code) installed and available on PATH.
 
+> **Authentication note:** Sorcerer runs multiple concurrent agent sessions. Consumer subscription accounts (Claude.ai Pro, Gemini Advanced, etc.) are not designed for this usage pattern — you should authenticate each CLI tool with an **API key** from the respective provider.
+
 > **Windows note:** The installer is not yet code-signed. SmartScreen may show "Windows protected your PC" — click **More info** → **Run anyway** to proceed. macOS users may need to right-click → Open on first launch.
 
 ## Features
@@ -36,6 +38,7 @@ By default, Sorcerer runs Claude Code with `--dangerously-skip-permissions` to e
 Sorcerer is an independent orchestration workbench. It operates as a wrapper around existing CLI-based AI agents (such as Claude Code, Gemini CLI, etc.). 
 
 - **Independent Tool**: Sorcerer is not affiliated with, endorsed by, or sponsored by Anthropic, Google, or any other AI service provider.
+- **API Keys Required**: Sorcerer's multi-session model is designed for API key usage. Consumer subscription accounts are not compatible with concurrent session workflows. Users should authenticate each CLI tool with an API key from the respective provider.
 - **No Circumvention**: Sorcerer does not bypass, modify, or multiplex user authentication or subscriptions. It relies entirely on the user's own local installation and valid authentication for these CLI tools.
 - **Compliance**: Users are responsible for ensuring their use of underlying CLI tools through Sorcerer complies with the respective providers' Terms of Service. Sorcerer interacts with these tools via standard terminal interfaces (PTY) and does not modify their binary code or internal logic.
 
