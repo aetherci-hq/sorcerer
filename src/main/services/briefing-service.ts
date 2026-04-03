@@ -35,7 +35,6 @@ interface AgentContext {
 interface BriefingData {
   sessions: SessionContext[]
   agents: AgentContext[]
-  humanActivity?: Record<string, any[]>
 }
 
 function timeAgo(epochSeconds: number): string {
@@ -156,16 +155,7 @@ export function collectBriefingData(db: DatabaseService, pty: PTYService): Brief
     agents.push(ctx)
   }
 
-  // Collect Human Activity for Shadow Mode
-  const humanActivity: Record<string, any[]> = {}
-  for (const p of projects) {
-    const activity = db.listActivity(p.id, 10).filter(a => a.source === 'human')
-    if (activity.length > 0) {
-      humanActivity[p.name] = activity
-    }
-  }
-
-  return { sessions, agents, humanActivity }
+  return { sessions, agents }
 }
 
 export async function collectGitSummaries(
@@ -206,22 +196,6 @@ export async function collectGitSummaries(
 function buildPromptContext(data: BriefingData): string {
   const lines: string[] = []
 
-  if (data.humanActivity && Object.keys(data.humanActivity).length > 0) {
-    lines.push('## Recent Manual Activity (Human)')
-    for (const [projectName, activity] of Object.entries(data.humanActivity)) {
-      lines.push(`- **${projectName}**:`)
-      for (const a of activity) {
-        const time = timeAgo(a.created_at)
-        if (a.type === 'file_change') {
-          lines.push(`  - [${time}] ${a.data.event}: ${a.data.path}`)
-        } else if (a.type === 'shell_command') {
-          lines.push(`  - [${time}] command: \`${a.data.command}\``)
-        }
-      }
-    }
-    lines.push('')
-  }
-
   if (data.sessions.length > 0) {
     lines.push('## Sessions')
     for (const s of data.sessions) {
@@ -253,15 +227,15 @@ function buildPromptContext(data: BriefingData): string {
 
 const BRIEFING_SYSTEM_PROMPT = `You are a helpful assistant integrated into Sorcerer, a desktop app for orchestrating multiple coding agents. The user is likely multi-tasking across several projects and may feel overwhelmed. Your job is to help them quickly orient, prioritize, and take action.
 
-You will receive a summary of the user's current sessions, agents, git status, terminal output, and notes. Crucially, you will also see "Recent Manual Activity" which tracks what the user (the human) has been doing outside of Sorcerer. Use this to provide a highly personalized "Where You Left Off" summary.
+You will receive a summary of the user's current sessions, agents, git status, terminal output, and notes. Use this to provide a concise, personalized briefing.
 
 Generate a concise, structured briefing using EXACTLY these three sections:
 
 ## Your Next Priority
-Pick the ONE session, agent, or project that most needs the user's attention right now. If the human just finished a manual change, suggest which agent should review or test it. If an agent just finished a task, suggest the user review it. Explain in 1-2 sentences what's happening and what they should do next.
+Pick the ONE session, agent, or project that most needs the user's attention right now. If an agent just finished a task, suggest the user review it. Explain in 1-2 sentences what's happening and what they should do next.
 
 ## Needs Attention
-List any sessions or agents that have issues or loose ends — uncommitted changes, sessions idle for a long time, stale branches, failed processes, or notes that suggest unfinished work. Also flag if the user's manual changes conflict with any active session's work. Use bullet points, one per item. If nothing needs attention, write "All clear."
+List any sessions or agents that have issues or loose ends — uncommitted changes, sessions idle for a long time, stale branches, failed processes, or notes that suggest unfinished work. Use bullet points, one per item. If nothing needs attention, write "All clear."
 
 **Branch divergence is critical to flag.** If a session shows "X commits behind main", warn the user — the longer they wait, the harder it will be to land. Branches 10+ commits behind should be called out urgently.
 
@@ -270,7 +244,7 @@ Briefly list sessions that are in a good state — clean git status, recently co
 
 Rules:
 - Keep the total response under 250 words
-- Be specific — reference project names, branch names, and actual content from notes/terminal output/manual activity
+- Be specific — reference project names, branch names, and actual content from notes/terminal output
 - Use **bold** for project/session names
 - Do NOT make up information that isn't in the context
 - Do NOT add a greeting or sign-off — get straight to the content

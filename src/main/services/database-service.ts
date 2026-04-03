@@ -220,50 +220,6 @@ export class DatabaseService {
       );
     `)
 
-    // Activity log table for Shadow Mode
-    this.db.run(`
-      CREATE TABLE IF NOT EXISTS activity_log (
-        id TEXT PRIMARY KEY,
-        project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-        type TEXT NOT NULL, -- 'file_change', 'shell_command'
-        source TEXT NOT NULL, -- 'human', 'agent'
-        data TEXT NOT NULL, -- JSON payload
-        created_at INTEGER NOT NULL DEFAULT (strftime('%s','now'))
-      );
-    `)
-
-    this.save()
-  }
-
-  // Activity log operations
-  saveActivity(data: { project_id: string; type: string; source: string; data: any }): void {
-    if (!this.db) return
-    const id = uuidv4()
-    this.db.run(
-      'INSERT INTO activity_log (id, project_id, type, source, data) VALUES (?, ?, ?, ?, ?)',
-      [id, data.project_id, data.type, data.source, JSON.stringify(data.data)]
-    )
-    this.save()
-  }
-
-  listActivity(projectId: string, limit: number = 50): any[] {
-    if (!this.db) return []
-    const stmt = this.db.prepare('SELECT * FROM activity_log WHERE project_id = ? ORDER BY created_at DESC LIMIT ?')
-    stmt.bind([projectId, limit])
-    const results: any[] = []
-    while (stmt.step()) {
-      const row = stmt.getAsObject() as any
-      row.data = JSON.parse(row.data)
-      results.push(row)
-    }
-    stmt.free()
-    return results
-  }
-
-  clearOldActivity(days: number = 7): void {
-    if (!this.db) return
-    const seconds = days * 24 * 60 * 60
-    this.db.run("DELETE FROM activity_log WHERE created_at < (strftime('%s','now') - ?)", [seconds])
     this.save()
   }
 
