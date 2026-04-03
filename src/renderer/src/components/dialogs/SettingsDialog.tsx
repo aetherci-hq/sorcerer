@@ -3,16 +3,17 @@ import { getApi, isElectron } from '../../api/client'
 import { useUIStore } from '../../stores/useUIStore'
 import { useToastStore } from '../../stores/useToastStore'
 import {
-  TerminalIcon, GitBranchIcon, SettingsIcon, UserIcon, WifiIcon, CopyIcon, RefreshIcon, EyeIcon, EyeOffIcon, PaletteIcon, SmartphoneIcon, BotIcon
+  TerminalIcon, GitBranchIcon, SettingsIcon, UserIcon, WifiIcon, CopyIcon, RefreshIcon, EyeIcon, EyeOffIcon, PaletteIcon, SmartphoneIcon, BotIcon, KeyboardIcon
 } from '../icons'
 import { THEMES, getThemeById, applyTheme } from '../../themes'
 import { gravatarUrl } from '../SidebarFooter'
 import { PROVIDERS } from '../../constants'
 
-type SettingsTab = 'profile' | 'appearance' | 'sessions' | 'git' | 'remote' | 'briefing' | 'general'
+type SettingsTab = 'profile' | 'appearance' | 'sessions' | 'git' | 'remote' | 'briefing' | 'general' | 'keybindings'
 
 const TABS: { id: SettingsTab; label: string; icon: React.ReactNode }[] = [
   { id: 'general', label: 'General', icon: <SettingsIcon /> },
+  { id: 'keybindings', label: 'Keybindings', icon: <KeyboardIcon /> },
   { id: 'profile', label: 'Profile', icon: <UserIcon /> },
   { id: 'appearance', label: 'Appearance', icon: <PaletteIcon /> },
   { id: 'sessions', label: 'Sessions', icon: <TerminalIcon /> },
@@ -593,16 +594,6 @@ function GeneralTab() {
         </SettingRow>
       )}
 
-      <SectionTitle>Keyboard Shortcuts</SectionTitle>
-      <div className="settings-shortcuts">
-        {SHORTCUTS.map((s) => (
-          <div key={s.keys} className="settings-shortcut-row">
-            <kbd className="settings-kbd">{s.keys}</kbd>
-            <span className="settings-shortcut-action">{s.action}</span>
-          </div>
-        ))}
-      </div>
-
       <SectionTitle>Data</SectionTitle>
       <SettingRow label="Reset sidebar layout" description="Restore default sidebar width and expanded state">
         <button
@@ -644,6 +635,22 @@ function GeneralTab() {
         </button>
       </SettingRow>
 
+    </>
+  )
+}
+
+function KeybindingsTab() {
+  return (
+    <>
+      <SectionTitle>Keyboard Shortcuts</SectionTitle>
+      <div className="settings-shortcuts">
+        {SHORTCUTS.map((s) => (
+          <div key={s.keys} className="settings-shortcut-row">
+            <kbd className="settings-kbd">{s.keys}</kbd>
+            <span className="settings-shortcut-action">{s.action}</span>
+          </div>
+        ))}
+      </div>
     </>
   )
 }
@@ -764,13 +771,13 @@ function BriefingTab() {
               style={{ width: 240, fontFamily: 'var(--font-mono)', fontSize: 12 }}
             />
             <button
-              className="settings-action-btn"
+              className="settings-browse-btn"
               type="button"
               onClick={() => toggleShowKey(field.id)}
               title={showKeys[field.id] ? 'Hide' : 'Show'}
-              style={{ padding: '4px 6px' }}
+              aria-label={showKeys[field.id] ? `Hide ${field.label}` : `Show ${field.label}`}
             >
-              {showKeys[field.id] ? <EyeOffIcon /> : <EyeIcon />}
+              {showKeys[field.id] ? <EyeOffIcon style={{ width: 14, height: 14 }} /> : <EyeIcon style={{ width: 14, height: 14 }} />}
             </button>
           </div>
         </SettingRow>
@@ -811,6 +818,7 @@ const TAB_CONTENT: Record<SettingsTab, () => React.JSX.Element> = {
   git: GitTab,
   remote: RemoteTab,
   briefing: BriefingTab,
+  keybindings: KeybindingsTab,
   general: GeneralTab
 }
 
