@@ -71,6 +71,10 @@ interface UIState {
   poppedOutSessionIds: Set<string>
   addPoppedOut: (id: string) => void
   removePoppedOut: (id: string) => void
+
+  // Display preferences
+  showProviderBadges: boolean
+  setShowProviderBadges: (v: boolean) => void
 }
 
 // --- Split tree helpers ---
@@ -458,7 +462,10 @@ export const useUIStore = create<UIState>()(
         const next = new Set(state.poppedOutSessionIds)
         next.delete(id)
         return { poppedOutSessionIds: next }
-      })
+      }),
+
+      showProviderBadges: true,
+      setShowProviderBadges: (v) => set({ showProviderBadges: v })
     }),
     {
       name: 'sorcerer-ui-store',
@@ -468,7 +475,8 @@ export const useUIStore = create<UIState>()(
         expandedSessions: state.expandedSessions,
         expandedGroups: state.expandedGroups,
         sidebarCollapsed: state.sidebarCollapsed,
-        sidebarWidth: state.sidebarWidth
+        sidebarWidth: state.sidebarWidth,
+        showProviderBadges: state.showProviderBadges
       })
     }
   )

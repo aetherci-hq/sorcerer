@@ -193,6 +193,7 @@ function SessionsTab() {
   const [autoArchive, setAutoArchive] = useSetting('autoArchive', 'false')
   const [idleTimeout, setIdleTimeout] = useSetting('idleTimeout', '30m')
   const [confirmDelete, setConfirmDelete] = useSetting('confirmDelete', 'true')
+  const { showProviderBadges, setShowProviderBadges } = useUIStore()
 
   return (
     <>
@@ -273,6 +274,14 @@ function SessionsTab() {
       </SettingRow>
       <SettingRow label="Confirm before delete" description="Show confirmation dialog when deleting sessions">
         <Toggle checked={confirmDelete === 'true'} onChange={(v) => setConfirmDelete(v ? 'true' : 'false')} />
+      </SettingRow>
+
+      <SectionTitle>Sidebar</SectionTitle>
+      <SettingRow label="Show provider badges" description="Display the AI provider name next to sessions and agents using non-default providers">
+        <Toggle
+          checked={showProviderBadges}
+          onChange={setShowProviderBadges}
+        />
       </SettingRow>
     </>
   )
