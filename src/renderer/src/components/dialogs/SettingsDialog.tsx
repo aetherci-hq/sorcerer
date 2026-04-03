@@ -7,6 +7,7 @@ import {
 } from '../icons'
 import { THEMES, getThemeById, applyTheme } from '../../themes'
 import { gravatarUrl } from '../SidebarFooter'
+import { PROVIDERS } from '../../constants'
 
 type SettingsTab = 'profile' | 'appearance' | 'sessions' | 'git' | 'remote' | 'briefing' | 'general'
 
@@ -194,6 +195,14 @@ function SessionsTab() {
   const [idleTimeout, setIdleTimeout] = useSetting('idleTimeout', '30m')
   const [confirmDelete, setConfirmDelete] = useSetting('confirmDelete', 'true')
   const { showProviderBadges, setShowProviderBadges } = useUIStore()
+  const [defaultProvider, setDefaultProvider] = useSetting('defaultProvider', 'claude')
+  const [defaultModel, setDefaultModel] = useSetting('defaultModel', PROVIDERS[0].models[0])
+
+  const handleDefaultProviderChange = (id: string) => {
+    setDefaultProvider(id)
+    const p = PROVIDERS.find((p) => p.id === id)
+    if (p) setDefaultModel(p.models[0])
+  }
 
   return (
     <>
@@ -274,6 +283,30 @@ function SessionsTab() {
       </SettingRow>
       <SettingRow label="Confirm before delete" description="Show confirmation dialog when deleting sessions">
         <Toggle checked={confirmDelete === 'true'} onChange={(v) => setConfirmDelete(v ? 'true' : 'false')} />
+      </SettingRow>
+
+      <SectionTitle>Agents</SectionTitle>
+      <SettingRow label="Default provider" description="Provider pre-selected when creating new sessions or agents">
+        <select
+          className="settings-select"
+          value={defaultProvider}
+          onChange={(e) => handleDefaultProviderChange(e.target.value)}
+        >
+          {PROVIDERS.map((p) => (
+            <option key={p.id} value={p.id}>{p.name}</option>
+          ))}
+        </select>
+      </SettingRow>
+      <SettingRow label="Default model" description={`Default model for ${PROVIDERS.find(p => p.id === defaultProvider)?.name || 'the selected provider'}`}>
+        <select
+          className="settings-select"
+          value={defaultModel}
+          onChange={(e) => setDefaultModel(e.target.value)}
+        >
+          {PROVIDERS.find((p) => p.id === defaultProvider)?.models.map((m) => (
+            <option key={m} value={m}>{m}</option>
+          ))}
+        </select>
       </SettingRow>
 
       <SectionTitle>Sidebar</SectionTitle>

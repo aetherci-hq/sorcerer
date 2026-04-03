@@ -27,10 +27,26 @@ export function NewSessionDialog() {
   const effectiveProjectId = dialogTargetId || projectId
   const project = projects.find((p) => p.id === effectiveProjectId)
 
-  // Update model when provider changes
+  // Load user defaults when dialog opens
+  useEffect(() => {
+    if (!open) return
+    Promise.all([
+      getApi().settings.get('defaultProvider'),
+      getApi().settings.get('defaultModel')
+    ]).then(([p, m]) => {
+      const provId = (p as string) || 'claude'
+      setProvider(provId)
+      const prov = PROVIDERS.find((pr) => pr.id === provId)
+      if (prov) {
+        setModel((m as string) && prov.models.includes(m as string) ? (m as string) : prov.models[0])
+      }
+    })
+  }, [open])
+
+  // Reset model when provider changes and current model isn't valid for new provider
   useEffect(() => {
     const p = PROVIDERS.find(p => p.id === provider)
-    if (p) setModel(p.models[0])
+    if (p && !p.models.includes(model)) setModel(p.models[0])
   }, [provider])
 
   // Check git status when project selection changes

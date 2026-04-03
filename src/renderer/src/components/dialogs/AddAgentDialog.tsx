@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Dialog, DialogField, DialogActions, DialogButton } from '../Dialog'
+import { getApi } from '../../api/client'
 import { useUIStore } from '../../stores/useUIStore'
 import { useAgentStore } from '../../stores/useAgentStore'
 import { useSessionStore } from '../../stores/useSessionStore'
@@ -30,10 +31,26 @@ export function AddAgentDialog() {
 
   const open = activeDialog === 'add-agent'
 
-  // Update model when provider changes
+  // Load user defaults when dialog opens
+  useEffect(() => {
+    if (!open) return
+    Promise.all([
+      getApi().settings.get('defaultProvider'),
+      getApi().settings.get('defaultModel')
+    ]).then(([p, m]) => {
+      const provId = (p as string) || 'claude'
+      setProvider(provId)
+      const prov = PROVIDERS.find((pr) => pr.id === provId)
+      if (prov) {
+        setModel((m as string) && prov.models.includes(m as string) ? (m as string) : prov.models[0])
+      }
+    })
+  }, [open])
+
+  // Reset model when provider changes and current model isn't valid for new provider
   useEffect(() => {
     const p = PROVIDERS.find(p => p.id === provider)
-    if (p) setModel(p.models[0])
+    if (p && !p.models.includes(model)) setModel(p.models[0])
   }, [provider])
 
   const handleClose = () => {
