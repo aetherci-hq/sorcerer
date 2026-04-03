@@ -544,7 +544,7 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 8px 6px 8px;
+  padding: 6px 8px 6px 28px;
   border-radius: var(--radius-sm);
   cursor: pointer;
   transition: all 0.15s var(--ease-out);
@@ -588,6 +588,8 @@ body {
 }
 
 .tree-chevron {
+  position: absolute;
+  left: 8px;
   width: 14px;
   height: 14px;
   color: var(--text-muted);
@@ -4067,7 +4069,8 @@ button:focus-visible,
   border-radius: 3px;
 }
 
-/* Override xterm's default black background in popout */
+/* Override xterm's default black background — applies to both main and popout terminals */
+.terminal-xterm .xterm-viewport,
 .popout-terminal .xterm-viewport {
   background-color: var(--terminal-bg) !important;
 }

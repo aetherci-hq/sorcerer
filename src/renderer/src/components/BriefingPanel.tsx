@@ -47,7 +47,6 @@ export function BriefingPanel({ open, onClose }: { open: boolean; onClose: () =>
   const [archive, setArchive] = useState<ArchivedBriefing[]>([])
   const [viewingArchive, setViewingArchive] = useState<ArchivedBriefing | null>(null)
   const [showArchive, setShowArchive] = useState(false)
-
   const loadArchive = useCallback(async () => {
     const list = await getApi().briefing.list(30)
     setArchive(list)

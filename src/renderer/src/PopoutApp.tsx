@@ -45,6 +45,8 @@ function PopoutTerminal({ sessionId, onExited }: { sessionId: string; onExited: 
 
     const terminal = new Terminal({
       cursorBlink: true,
+      cursorStyle: 'bar',
+      cursorInactiveStyle: 'none',
       fontSize: 13,
       fontFamily: "'JetBrains Mono', 'Cascadia Code', 'Consolas', monospace",
       theme: {
@@ -166,7 +168,7 @@ function PopoutTerminal({ sessionId, onExited }: { sessionId: string; onExited: 
       if (!theme || !termRef.current) return
       const termBg = theme.colors['terminal-bg']
       termRef.current.terminal.options.theme = {
-        background: termBg,
+        background: 'transparent',
         foreground: theme.colors['text-primary'],
         cursor: theme.colors['accent'],
         cursorAccent: termBg,

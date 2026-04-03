@@ -183,7 +183,7 @@ function SessionItem({
   projectId: string
 }) {
   const { setActiveSession, activeSessionId } = useSessionStore()
-  const { expandedSessions, toggleSession, openContextMenu, renamingId, setRenamingId, splitRoot, remoteSessionIds, poppedOutSessionIds } = useUIStore()
+  const { expandedSessions, toggleSession, openContextMenu, renamingId, setRenamingId, splitRoot, remoteSessionIds, poppedOutSessionIds, showProviderBadges } = useUIStore()
   const { projects } = useProjectStore()
   const { teams, tasksByTeam } = useTeamStore()
   const isExpanded = expandedSessions.has(session.id)
@@ -321,8 +321,7 @@ function SessionItem({
           ? <ShellPromptIcon className="tree-icon tree-icon--quick-terminal" />
           : <TerminalIcon className="tree-icon" />
         }
-        <div className="tree-label-group tree-label-group--stacked">
-          <div className="tree-label-group">
+        <div className="tree-label-group">
             {isRenaming ? (
               <input
                 ref={renameInputRef}
@@ -336,6 +335,12 @@ function SessionItem({
             ) : (
               <span className="tree-label" onDoubleClick={handleDoubleClick}>{session.name}</span>
             )}
+            {showProviderBadges && session.provider && session.provider !== 'claude' && (
+              <span className="teammate-badge" style={{ fontSize: '9px' }}>{session.provider}</span>
+            )}
+            {isMainRepo && session.branch && !isRenaming && (
+              <span className="teammate-badge" style={{ fontSize: '9px' }}>direct</span>
+            )}
             {!isRenaming && divergence && divergence.behind > 0 && (
               <Tooltip label={`${divergence.behind} commit${divergence.behind !== 1 ? 's' : ''} behind main${divergence.ahead > 0 ? `, ${divergence.ahead} ahead` : ''}`}>
                 <span className={`tree-divergence ${divergence.behind >= 10 ? 'tree-divergence--danger' : divergence.behind >= 3 ? 'tree-divergence--warning' : ''}`}>
@@ -348,10 +353,6 @@ function SessionItem({
             {!isRenaming && remoteSessionIds.has(session.id) && (
               <WifiIcon className="tree-icon tree-remote-indicator" />
             )}
-          </div>
-          {isMainRepo && session.branch && !isRenaming && (
-            <span className="tree-hint">direct</span>
-          )}
         </div>
         {!isRenaming && (
           <>
