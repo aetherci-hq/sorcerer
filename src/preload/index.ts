@@ -23,7 +23,7 @@ const api = {
 
   session: {
     list: (projectId?: string) => ipcRenderer.invoke('session:list', projectId),
-    create: (projectId: string, name: string, useMainRepo?: boolean, bypassPermissions?: boolean, remoteControl?: boolean) => ipcRenderer.invoke('session:create', projectId, name, useMainRepo, bypassPermissions, remoteControl),
+    create: (projectId: string, name: string, useMainRepo?: boolean, bypassPermissions?: boolean, remoteControl?: boolean, provider?: string, model?: string) => ipcRenderer.invoke('session:create', projectId, name, useMainRepo, bypassPermissions, remoteControl, provider, model),
     spawnShell: (sessionId: string, cwd: string) => ipcRenderer.invoke('session:spawn-shell', sessionId, cwd),
     kill: (sessionId: string) => ipcRenderer.invoke('session:kill', sessionId),
     archive: (sessionId: string) => ipcRenderer.invoke('session:archive', sessionId),
@@ -58,7 +58,8 @@ const api = {
     add: (data: {
       id?: string; name: string; description?: string; system_prompt?: string; mcp_config?: string;
       bypass_permissions?: boolean; remote_control?: boolean;
-      mission?: string; auto_start?: boolean; auto_restart?: boolean; restart_delay?: number; max_restarts?: number; schedule_minutes?: number
+      mission?: string; auto_start?: boolean; auto_restart?: boolean; restart_delay?: number; max_restarts?: number; schedule_minutes?: number;
+      provider?: string; model?: string
     }) => ipcRenderer.invoke('agent:add', data),
     update: (id: string, updates: any) => ipcRenderer.invoke('agent:update', id, updates),
     remove: (id: string) => ipcRenderer.invoke('agent:remove', id),

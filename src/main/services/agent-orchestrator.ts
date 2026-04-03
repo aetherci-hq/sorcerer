@@ -17,7 +17,8 @@ import os from 'os'
 import fs from 'fs'
 import { DatabaseService } from './database-service'
 import { PTYService } from './pty-service'
-import { ensureClaudeTrust } from '../ipc/shared-handlers'
+import { ensureProviderTrust } from '../ipc/shared-handlers'
+import { getProviderRunner } from './provider-runners'
 
 interface RunningAgent {
   agentId: string
@@ -30,18 +31,15 @@ export class AgentOrchestrator {
   private mainWindow: BrowserWindow | null
   private pollInterval: ReturnType<typeof setInterval> | null = null
   private runningAgents = new Map<string, RunningAgent>()
-  private resolveClaudeBinary: () => string
 
   constructor(
     db: DatabaseService,
     pty: PTYService,
-    mainWindow: BrowserWindow | null,
-    resolveClaudeBinary: () => string
+    mainWindow: BrowserWindow | null
   ) {
     this.db = db
     this.pty = pty
     this.mainWindow = mainWindow
-    this.resolveClaudeBinary = resolveClaudeBinary
   }
 
   /**
@@ -107,32 +105,31 @@ export class AgentOrchestrator {
     const cwd = path.join(os.homedir(), '.sorcerer', 'agents', agentId)
     fs.mkdirSync(cwd, { recursive: true })
 
-    ensureClaudeTrust(cwd)
+    const providerId = (agent.provider as string) || 'claude'
+    const runner = getProviderRunner(providerId)
 
-    const args: string[] = []
-    if (agent.bypass_permissions) args.push('--dangerously-skip-permissions')
-    if (agent.mcp_config) args.push('--mcp-config', agent.mcp_config as string)
-    if (agent.system_prompt) args.push('--append-system-prompt', agent.system_prompt as string)
+    ensureProviderTrust(providerId, cwd)
 
-    // Use --continue if there's a previous run (maintains context), otherwise -p
     const hasHistory = this.db.getLatestAgentRun(agentId) !== undefined
-    if (hasHistory) {
-      args.push('--continue')
-      // Send the mission as a follow-up prompt after connecting
-      // We'll write it to the PTY after a delay
-    } else {
-      args.push('-p', agent.mission as string)
-    }
+    
+    const args = runner.getArgs({
+      mission: agent.mission as string,
+      systemPrompt: agent.system_prompt as string,
+      mcpConfig: agent.mcp_config as string,
+      bypassPermissions: agent.bypass_permissions !== 0,
+      hasHistory,
+      model: agent.model as string
+    })
 
     const startedAt = Math.floor(Date.now() / 1000)
     this.runningAgents.set(agentId, { agentId, startedAt })
 
-    console.log(`[orchestrator] Running agent: ${agent.name} (${hasHistory ? 'continue' : 'fresh'})`)
+    console.log(`[orchestrator] Running agent: ${agent.name} (provider: ${providerId}, ${hasHistory ? 'continue' : 'fresh'})`)
 
     this.pty.spawn(agentId, cwd, {
-      command: this.resolveClaudeBinary(),
+      command: runner.resolveBinary(),
       args,
-      env: { CLAUDE_CODE_TASK_LIST_ID: agentId }
+      env: runner.getEnv(agentId)
     })
 
     const pid = this.pty.getPid(agentId)
@@ -141,8 +138,8 @@ export class AgentOrchestrator {
     // Notify renderer
     this.notifyRenderer('agent:restarted', agentId, 'active', pid ?? null)
 
-    // If continuing, send the mission as input after Claude loads
-    if (hasHistory) {
+    // If continuing with Claude, send the mission as input after Claude loads
+    if (hasHistory && providerId === 'claude') {
       setTimeout(() => {
         if (this.pty.isRunning(agentId)) {
           this.pty.write(agentId, agent.mission + '\n')

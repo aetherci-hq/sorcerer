@@ -32,6 +32,8 @@ export interface Session {
   pid?: number | null
   created_at?: number
   archived_at?: number | null
+  provider?: string
+  model?: string
 }
 
 // ── Team / task types (from file watcher) ─────────────────────────
@@ -82,6 +84,8 @@ export interface Agent {
   pid: number | null
   team_name: string | null
   created_at: number
+  provider?: string
+  model?: string
 }
 
 export interface AgentGroup {

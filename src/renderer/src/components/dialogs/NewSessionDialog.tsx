@@ -5,6 +5,7 @@ import { useUIStore } from '../../stores/useUIStore'
 import { useProjectStore } from '../../stores/useProjectStore'
 import { useSessionStore } from '../../stores/useSessionStore'
 import { useToastStore } from '../../stores/useToastStore'
+import { PROVIDERS } from '../../constants'
 
 export function NewSessionDialog() {
   const { activeDialog, dialogTargetId, closeDialog } = useUIStore()
@@ -16,6 +17,8 @@ export function NewSessionDialog() {
   const [useMainRepo, setUseMainRepo] = useState(false)
   const [bypassPermissions, setBypassPermissions] = useState(true)
   const [remoteControl, setRemoteControl] = useState(false)
+  const [provider, setProvider] = useState('claude')
+  const [model, setModel] = useState(PROVIDERS[0].models[0])
   const [gitInfo, setGitInfo] = useState<{ hasGit: boolean; hasCommits: boolean } | null>(null)
 
   const open = activeDialog === 'new-session'
@@ -23,6 +26,12 @@ export function NewSessionDialog() {
   // If opened from a project context menu, pre-select that project
   const effectiveProjectId = dialogTargetId || projectId
   const project = projects.find((p) => p.id === effectiveProjectId)
+
+  // Update model when provider changes
+  useEffect(() => {
+    const p = PROVIDERS.find(p => p.id === provider)
+    if (p) setModel(p.models[0])
+  }, [provider])
 
   // Check git status when project selection changes
   useEffect(() => {
@@ -42,6 +51,8 @@ export function NewSessionDialog() {
     setUseMainRepo(false)
     setBypassPermissions(true)
     setRemoteControl(false)
+    setProvider('claude')
+    setModel(PROVIDERS[0].models[0])
     setGitInfo(null)
     closeDialog()
   }
@@ -56,11 +67,11 @@ export function NewSessionDialog() {
       addToast('Please enter a session name', 'error')
       return
     }
-    const result = await createSession(effectiveProjectId, name.trim(), useMainRepo, bypassPermissions, remoteControl)
-    if (result?.session) {
-      addToast(`Session "${name.trim()}" created`, 'success')
-    } else {
+    const result = await createSession(effectiveProjectId, name.trim(), useMainRepo, bypassPermissions, remoteControl, provider, model)
+    if (!result?.session) {
       addToast(result?.error || 'Failed to create session', 'error')
+    } else {
+      addToast(`Session "${name.trim()}" created`, 'success')
     }
     handleClose()
   }
@@ -70,7 +81,7 @@ export function NewSessionDialog() {
   if (!gitInfo) {
     hintText = null
   } else if (!gitInfo.hasGit) {
-    hintText = 'Claude Code will run directly in this folder.'
+    hintText = `${PROVIDERS.find(p => p.id === provider)?.name || 'Agent'} will run directly in this folder.`
   } else if (isEmptyGit) {
     hintText = 'Git repository has no commits yet — will work directly in the project folder.'
   } else if (useMainRepo) {
@@ -98,6 +109,37 @@ export function NewSessionDialog() {
             </select>
           )}
         </DialogField>
+        
+        <div style={{ display: 'flex', gap: 12 }}>
+          <DialogField label="AI Provider" style={{ flex: 1 }}>
+            <select
+              className="dialog-input"
+              value={provider}
+              onChange={(e) => setProvider(e.target.value)}
+            >
+              {PROVIDERS.map((p) => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+          </DialogField>
+          <DialogField label="Model" style={{ flex: 1 }}>
+            <select
+              className="dialog-input"
+              value={model}
+              onChange={(e) => setModel(e.target.value)}
+            >
+              {PROVIDERS.find(p => p.id === provider)?.models.map((m) => (
+                <option key={m} value={m}>{m}</option>
+              ))}
+            </select>
+          </DialogField>
+        </div>
+        {PROVIDERS.find(p => p.id === provider)?.apiKeyEnv && (
+          <div className="dialog-hint" style={{ marginTop: 4 }}>
+            Requires <code style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>{PROVIDERS.find(p => p.id === provider)?.apiKeyEnv}</code> in your environment.
+          </div>
+        )}
+
         <DialogField label="Session name">
           <input
             className="dialog-input"
@@ -126,14 +168,16 @@ export function NewSessionDialog() {
           />
           Auto-accept permissions
         </label>
-        <label className="dialog-checkbox">
-          <input
-            type="checkbox"
-            checked={remoteControl}
-            onChange={(e) => setRemoteControl(e.target.checked)}
-          />
-          Enable Session Remote Control
-        </label>
+        {provider === 'claude' && (
+          <label className="dialog-checkbox">
+            <input
+              type="checkbox"
+              checked={remoteControl}
+              onChange={(e) => setRemoteControl(e.target.checked)}
+            />
+            Enable Session Remote Control
+          </label>
+        )}
         {hintText && <div className="dialog-hint">{hintText}</div>}
         <DialogActions>
           <DialogButton onClick={handleClose}>Cancel</DialogButton>

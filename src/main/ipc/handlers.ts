@@ -329,8 +329,8 @@ export function registerIPC(
     return listSessions(services, projectId)
   })
 
-  ipcMain.handle('session:create', async (_event, projectId: string, sessionName: string, useMainRepo?: boolean, bypassPermissions?: boolean, remoteControl?: boolean) => {
-    return createSession(services, projectId, sessionName, useMainRepo, bypassPermissions, remoteControl)
+  ipcMain.handle('session:create', (_e, projectId: string, name: string, useMainRepo?: boolean, bypassPermissions?: boolean, remoteControl?: boolean, provider?: string, model?: string) => {
+    return createSession(services, projectId, name, useMainRepo, bypassPermissions, remoteControl, provider, model)
   })
 
   ipcMain.handle('session:spawn-shell', (_event, sessionId: string, cwd: string) => {
@@ -525,7 +525,12 @@ export function registerIPC(
     return listAgents(services)
   })
 
-  ipcMain.handle('agent:add', (_event, data: { id?: string; name: string; description?: string; system_prompt?: string; mcp_config?: string }) => {
+  ipcMain.handle('agent:add', (_event, data: {
+    id?: string; name: string; description?: string; system_prompt?: string; mcp_config?: string;
+    bypass_permissions?: boolean; remote_control?: boolean;
+    mission?: string; auto_start?: boolean; auto_restart?: boolean; restart_delay?: number; max_restarts?: number; schedule_minutes?: number;
+    provider?: string; model?: string
+  }) => {
     return addAgent(services, data)
   })
 

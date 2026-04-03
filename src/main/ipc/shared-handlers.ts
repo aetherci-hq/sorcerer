@@ -7,6 +7,7 @@ import { PTYService } from '../services/pty-service'
 import { DatabaseService } from '../services/database-service'
 import { WorktreeService } from '../services/worktree-service'
 import { FileWatcherService } from '../services/file-watcher-service'
+import { getProviderRunner } from '../services/provider-runners'
 
 // ── Services interface ──────────────────────────────────────
 
@@ -18,54 +19,6 @@ export interface HandlerServices {
 }
 
 // ── Helpers ─────────────────────────────────────────────────
-
-let _claudeBinary: string | null = null
-
-/**
- * Resolve the full path to the Claude Code binary.
- * Checks well-known install locations so we don't depend on PATH ordering
- * (the native installer puts claude.exe in ~/.local/bin which Electron may not see).
- */
-export function resolveClaudeBinary(): string {
-  if (_claudeBinary) return _claudeBinary
-
-  const home = os.homedir()
-  const candidates =
-    os.platform() === 'win32'
-      ? [
-          path.join(home, '.local', 'bin', 'claude.exe'),
-          path.join(home, 'AppData', 'Roaming', 'npm', 'claude.cmd'),
-          path.join(home, 'AppData', 'Roaming', 'npm', 'claude')
-        ]
-      : [
-          path.join(home, '.local', 'bin', 'claude'),
-          '/usr/local/bin/claude',
-          path.join(home, '.npm-global', 'bin', 'claude')
-        ]
-
-  for (const candidate of candidates) {
-    if (fs.existsSync(candidate)) {
-      console.log('[claude-binary] Resolved:', candidate)
-      _claudeBinary = candidate
-      return candidate
-    }
-  }
-
-  // Fallback: hope it's on PATH
-  console.warn('[claude-binary] No known path found, falling back to bare "claude"')
-  _claudeBinary = 'claude'
-  return 'claude'
-}
-
-/**
- * Build session-scoped env vars for Claude Code.
- * Each session gets its own CLAUDE_CODE_TASK_LIST_ID to prevent cross-session task contamination.
- */
-export function sessionEnv(sessionId: string): Record<string, string> {
-  return {
-    CLAUDE_CODE_TASK_LIST_ID: sessionId
-  }
-}
 
 /**
  * Check if Claude Code has conversation data for a given working directory.
@@ -124,16 +77,19 @@ function findMostRecentConversation(cwd: string): string | null {
 }
 
 /**
- * Pre-trust a directory for Claude Code so it skips the interactive trust prompt.
- * Claude Code stores trust in ~/.claude.json under projects[path].hasTrustDialogAccepted.
+ * Pre-trust a directory for an AI provider so it skips the interactive trust prompt.
  */
-export function ensureClaudeTrust(cwd: string): void {
+export function ensureProviderTrust(provider: string, cwd: string): void {
+  // Only Claude Code uses the hasTrustDialogAccepted pattern.
+  // Gemini CLI and Codex CLI don't have an equivalent trust config — skip them.
+  if (provider !== 'claude') return
+
   // Use forward slashes — Claude Code normalises to this on all platforms
   const key = cwd.replace(/\\/g, '/')
-  const claudeJsonPath = path.join(os.homedir(), '.claude.json')
+  const configPath = path.join(os.homedir(), '.claude.json')
   try {
-    const data = fs.existsSync(claudeJsonPath)
-      ? JSON.parse(fs.readFileSync(claudeJsonPath, 'utf8'))
+    const data = fs.existsSync(configPath)
+      ? JSON.parse(fs.readFileSync(configPath, 'utf8'))
       : {}
     if (!data.projects) data.projects = {}
     if (data.projects[key]?.hasTrustDialogAccepted) return // already trusted
@@ -142,7 +98,7 @@ export function ensureClaudeTrust(cwd: string): void {
       allowedTools: [],
       hasTrustDialogAccepted: true
     }
-    fs.writeFileSync(claudeJsonPath, JSON.stringify(data, null, 2))
+    fs.writeFileSync(configPath, JSON.stringify(data, null, 2))
   } catch {
     // Best effort — don't block agent launch if we can't write
   }
@@ -375,7 +331,9 @@ export async function createSession(
   sessionName: string,
   useMainRepo?: boolean,
   bypassPermissions?: boolean,
-  remoteControl?: boolean
+  remoteControl?: boolean,
+  provider: string = 'claude',
+  model: string = ''
 ): Promise<any> {
   console.log('[session:create] Starting:', { projectId, sessionName, useMainRepo, remoteControl })
   const project = db.getProject(projectId)
@@ -414,7 +372,7 @@ export async function createSession(
     console.log('[session:create] Worktree created:', { worktreePath, branch })
   }
 
-  // Create session record with a pinned Claude conversation ID
+  // Create session record with a pinned conversation ID (for Claude)
   const id = uuidv4()
   const claudeSessionId = uuidv4()
   const skipPerms = bypassPermissions !== false  // default true
@@ -427,28 +385,38 @@ export async function createSession(
     worktree_path: worktreePath,
     bypass_permissions: skipPerms ? 1 : 0,
     remote_control: rc,
-    claude_session_id: claudeSessionId
+    claude_session_id: claudeSessionId,
+    provider,
+    model
   })
   console.log('[session:create] Session saved:', { id, claudeSessionId, status: session?.status })
 
-  // Spawn Claude Code directly in the worktree — no shell prompt visible
-  // Use --session-id to pin this Claude conversation to this Sorcerer session,
-  // preventing cross-contamination when multiple sessions share the same cwd.
-  const args: string[] = ['--session-id', claudeSessionId]
-  if (skipPerms) args.push('--dangerously-skip-permissions')
+  const runner = getProviderRunner(provider)
+  ensureProviderTrust(provider, worktreePath)
+
+  const args = runner.getArgs({
+    bypassPermissions: skipPerms,
+    model
+  })
+
+  // Add provider-specific session pinning
+  if (provider === 'claude') {
+    args.push('--session-id', claudeSessionId)
+  }
+
   pty.spawn(id, worktreePath, {
-    command: resolveClaudeBinary(),
+    command: runner.resolveBinary(),
     args,
-    env: sessionEnv(id)
+    env: runner.getEnv(id)
   })
   const pid = pty.getPid(id)
-  console.log('[session:create] Claude spawned, pid:', pid)
+  console.log(`[session:create] ${provider} spawned, pid:`, pid)
   if (pid) {
     db.updateSession(id, { pid })
   }
 
-  // Enable Remote Control if requested
-  if (remoteControl) {
+  // Enable Remote Control if requested (only if provider supports it via /remote-control)
+  if (remoteControl && provider === 'claude') {
     enableRemoteControl(pty, id)
   }
 
@@ -652,21 +620,29 @@ export async function restartSession(
     // Quick terminal: spawn plain shell
     pty.spawn(sessionId, cwd)
   } else {
-    // Re-spawn Claude Code with a fresh, pinned conversation ID.
-    // Without --session-id, Claude picks the most recent conversation in the cwd,
-    // which can collide with external Claude instances or other Sorcerer sessions.
-    const newClaudeSessionId = uuidv4()
-    db.updateSession(sessionId, { claude_session_id: newClaudeSessionId })
-    const args: string[] = ['--session-id', newClaudeSessionId]
-    if (session.bypass_permissions !== 0) args.push('--dangerously-skip-permissions')
+    const provider = (session.provider as string) || 'claude'
+    const runner = getProviderRunner(provider)
+    ensureProviderTrust(provider, cwd)
+
+    const args = runner.getArgs({
+      bypassPermissions: session.bypass_permissions !== 0,
+      model: session.model as string
+    })
+
+    if (provider === 'claude') {
+      const newClaudeSessionId = uuidv4()
+      db.updateSession(sessionId, { claude_session_id: newClaudeSessionId })
+      args.push('--session-id', newClaudeSessionId)
+    }
+
     pty.spawn(sessionId, cwd, {
-      command: resolveClaudeBinary(),
+      command: runner.resolveBinary(),
       args,
-      env: sessionEnv(sessionId)
+      env: runner.getEnv(sessionId)
     })
 
     // Re-enable Remote Control if previously set
-    if (session.remote_control) {
+    if (session.remote_control && provider === 'claude') {
       enableRemoteControl(pty, sessionId)
     }
   }
@@ -694,50 +670,59 @@ export async function resumeSession(
     : (db.getProject(session.project_id as string)?.path as string || process.cwd())
 
   if (session.type === 'quick-terminal') {
-    // Quick terminal: just restart the shell (no Claude conversation to resume)
+    // Quick terminal: just restart the shell
     pty.spawn(sessionId, cwd)
   } else {
-    // Resume the Claude Code conversation pinned to this session.
-    // Use --resume <id> for sessions with a stored claude_session_id.
-    // If the stored ID doesn't have a conversation file on disk (e.g. session was
-    // created outside Sorcerer, or the file expired), fall back to the most recent
-    // conversation in the project directory. If nothing exists, start fresh.
-    let claudeSessionId = session.claude_session_id as string | undefined
+    const provider = (session.provider as string) || 'claude'
+    const runner = getProviderRunner(provider)
+    ensureProviderTrust(provider, cwd)
+
     let args: string[]
 
-    // Validate stored ID against actual conversation files
-    if (claudeSessionId && !conversationFileExists(cwd, claudeSessionId)) {
-      console.log(`[session:resume] Stored claude_session_id ${claudeSessionId} not found on disk, searching for conversation...`)
-      const actual = findMostRecentConversation(cwd)
-      if (actual) {
-        console.log(`[session:resume] Found conversation on disk: ${actual}`)
-        claudeSessionId = actual
-        db.updateSession(sessionId, { claude_session_id: claudeSessionId })
-      } else {
-        console.log(`[session:resume] No conversation files found for cwd: ${cwd}`)
-        claudeSessionId = undefined
+    if (provider === 'claude') {
+      let claudeSessionId = session.claude_session_id as string | undefined
+      if (claudeSessionId && !conversationFileExists(cwd, claudeSessionId)) {
+        console.log(`[session:resume] Stored claude_session_id ${claudeSessionId} not found on disk, searching for conversation...`)
+        const actual = findMostRecentConversation(cwd)
+        if (actual) {
+          console.log(`[session:resume] Found conversation on disk: ${actual}`)
+          claudeSessionId = actual
+          db.updateSession(sessionId, { claude_session_id: claudeSessionId })
+        } else {
+          console.log(`[session:resume] No conversation files found for cwd: ${cwd}`)
+          claudeSessionId = undefined
+        }
       }
+
+      args = runner.getArgs({
+        bypassPermissions: session.bypass_permissions !== 0,
+        model: session.model as string
+      })
+
+      if (claudeSessionId) {
+        args.push('--resume', claudeSessionId)
+      } else {
+        claudeSessionId = uuidv4()
+        db.updateSession(sessionId, { claude_session_id: claudeSessionId })
+        args.push('--session-id', claudeSessionId)
+      }
+      trackResume(sessionId)
+    } else {
+      args = runner.getArgs({
+        bypassPermissions: session.bypass_permissions !== 0,
+        model: session.model as string,
+        hasHistory: true
+      })
     }
 
-    if (claudeSessionId) {
-      args = ['--resume', claudeSessionId]
-    } else {
-      // No conversation found — start fresh with a new pinned ID
-      claudeSessionId = uuidv4()
-      db.updateSession(sessionId, { claude_session_id: claudeSessionId })
-      args = ['--session-id', claudeSessionId]
-      console.log(`[session:resume] Starting fresh session with ${claudeSessionId}`)
-    }
-    if (session.bypass_permissions !== 0) args.push('--dangerously-skip-permissions')
-    trackResume(sessionId)
     pty.spawn(sessionId, cwd, {
-      command: resolveClaudeBinary(),
+      command: runner.resolveBinary(),
       args,
-      env: sessionEnv(sessionId)
+      env: runner.getEnv(sessionId)
     })
 
     // Re-enable Remote Control if previously set
-    if (session.remote_control) {
+    if (session.remote_control && provider === 'claude') {
       enableRemoteControl(pty, sessionId)
     }
   }
@@ -930,7 +915,7 @@ export function listAgents({ db }: HandlerServices): any[] {
 
 function writeAgentManifest(
   agentId: string,
-  data: { name: string; description?: string; system_prompt?: string; mcp_config?: string; mission?: string; created_at?: number }
+  data: { name: string; description?: string; system_prompt?: string; mcp_config?: string; mission?: string; created_at?: number; provider?: string; model?: string }
 ): void {
   const dir = path.join(os.homedir(), '.sorcerer', 'agents', agentId)
   fs.mkdirSync(dir, { recursive: true })
@@ -940,7 +925,9 @@ function writeAgentManifest(
     system_prompt: data.system_prompt || '',
     mcp_config: data.mcp_config || '',
     mission: data.mission || '',
-    created_at: data.created_at || Math.floor(Date.now() / 1000)
+    created_at: data.created_at || Math.floor(Date.now() / 1000),
+    provider: data.provider || 'claude',
+    model: data.model || ''
   }
   fs.writeFileSync(path.join(dir, 'agent.json'), JSON.stringify(manifest, null, 2), 'utf8')
 }
@@ -950,7 +937,8 @@ export function addAgent(
   data: {
     id?: string; name: string; description?: string; system_prompt?: string; mcp_config?: string;
     bypass_permissions?: boolean; remote_control?: boolean;
-    mission?: string; auto_start?: boolean; auto_restart?: boolean; restart_delay?: number; max_restarts?: number; schedule_minutes?: number
+    mission?: string; auto_start?: boolean; auto_restart?: boolean; restart_delay?: number; max_restarts?: number; schedule_minutes?: number;
+    provider?: string; model?: string
   }
 ): any {
   const id = data.id || uuidv4()
@@ -966,7 +954,9 @@ export function addAgent(
     auto_restart: data.auto_restart ? 1 : 0,
     restart_delay: data.restart_delay ?? 30,
     max_restarts: data.max_restarts ?? 10,
-    schedule_minutes: data.schedule_minutes ?? 0
+    schedule_minutes: data.schedule_minutes ?? 0,
+    provider: data.provider || 'claude',
+    model: data.model || ''
   })
   writeAgentManifest(id, data)
   return agent
@@ -979,14 +969,16 @@ export function updateAgent(
 ): any {
   const agent = db.updateAgent(id, updates)
   // Keep manifest in sync when metadata changes
-  if (agent && (updates.name || updates.description || updates.system_prompt || updates.mcp_config || updates.mission !== undefined)) {
+  if (agent && (updates.name || updates.description || updates.system_prompt || updates.mcp_config || updates.mission !== undefined || updates.provider || updates.model)) {
     writeAgentManifest(id, {
       name: agent.name as string,
       description: agent.description as string,
       system_prompt: agent.system_prompt as string,
       mcp_config: agent.mcp_config as string,
       mission: agent.mission as string,
-      created_at: agent.created_at as number
+      created_at: agent.created_at as number,
+      provider: agent.provider as string,
+      model: agent.model as string
     })
   }
   return agent
@@ -1025,32 +1017,34 @@ export function startAgent(
 
   const cwd = path.join(os.homedir(), '.sorcerer', 'agents', agentId)
   fs.mkdirSync(cwd, { recursive: true })
-  ensureClaudeTrust(cwd)
+  
+  const provider = (agent.provider as string) || 'claude'
+  const runner = getProviderRunner(provider)
+  ensureProviderTrust(provider, cwd)
 
-  const args: string[] = []
-  if (agent.bypass_permissions !== 0) args.push('--dangerously-skip-permissions')
-  if (agent.mcp_config) args.push('--mcp-config', agent.mcp_config as string)
-  if (agent.system_prompt) args.push('--append-system-prompt', agent.system_prompt as string)
+  const args = runner.getArgs({
+    mission: agent.mission as string,
+    systemPrompt: agent.system_prompt as string,
+    mcpConfig: agent.mcp_config as string,
+    bypassPermissions: agent.bypass_permissions !== 0,
+    model: agent.model as string
+  })
 
-  // Pin each agent run to a unique conversation ID to prevent cross-contamination
-  const claudeSessionId = uuidv4()
-  args.push('--session-id', claudeSessionId)
-
-  // Autonomous mode: run mission non-interactively
-  if (agent.mission) {
-    args.push('-p', agent.mission as string)
+  if (provider === 'claude') {
+    const claudeSessionId = uuidv4()
+    args.push('--session-id', claudeSessionId)
   }
 
   pty.spawn(agentId, cwd, {
-    command: resolveClaudeBinary(),
+    command: runner.resolveBinary(),
     args,
-    env: sessionEnv(agentId)
+    env: runner.getEnv(agentId)
   })
   const pid = pty.getPid(agentId)
   db.updateAgent(agentId, { status: 'active', pid: pid ?? null })
 
-  // Enable Remote Control if configured (only for interactive agents)
-  if (agent.remote_control && !agent.mission) {
+  // Enable Remote Control if configured (only for interactive agents, and if supported)
+  if (agent.remote_control && !agent.mission && provider === 'claude') {
     enableRemoteControl(pty, agentId)
   }
 
@@ -1070,24 +1064,34 @@ export function resumeAgent(
 
   const cwd = path.join(os.homedir(), '.sorcerer', 'agents', agentId)
   fs.mkdirSync(cwd, { recursive: true })
-  ensureClaudeTrust(cwd)
+  
+  const provider = (agent.provider as string) || 'claude'
+  const runner = getProviderRunner(provider)
+  ensureProviderTrust(provider, cwd)
 
-  const args = ['--continue']
-  if (agent.bypass_permissions !== 0) args.push('--dangerously-skip-permissions')
-  if (agent.mcp_config) args.push('--mcp-config', agent.mcp_config as string)
-  if (agent.system_prompt) args.push('--append-system-prompt', agent.system_prompt as string)
+  const args = runner.getArgs({
+    mission: agent.mission as string,
+    systemPrompt: agent.system_prompt as string,
+    mcpConfig: agent.mcp_config as string,
+    bypassPermissions: agent.bypass_permissions !== 0,
+    model: agent.model as string,
+    hasHistory: true
+  })
 
-  trackResume(agentId)
+  if (provider === 'claude') {
+    trackResume(agentId)
+  }
+
   pty.spawn(agentId, cwd, {
-    command: resolveClaudeBinary(),
+    command: runner.resolveBinary(),
     args,
-    env: sessionEnv(agentId)
+    env: runner.getEnv(agentId)
   })
   const pid = pty.getPid(agentId)
   db.updateAgent(agentId, { status: 'active', pid: pid ?? null })
 
   // Re-enable Remote Control if configured
-  if (agent.remote_control) {
+  if (agent.remote_control && provider === 'claude') {
     enableRemoteControl(pty, agentId)
   }
 
@@ -1107,25 +1111,35 @@ export function restartAgent(
 
   const cwd = path.join(os.homedir(), '.sorcerer', 'agents', agentId)
   fs.mkdirSync(cwd, { recursive: true })
-  ensureClaudeTrust(cwd)
+  
+  const provider = (agent.provider as string) || 'claude'
+  const runner = getProviderRunner(provider)
+  ensureProviderTrust(provider, cwd)
 
-  // Pin to a fresh conversation ID to avoid picking up stale conversations
-  const claudeSessionId = uuidv4()
-  const args: string[] = ['--session-id', claudeSessionId]
-  if (agent.bypass_permissions !== 0) args.push('--dangerously-skip-permissions')
-  if (agent.mcp_config) args.push('--mcp-config', agent.mcp_config as string)
-  if (agent.system_prompt) args.push('--append-system-prompt', agent.system_prompt as string)
+  const args = runner.getArgs({
+    mission: agent.mission as string,
+    systemPrompt: agent.system_prompt as string,
+    mcpConfig: agent.mcp_config as string,
+    bypassPermissions: agent.bypass_permissions !== 0,
+    model: agent.model as string,
+    hasHistory: false
+  })
+
+  if (provider === 'claude') {
+    const claudeSessionId = uuidv4()
+    args.push('--session-id', claudeSessionId)
+  }
 
   pty.spawn(agentId, cwd, {
-    command: resolveClaudeBinary(),
+    command: runner.resolveBinary(),
     args,
-    env: sessionEnv(agentId)
+    env: runner.getEnv(agentId)
   })
   const pid = pty.getPid(agentId)
   db.updateAgent(agentId, { status: 'active', pid: pid ?? null })
 
   // Re-enable Remote Control if configured
-  if (agent.remote_control) {
+  if (agent.remote_control && provider === 'claude') {
     enableRemoteControl(pty, agentId)
   }
 

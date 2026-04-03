@@ -9,7 +9,7 @@ import { WorktreeService } from './services/worktree-service'
 import { FileWatcherService } from './services/file-watcher-service'
 import { PopoutService } from './services/popout-service'
 import { registerIPC } from './ipc/handlers'
-import { syncWorktrees, checkResumeFailed, resolveClaudeBinary } from './ipc/shared-handlers'
+import { syncWorktrees, checkResumeFailed } from './ipc/shared-handlers'
 import { AgentOrchestrator } from './services/agent-orchestrator'
 
 // On macOS/Linux, Electron doesn't inherit the user's shell PATH.
@@ -119,32 +119,36 @@ async function createWindow(): Promise<void> {
   }
 
   // Initialize remaining services
-  ptyService = new PTYService(mainWindow)
-  worktreeService = new WorktreeService()
-  popoutService = new PopoutService(mainWindow)
-  fileWatcherService = new FileWatcherService(mainWindow, dbService)
+  try {
+    ptyService = new PTYService(mainWindow)
+    worktreeService = new WorktreeService()
+    popoutService = new PopoutService(mainWindow)
+    fileWatcherService = new FileWatcherService(mainWindow, dbService)
 
-  // Mark all previously-active sessions as idle (PTY processes died on app exit)
-  const staleSessions = dbService.listSessions().filter((s: any) => s.status === 'active')
-  for (const s of staleSessions) {
-    dbService.updateSession(s.id, { status: 'idle', pid: null })
-  }
+    // Mark all previously-active sessions as idle (PTY processes died on app exit)
+    const staleSessions = dbService.listSessions().filter((s: any) => s.status === 'active')
+    for (const s of staleSessions) {
+      dbService.updateSession(s.id, { status: 'idle', pid: null })
+    }
 
-  // Same for agents — their PTY processes also die on app exit
-  const staleAgents = dbService.listAgents().filter((a: any) => a.status === 'active')
-  for (const a of staleAgents) {
-    dbService.updateAgent(a.id, { status: 'idle', pid: null })
-  }
+    // Same for agents — their PTY processes also die on app exit
+    const staleAgents = dbService.listAgents().filter((a: any) => a.status === 'active')
+    for (const a of staleAgents) {
+      dbService.updateAgent(a.id, { status: 'idle', pid: null })
+    }
 
-  // Clean up idle quick terminals — they can never be recovered
-  const idleQTs = dbService.listSessions().filter(
-    (s: any) => s.type === 'quick-terminal' && s.status === 'idle'
-  )
-  for (const qt of idleQTs) {
-    dbService.removeSession(qt.id)
-  }
-  if (idleQTs.length > 0) {
-    console.log(`[startup] Cleaned up ${idleQTs.length} idle quick terminal(s)`)
+    // Clean up idle quick terminals — they can never be recovered
+    const idleQTs = dbService.listSessions().filter(
+      (s: any) => s.type === 'quick-terminal' && s.status === 'idle'
+    )
+    for (const qt of idleQTs) {
+      dbService.removeSession(qt.id)
+    }
+    if (idleQTs.length > 0) {
+      console.log(`[startup] Cleaned up ${idleQTs.length} idle quick terminal(s)`)
+    }
+  } catch (err) {
+    console.error('[startup] Service initialization failed:', err)
   }
 
   // Crash recovery: auto-commit orphaned worktrees
@@ -219,7 +223,7 @@ async function createWindow(): Promise<void> {
   registerIPC(ptyService, dbService, worktreeService, fileWatcherService)
 
   // Start the agent orchestrator — handles scheduled runs, output capture, decisions
-  const orchestrator = new AgentOrchestrator(dbService, ptyService, mainWindow, resolveClaudeBinary)
+  const orchestrator = new AgentOrchestrator(dbService, ptyService, mainWindow)
   orchestrator.start()
 
   // Auto-start agents configured for auto_start (immediate, outside of schedule)

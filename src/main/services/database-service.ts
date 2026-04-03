@@ -1,6 +1,5 @@
 import initSqlJs, { Database as SqlJsDatabase } from 'sql.js'
 import { v4 as uuidv4 } from 'uuid'
-import { safeStorage } from 'electron'
 import path from 'path'
 import os from 'os'
 import fs from 'fs'
@@ -136,6 +135,20 @@ export class DatabaseService {
     } catch { /* column already exists */ }
     try {
       this.db.run(`ALTER TABLE agents ADD COLUMN remote_control INTEGER NOT NULL DEFAULT 0`)
+    } catch { /* column already exists */ }
+
+    // Add provider and model columns to sessions and agents (idempotent migration)
+    try {
+      this.db.run(`ALTER TABLE sessions ADD COLUMN provider TEXT NOT NULL DEFAULT 'claude'`)
+    } catch { /* column already exists */ }
+    try {
+      this.db.run(`ALTER TABLE sessions ADD COLUMN model TEXT DEFAULT ''`)
+    } catch { /* column already exists */ }
+    try {
+      this.db.run(`ALTER TABLE agents ADD COLUMN provider TEXT NOT NULL DEFAULT 'claude'`)
+    } catch { /* column already exists */ }
+    try {
+      this.db.run(`ALTER TABLE agents ADD COLUMN model TEXT DEFAULT ''`)
     } catch { /* column already exists */ }
 
     // Project groups table
@@ -450,15 +463,18 @@ export class DatabaseService {
     remote_control?: number
     status?: string
     claude_session_id?: string
+    provider?: string
+    model?: string
   }): any {
     if (!this.db) throw new Error('Database not initialized')
     this.db.run(
-      `INSERT INTO sessions (id, project_id, name, branch, worktree_path, status, type, team_name, parent_session_id, bypass_permissions, remote_control, claude_session_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO sessions (id, project_id, name, branch, worktree_path, status, type, team_name, parent_session_id, bypass_permissions, remote_control, claude_session_id, provider, model)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [data.id, data.project_id, data.name, data.branch, data.worktree_path,
        data.status || 'active',
        data.type || 'session', data.team_name || null, data.parent_session_id || null,
-       data.bypass_permissions ?? 1, data.remote_control ?? 0, data.claude_session_id || null]
+       data.bypass_permissions ?? 1, data.remote_control ?? 0, data.claude_session_id || null,
+       data.provider || 'claude', data.model || '']
     )
     this.save()
     return this.getSession(data.id)
@@ -472,6 +488,8 @@ export class DatabaseService {
     archived_at: number | null
     remote_control: number
     claude_session_id: string
+    provider: string
+    model: string
   }>): any {
     if (!this.db) return undefined
     const setClauses: string[] = []
@@ -534,15 +552,18 @@ export class DatabaseService {
     restart_delay?: number
     max_restarts?: number
     schedule_minutes?: number
+    provider?: string
+    model?: string
   }): any {
     if (!this.db) throw new Error('Database not initialized')
     this.db.run(
-      `INSERT INTO agents (id, name, description, system_prompt, mcp_config, bypass_permissions, remote_control, mission, auto_start, auto_restart, restart_delay, max_restarts, schedule_minutes)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO agents (id, name, description, system_prompt, mcp_config, bypass_permissions, remote_control, mission, auto_start, auto_restart, restart_delay, max_restarts, schedule_minutes, provider, model)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [data.id, data.name, data.description || '', data.system_prompt || '', data.mcp_config || '',
        data.bypass_permissions ?? 1, data.remote_control ?? 0,
        data.mission || '', data.auto_start ?? 0, data.auto_restart ?? 0,
-       data.restart_delay ?? 30, data.max_restarts ?? 10, data.schedule_minutes ?? 0]
+       data.restart_delay ?? 30, data.max_restarts ?? 10, data.schedule_minutes ?? 0,
+       data.provider || 'claude', data.model || '']
     )
     this.save()
     return this.getAgent(data.id)
@@ -563,6 +584,8 @@ export class DatabaseService {
     max_restarts: number
     schedule_minutes: number
     last_run_at: number | null
+    provider: string
+    model: string
   }>): any {
     if (!this.db) return undefined
     const setClauses: string[] = []
@@ -686,6 +709,7 @@ export class DatabaseService {
 
     if (this.isSecret(key)) {
       try {
+        const { safeStorage } = require('electron')
         const buffer = Buffer.from(row.value, 'base64')
         if (safeStorage.isEncryptionAvailable()) {
           return safeStorage.decryptString(buffer)
@@ -704,10 +728,13 @@ export class DatabaseService {
     if (!this.db) return
 
     let valueToStore = value
-    if (this.isSecret(key) && value && safeStorage.isEncryptionAvailable()) {
+    if (this.isSecret(key) && value) {
       try {
-        const encrypted = safeStorage.encryptString(value)
-        valueToStore = encrypted.toString('base64')
+        const { safeStorage } = require('electron')
+        if (safeStorage.isEncryptionAvailable()) {
+          const encrypted = safeStorage.encryptString(value)
+          valueToStore = encrypted.toString('base64')
+        }
       } catch (e) {
         console.error(`[db] Failed to encrypt secret key ${key}`, e)
       }

@@ -1,10 +1,11 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Dialog, DialogField, DialogActions, DialogButton } from '../Dialog'
 import { useUIStore } from '../../stores/useUIStore'
 import { useAgentStore } from '../../stores/useAgentStore'
 import { useSessionStore } from '../../stores/useSessionStore'
 import { useToastStore } from '../../stores/useToastStore'
 import { ChevronIcon, BotIcon, TerminalIcon } from '../icons'
+import { PROVIDERS } from '../../constants'
 
 type AgentMode = null | 'interactive' | 'autonomous'
 
@@ -24,8 +25,16 @@ export function AddAgentDialog() {
   const [autoStart, setAutoStart] = useState(false)
   const [scheduleMinutes, setScheduleMinutes] = useState('0')
   const [showAdvanced, setShowAdvanced] = useState(false)
+  const [provider, setProvider] = useState('claude')
+  const [model, setModel] = useState(PROVIDERS[0].models[0])
 
   const open = activeDialog === 'add-agent'
+
+  // Update model when provider changes
+  useEffect(() => {
+    const p = PROVIDERS.find(p => p.id === provider)
+    if (p) setModel(p.models[0])
+  }, [provider])
 
   const handleClose = () => {
     setMode(null)
@@ -39,6 +48,8 @@ export function AddAgentDialog() {
     setAutoStart(false)
     setScheduleMinutes('0')
     setShowAdvanced(false)
+    setProvider('claude')
+    setModel(PROVIDERS[0].models[0])
     closeDialog()
   }
 
@@ -56,7 +67,9 @@ export function AddAgentDialog() {
       remote_control: mode === 'interactive' ? remoteControl : false,
       auto_start: mode === 'autonomous' ? autoStart : false,
       auto_restart: mode === 'autonomous' && parseInt(scheduleMinutes) > 0,
-      schedule_minutes: mode === 'autonomous' ? parseInt(scheduleMinutes) || 0 : 0
+      schedule_minutes: mode === 'autonomous' ? parseInt(scheduleMinutes) || 0 : 0,
+      provider,
+      model
     })
     if (id) {
       await startAgent(id)
@@ -78,7 +91,7 @@ export function AddAgentDialog() {
             <TerminalIcon className="agent-mode-icon" />
             <div className="agent-mode-info">
               <span className="agent-mode-label">Interactive Session</span>
-              <span className="agent-mode-desc">A standalone Claude Code session you interact with directly. Not tied to any git repo.</span>
+              <span className="agent-mode-desc">A standalone agent session you interact with directly. Not tied to any git repo.</span>
             </div>
           </button>
           <button type="button" className="agent-mode-option" onClick={() => setMode('autonomous')}>
@@ -115,6 +128,37 @@ export function AddAgentDialog() {
             autoFocus
           />
         </DialogField>
+        
+        <div style={{ display: 'flex', gap: 12 }}>
+          <DialogField label="AI Provider" style={{ flex: 1 }}>
+            <select
+              className="dialog-input"
+              value={provider}
+              onChange={(e) => setProvider(e.target.value)}
+            >
+              {PROVIDERS.map((p) => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+          </DialogField>
+          <DialogField label="Model" style={{ flex: 1 }}>
+            <select
+              className="dialog-input"
+              value={model}
+              onChange={(e) => setModel(e.target.value)}
+            >
+              {PROVIDERS.find(p => p.id === provider)?.models.map((m) => (
+                <option key={m} value={m}>{m}</option>
+              ))}
+            </select>
+          </DialogField>
+        </div>
+        {PROVIDERS.find(p => p.id === provider)?.apiKeyEnv && (
+          <div className="dialog-hint" style={{ marginTop: 4 }}>
+            Requires <code style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>{PROVIDERS.find(p => p.id === provider)?.apiKeyEnv}</code> in your environment.
+          </div>
+        )}
+
         <DialogField label="Description">
           <input
             className="dialog-input"
@@ -165,7 +209,7 @@ export function AddAgentDialog() {
           <input type="checkbox" checked={bypassPermissions} onChange={(e) => setBypassPermissions(e.target.checked)} />
           Auto-accept permissions
         </label>
-        {mode === 'interactive' && (
+        {mode === 'interactive' && provider === 'claude' && (
           <label className="dialog-checkbox">
             <input type="checkbox" checked={remoteControl} onChange={(e) => setRemoteControl(e.target.checked)} />
             Enable Session Remote Control
@@ -205,7 +249,7 @@ export function AddAgentDialog() {
                 rows={4}
               />
               <div className="dialog-hint" style={{ marginTop: 4, marginBottom: 0 }}>
-                Appended to Claude's system prompt via <span className="dialog-hint-mono">--append-system-prompt</span>.
+                Appended to agent's system prompt (if supported).
               </div>
             </DialogField>
           </div>
