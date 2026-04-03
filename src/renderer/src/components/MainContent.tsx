@@ -316,7 +316,9 @@ function SplitNodeView({ node }: { node: SplitNode }) {
       }
     }
 
-    // If the focused panel is empty, fill it instead of creating a new split
+    // If the focused panel is empty, fill it instead of creating a new split.
+    // When no empty panel is available, split from this panel (node.id), not from
+    // whatever panel happens to be focused.
     const fillEmptyOrSplit = (sessionId: string) => {
       const { splitRoot: root, focusedPanelId: fpId } = useUIStore.getState()
       if (root && fpId) {
@@ -327,14 +329,30 @@ function SplitNodeView({ node }: { node: SplitNode }) {
           return
         }
       }
+      setFocusedPanel(node.id)
       splitRight(sessionId)
+    }
+
+    // Same as fillEmptyOrSplit but for non-session panel content (e.g. Quick Notes)
+    // that shouldn't touch activeSessionId.
+    const fillEmptyOrSplitPanel = (panelSessionId: string) => {
+      const { splitRoot: root, focusedPanelId: fpId } = useUIStore.getState()
+      if (root && fpId) {
+        const focused = findLeaf(root, fpId)
+        if (focused && focused.sessionId === null) {
+          setPanelSession(fpId, panelSessionId)
+          return
+        }
+      }
+      setFocusedPanel(node.id)
+      splitRight(panelSessionId)
     }
 
     const openQuickNotesSplit = (parentId: string, parentType: 'session' | 'agent') => {
       const notePanelId = `quicknotes:${parentType}:${parentId}`
       useQuickNotesStore.getState().addNotePanel(parentId)
       ensureExpanded(parentId)
-      splitRight(notePanelId)
+      fillEmptyOrSplitPanel(notePanelId)
       const { splitRoot: root } = useUIStore.getState()
       if (root) {
         const leaf = findLeafBySession(root, notePanelId)
@@ -361,7 +379,6 @@ function SplitNodeView({ node }: { node: SplitNode }) {
                   title="Open Quick Notes"
                   onClick={(e) => {
                     e.stopPropagation()
-                    setFocusedPanel(node.id)
                     openQuickNotesSplit(session.id, 'session')
                   }}
                 >
@@ -372,7 +389,6 @@ function SplitNodeView({ node }: { node: SplitNode }) {
                   title="Open Quick Terminal"
                   onClick={async (e) => {
                     e.stopPropagation()
-                    setFocusedPanel(node.id)
                     const newSession = await createQuickTerminal(session.id)
                     if (newSession) {
                       ensureExpanded(session.id)
@@ -397,7 +413,6 @@ function SplitNodeView({ node }: { node: SplitNode }) {
                   title="Open Quick Notes"
                   onClick={(e) => {
                     e.stopPropagation()
-                    setFocusedPanel(node.id)
                     openQuickNotesSplit(agent.id, 'agent')
                   }}
                 >
@@ -408,7 +423,6 @@ function SplitNodeView({ node }: { node: SplitNode }) {
                   title="Open Quick Terminal"
                   onClick={async (e) => {
                     e.stopPropagation()
-                    setFocusedPanel(node.id)
                     const qt = await getApi().agent.createQuickTerminal(agent.id)
                     if (qt) {
                       addLocalSession(qt as any)

@@ -12,7 +12,7 @@ import {
 import { useQuickNotesStore } from '../stores/useQuickNotesStore'
 
 type MenuItem =
-  | { label: string; icon?: ReactNode; shortcut?: string; action: () => void; danger?: boolean }
+  | { label: string; icon?: ReactNode; shortcut?: string; action: () => void; danger?: boolean; eager?: boolean }
   | { type: 'separator' }
 
 export function ContextMenu() {
@@ -148,6 +148,22 @@ export function ContextMenu() {
     splitRight(sessionId)
   }
 
+  // Same as fillEmptyOrSplit but for Quick Notes panels (not sessions).
+  // Falls back to focusing the target session's panel and splitting next to it.
+  const fillEmptyOrSplitNotes = (notePanelId: string, parentSessionId: string) => {
+    const { splitRoot: root, focusedPanelId, setPanelSession, setFocusedPanel } = useUIStore.getState()
+    if (root && focusedPanelId) {
+      const focused = findLeaf(root, focusedPanelId)
+      if (focused && focused.sessionId === null) {
+        setPanelSession(focusedPanelId, notePanelId)
+        setFocusedPanel(focusedPanelId)
+        return
+      }
+    }
+    focusTargetPanel(parentSessionId)
+    splitRight(notePanelId)
+  }
+
   let items: MenuItem[]
 
   if (contextMenu.type === 'agent') {
@@ -165,11 +181,11 @@ export function ContextMenu() {
           addToast('Agent mission started', 'info')
         }}
       ] : [
-        { label: 'Resume Agent', icon: <PlayIcon className={iconClass} />, action: async () => {
+        { label: 'Resume Agent', icon: <PlayIcon className={iconClass} />, eager: true, action: async () => {
           await resumeAgent(contextMenu.targetId)
           addToast('Agent resumed', 'info')
         }},
-        { label: 'Start New Session', icon: <RefreshIcon className={iconClass} />, action: async () => {
+        { label: 'Start New Session', icon: <RefreshIcon className={iconClass} />, eager: true, action: async () => {
           await restartAgent(contextMenu.targetId)
           addToast('New agent session started', 'info')
         }}
@@ -216,8 +232,7 @@ export function ContextMenu() {
         const notePanelId = `quicknotes:agent:${contextMenu.targetId}`
         useQuickNotesStore.getState().addNotePanel(contextMenu.targetId)
         ensureExpanded(contextMenu.targetId)
-        focusTargetPanel(contextMenu.targetId)
-        splitRight(notePanelId)
+        fillEmptyOrSplitNotes(notePanelId, contextMenu.targetId)
         const { splitRoot: root, setFocusedPanel } = useUIStore.getState()
         if (root) {
           const leaf = findLeafBySession(root, notePanelId)
@@ -492,8 +507,7 @@ export function ContextMenu() {
         const notePanelId = `quicknotes:session:${contextMenu.targetId}`
         useQuickNotesStore.getState().addNotePanel(contextMenu.targetId)
         ensureExpanded(contextMenu.targetId)
-        focusTargetPanel(contextMenu.targetId)
-        splitRight(notePanelId)
+        fillEmptyOrSplitNotes(notePanelId, contextMenu.targetId)
         const { splitRoot: root, setFocusedPanel } = useUIStore.getState()
         if (root) {
           const leaf = findLeafBySession(root, notePanelId)
@@ -502,11 +516,11 @@ export function ContextMenu() {
       }},
       { type: 'separator' },
       { label: 'Rename', icon: <EditIcon className={iconClass} />, shortcut: 'F2', action: () => setRenamingId(contextMenu.targetId) },
-      { label: 'Resume Session', icon: <PlayIcon className={iconClass} />, action: async () => {
+      { label: 'Resume Session', icon: <PlayIcon className={iconClass} />, eager: true, action: async () => {
         await resumeSession(contextMenu.targetId)
         addToast('Session resumed', 'info')
       }},
-      { label: 'New Session', icon: <RefreshIcon className={iconClass} />, action: async () => {
+      { label: 'New Session', icon: <RefreshIcon className={iconClass} />, eager: true, action: async () => {
         await restartSession(contextMenu.targetId)
         addToast('New session started', 'info')
       }},
@@ -572,10 +586,15 @@ export function ContextMenu() {
             className={`context-menu-item ${item.danger ? 'context-menu-item--danger' : ''} ${loadingItem === i ? 'context-menu-item--active' : ''}`}
             disabled={loadingItem !== null && loadingItem !== i}
             onClick={async () => {
-              let spinnerTimer: ReturnType<typeof setTimeout> | null = setTimeout(() => {
-                spinnerTimer = null
+              let spinnerTimer: ReturnType<typeof setTimeout> | null = null
+              if (item.eager) {
                 setLoadingItem(i)
-              }, 150)
+              } else {
+                spinnerTimer = setTimeout(() => {
+                  spinnerTimer = null
+                  setLoadingItem(i)
+                }, 150)
+              }
               try {
                 await Promise.resolve(item.action())
               } finally {
