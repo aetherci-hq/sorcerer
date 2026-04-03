@@ -62,21 +62,22 @@ export function DialogActions({ children }: { children: ReactNode }) {
   return <div className="dialog-actions">{children}</div>
 }
 
-export function DialogButton({ children, variant = 'secondary', onClick, type, disabled }: {
+export function DialogButton({ children, variant = 'secondary', onClick, type, disabled, loading }: {
   children: ReactNode
   variant?: 'primary' | 'secondary' | 'danger'
   onClick?: () => void
   type?: 'submit' | 'button'
   disabled?: boolean
+  loading?: boolean
 }) {
   return (
     <button
       className={`dialog-btn dialog-btn--${variant}`}
       onClick={onClick}
       type={type || 'button'}
-      disabled={disabled}
+      disabled={disabled || loading}
     >
-      {children}
+      {loading ? <span className="btn-spinner" /> : children}
     </button>
   )
 }

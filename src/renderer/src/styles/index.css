@@ -1799,6 +1799,16 @@ body {
   color: var(--danger);
 }
 
+.context-menu-item:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.context-menu-item--active {
+  background: var(--bg-hover);
+}
+
 .context-menu-label {
   flex: 1;
 }
@@ -2215,6 +2225,12 @@ select.dialog-input option {
   background: rgba(226, 85, 85, 0.22);
   border-color: rgba(226, 85, 85, 0.45);
   box-shadow: 0 0 16px rgba(226, 85, 85, 0.08);
+}
+
+.dialog-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  pointer-events: none;
 }
 
 /* ============================
@@ -2639,6 +2655,12 @@ button:focus-visible,
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
   opacity: 0.8;
+}
+
+.btn-spinner--sm {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
 }
 
 @keyframes spin {

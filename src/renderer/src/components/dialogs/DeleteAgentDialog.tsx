@@ -52,9 +52,7 @@ export function DeleteAgentDialog() {
       </div>
       <DialogActions>
         <DialogButton onClick={handleClose} disabled={deleting}>Cancel</DialogButton>
-        <DialogButton variant="danger" onClick={handleDelete} disabled={deleting}>
-          {deleting ? <span className="btn-spinner" /> : 'Delete'}
-        </DialogButton>
+        <DialogButton variant="danger" onClick={handleDelete} loading={deleting}>Delete</DialogButton>
       </DialogActions>
     </Dialog>
   )

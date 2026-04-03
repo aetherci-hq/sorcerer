@@ -73,9 +73,7 @@ export function DeleteDialog() {
       </div>
       <DialogActions>
         <DialogButton onClick={handleClose} disabled={deleting}>Cancel</DialogButton>
-        <DialogButton variant="danger" onClick={handleConfirm} disabled={deleting}>
-          {deleting ? <span className="btn-spinner" /> : 'Delete'}
-        </DialogButton>
+        <DialogButton variant="danger" onClick={handleConfirm} loading={deleting}>Delete</DialogButton>
       </DialogActions>
     </Dialog>
   )

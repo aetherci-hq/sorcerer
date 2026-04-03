@@ -23,6 +23,7 @@ export function ContextMenu() {
   const { addToast } = useToastStore()
   const menuRef = useRef<HTMLDivElement>(null)
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null)
+  const [loadingItem, setLoadingItem] = useState<number | null>(null)
 
   // Clamp menu position to viewport before paint
   useLayoutEffect(() => {
@@ -568,10 +569,25 @@ export function ContextMenu() {
         ) : (
           <button
             key={i}
-            className={`context-menu-item ${item.danger ? 'context-menu-item--danger' : ''}`}
-            onClick={() => { item.action(); closeContextMenu() }}
+            className={`context-menu-item ${item.danger ? 'context-menu-item--danger' : ''} ${loadingItem === i ? 'context-menu-item--active' : ''}`}
+            disabled={loadingItem !== null && loadingItem !== i}
+            onClick={async () => {
+              let spinnerTimer: ReturnType<typeof setTimeout> | null = setTimeout(() => {
+                spinnerTimer = null
+                setLoadingItem(i)
+              }, 150)
+              try {
+                await Promise.resolve(item.action())
+              } finally {
+                if (spinnerTimer !== null) clearTimeout(spinnerTimer)
+                setLoadingItem(null)
+                closeContextMenu()
+              }
+            }}
           >
-            {item.icon}
+            {loadingItem === i
+              ? <span className="btn-spinner btn-spinner--sm" />
+              : item.icon}
             <span className="context-menu-label">{item.label}</span>
             {item.shortcut && <span className="context-menu-shortcut">{item.shortcut}</span>}
           </button>

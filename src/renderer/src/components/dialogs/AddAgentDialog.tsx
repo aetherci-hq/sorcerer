@@ -28,6 +28,7 @@ export function AddAgentDialog() {
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [provider, setProvider] = useState('claude')
   const [model, setModel] = useState(PROVIDERS[0].models[0])
+  const [submitting, setSubmitting] = useState(false)
 
   const open = activeDialog === 'add-agent'
 
@@ -74,26 +75,31 @@ export function AddAgentDialog() {
     e.preventDefault()
     if (!name.trim()) return
     if (mode === 'autonomous' && !mission.trim()) return
-    const id = await addAgent({
-      name: name.trim(),
-      description: description.trim(),
-      mission: mode === 'autonomous' ? mission.trim() : '',
-      system_prompt: systemPrompt.trim(),
-      mcp_config: mcpConfig.trim(),
-      bypass_permissions: bypassPermissions,
-      remote_control: mode === 'interactive' ? remoteControl : false,
-      auto_start: mode === 'autonomous' ? autoStart : false,
-      auto_restart: mode === 'autonomous' && parseInt(scheduleMinutes) > 0,
-      schedule_minutes: mode === 'autonomous' ? parseInt(scheduleMinutes) || 0 : 0,
-      provider,
-      model
-    })
-    if (id) {
-      await startAgent(id)
-      setActiveSession(id)
-      addToast(`Agent "${name.trim()}" created${mode === 'autonomous' ? ' — mission started' : ''}`, 'success')
+    setSubmitting(true)
+    try {
+      const id = await addAgent({
+        name: name.trim(),
+        description: description.trim(),
+        mission: mode === 'autonomous' ? mission.trim() : '',
+        system_prompt: systemPrompt.trim(),
+        mcp_config: mcpConfig.trim(),
+        bypass_permissions: bypassPermissions,
+        remote_control: mode === 'interactive' ? remoteControl : false,
+        auto_start: mode === 'autonomous' ? autoStart : false,
+        auto_restart: mode === 'autonomous' && parseInt(scheduleMinutes) > 0,
+        schedule_minutes: mode === 'autonomous' ? parseInt(scheduleMinutes) || 0 : 0,
+        provider,
+        model
+      })
+      if (id) {
+        await startAgent(id)
+        setActiveSession(id)
+        addToast(`Agent "${name.trim()}" created${mode === 'autonomous' ? ' — mission started' : ''}`, 'success')
+        handleClose()
+      }
+    } finally {
+      setSubmitting(false)
     }
-    handleClose()
   }
 
   if (!open) return null
@@ -273,8 +279,8 @@ export function AddAgentDialog() {
         )}
 
         <DialogActions>
-          <DialogButton onClick={() => setMode(null)}>Back</DialogButton>
-          <DialogButton variant="primary" type="submit">
+          <DialogButton onClick={() => setMode(null)} disabled={submitting}>Back</DialogButton>
+          <DialogButton variant="primary" type="submit" loading={submitting}>
             {mode === 'autonomous' ? 'Create & Start Mission' : 'Create Agent'}
           </DialogButton>
         </DialogActions>

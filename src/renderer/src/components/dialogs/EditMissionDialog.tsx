@@ -18,6 +18,7 @@ export function EditMissionDialog() {
   const [mcpConfig, setMcpConfig] = useState('')
   const [bypassPermissions, setBypassPermissions] = useState(true)
   const [showAdvanced, setShowAdvanced] = useState(false)
+  const [loading, setLoading] = useState(false)
 
   const open = activeDialog === 'edit-agent-mission'
   const agent = agents.find((a) => a.id === dialogTargetId)
@@ -42,20 +43,25 @@ export function EditMissionDialog() {
 
   const handleSave = async () => {
     if (!dialogTargetId) return
-    const updates: any = {
-      mission: mission.trim(),
-      schedule_minutes: parseInt(scheduleMinutes) || 0,
-      auto_start: autoStart ? 1 : 0,
-      auto_restart: parseInt(scheduleMinutes) > 0 ? 1 : 0,
-      max_restarts: parseInt(maxRestarts) || 10,
-      system_prompt: systemPrompt.trim(),
-      mcp_config: mcpConfig.trim(),
-      bypass_permissions: bypassPermissions ? 1 : 0
+    setLoading(true)
+    try {
+      const updates: any = {
+        mission: mission.trim(),
+        schedule_minutes: parseInt(scheduleMinutes) || 0,
+        auto_start: autoStart ? 1 : 0,
+        auto_restart: parseInt(scheduleMinutes) > 0 ? 1 : 0,
+        max_restarts: parseInt(maxRestarts) || 10,
+        system_prompt: systemPrompt.trim(),
+        mcp_config: mcpConfig.trim(),
+        bypass_permissions: bypassPermissions ? 1 : 0
+      }
+      await getApi().agent.update(dialogTargetId, updates)
+      useAgentStore.getState().updateAgentInStore(dialogTargetId, updates)
+      addToast('Agent settings updated', 'success')
+      handleClose()
+    } finally {
+      setLoading(false)
     }
-    await getApi().agent.update(dialogTargetId, updates)
-    useAgentStore.getState().updateAgentInStore(dialogTargetId, updates)
-    addToast('Agent settings updated', 'success')
-    handleClose()
   }
 
   if (!open || !agent) return null
@@ -154,8 +160,8 @@ export function EditMissionDialog() {
         {hasMission ? 'Changes take effect on the next scheduled run.' : 'Clearing the mission converts this to an interactive agent.'}
       </div>
       <DialogActions>
-        <DialogButton onClick={handleClose}>Cancel</DialogButton>
-        <DialogButton variant="primary" onClick={handleSave}>Save</DialogButton>
+        <DialogButton onClick={handleClose} disabled={loading}>Cancel</DialogButton>
+        <DialogButton variant="primary" onClick={handleSave} loading={loading}>Save</DialogButton>
       </DialogActions>
     </Dialog>
   )

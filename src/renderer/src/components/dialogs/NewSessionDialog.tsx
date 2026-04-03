@@ -20,6 +20,7 @@ export function NewSessionDialog() {
   const [provider, setProvider] = useState('claude')
   const [model, setModel] = useState(PROVIDERS[0].models[0])
   const [gitInfo, setGitInfo] = useState<{ hasGit: boolean; hasCommits: boolean } | null>(null)
+  const [submitting, setSubmitting] = useState(false)
 
   const open = activeDialog === 'new-session'
 
@@ -83,13 +84,18 @@ export function NewSessionDialog() {
       addToast('Please enter a session name', 'error')
       return
     }
-    const result = await createSession(effectiveProjectId, name.trim(), useMainRepo, bypassPermissions, remoteControl, provider, model)
-    if (!result?.session) {
-      addToast(result?.error || 'Failed to create session', 'error')
-    } else {
-      addToast(`Session "${name.trim()}" created`, 'success')
+    setSubmitting(true)
+    try {
+      const result = await createSession(effectiveProjectId, name.trim(), useMainRepo, bypassPermissions, remoteControl, provider, model)
+      if (!result?.session) {
+        addToast(result?.error || 'Failed to create session', 'error')
+      } else {
+        addToast(`Session "${name.trim()}" created`, 'success')
+        handleClose()
+      }
+    } finally {
+      setSubmitting(false)
     }
-    handleClose()
   }
 
   // Build the hint text based on project type
@@ -196,8 +202,8 @@ export function NewSessionDialog() {
         )}
         {hintText && <div className="dialog-hint">{hintText}</div>}
         <DialogActions>
-          <DialogButton onClick={handleClose}>Cancel</DialogButton>
-          <DialogButton variant="primary" type="submit">Create Session</DialogButton>
+          <DialogButton onClick={handleClose} disabled={submitting}>Cancel</DialogButton>
+          <DialogButton variant="primary" type="submit" loading={submitting}>Create Session</DialogButton>
         </DialogActions>
       </form>
     </Dialog>

@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Dialog, DialogActions, DialogButton } from '../Dialog'
 import { useUIStore } from '../../stores/useUIStore'
 import { useSessionStore } from '../../stores/useSessionStore'
@@ -7,6 +8,7 @@ export function ArchiveDialog() {
   const { activeDialog, dialogTargetId, closeDialog } = useUIStore()
   const { sessions, archiveSession } = useSessionStore()
   const { addToast } = useToastStore()
+  const [loading, setLoading] = useState(false)
 
   const open = activeDialog === 'archive-session'
 
@@ -16,11 +18,15 @@ export function ArchiveDialog() {
   const targetName = targetSession?.name ?? 'this session'
 
   const handleConfirm = async () => {
-    if (dialogTargetId) {
+    if (!dialogTargetId) return
+    setLoading(true)
+    try {
       await archiveSession(dialogTargetId)
       addToast(`"${targetName}" archived`, 'success')
+      closeDialog()
+    } finally {
+      setLoading(false)
     }
-    closeDialog()
   }
 
   return (
@@ -41,8 +47,8 @@ export function ArchiveDialog() {
         </p>
       </div>
       <DialogActions>
-        <DialogButton onClick={closeDialog}>Cancel</DialogButton>
-        <DialogButton variant="primary" onClick={handleConfirm}>Archive</DialogButton>
+        <DialogButton onClick={closeDialog} disabled={loading}>Cancel</DialogButton>
+        <DialogButton variant="primary" onClick={handleConfirm} loading={loading}>Archive</DialogButton>
       </DialogActions>
     </Dialog>
   )

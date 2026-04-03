@@ -17,6 +17,7 @@ export function AddProjectDialog() {
   const { addToast } = useToastStore()
   const [nameOverride, setNameOverride] = useState('')
   const [path, setPath] = useState('')
+  const [submitting, setSubmitting] = useState(false)
 
   const open = activeDialog === 'add-project'
 
@@ -53,6 +54,7 @@ export function AddProjectDialog() {
       addToast('Please enter a project path', 'error')
       return
     }
+    setSubmitting(true)
     try {
       const project = await addProjectByPath(path.trim(), effectiveName || undefined)
       if (project) {
@@ -61,6 +63,8 @@ export function AddProjectDialog() {
       }
     } catch (err) {
       addToast(`Failed: ${err}`, 'error')
+    } finally {
+      setSubmitting(false)
     }
   }
 
@@ -98,8 +102,8 @@ export function AddProjectDialog() {
           Any folder works — git repos get worktree isolation and branch tracking.
         </div>
         <DialogActions>
-          <DialogButton onClick={handleClose}>Cancel</DialogButton>
-          <DialogButton variant="primary" type="submit">Add Project</DialogButton>
+          <DialogButton onClick={handleClose} disabled={submitting}>Cancel</DialogButton>
+          <DialogButton variant="primary" type="submit" loading={submitting}>Add Project</DialogButton>
         </DialogActions>
       </form>
     </Dialog>
