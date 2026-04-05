@@ -114,14 +114,15 @@ function ChildNotesItem({
   parentId: string
   parentType: 'session' | 'agent'
 }) {
-  const { splitRight, setFocusedPanel, splitRoot, focusedPanelId, openContextMenu } = useUIStore()
+  const { splitRight, setFocusedPanel, setPanelSession, splitRoot, focusedPanelId, openContextMenu } = useUIStore()
   const notePanelId = `quicknotes:${parentType}:${parentId}`
 
   // Determine active/split state
   const splitIds = splitRoot ? getAllSessionIds(splitRoot) : []
   const isInSplitView = splitIds.includes(notePanelId)
   const focusedLeaf = splitRoot ? findLeafBySession(splitRoot, notePanelId) : null
-  const isActive = isInSplitView && focusedLeaf?.id === focusedPanelId
+  const activeSessionId = useSessionStore((s) => s.activeSessionId)
+  const isActive = (isInSplitView && focusedLeaf?.id === focusedPanelId) || (!splitRoot && activeSessionId === notePanelId)
   const isInSplit = isInSplitView && !isActive
 
   const handleContextMenu = (e: React.MouseEvent) => {
@@ -137,6 +138,7 @@ function ChildNotesItem({
   }
 
   const handleClick = () => {
+    useQuickNotesStore.getState().addNotePanel(parentId)
     // Focus the existing panel if already open in split view
     if (splitRoot) {
       const leaf = findLeafBySession(splitRoot, notePanelId)
@@ -144,8 +146,17 @@ function ChildNotesItem({
         setFocusedPanel(leaf.id)
         return
       }
+      if (focusedPanelId) {
+        setPanelSession(focusedPanelId, notePanelId)
+        setFocusedPanel(focusedPanelId)
+        return
+      }
     }
     // Otherwise open it
+    if (!splitRoot) {
+      useSessionStore.setState({ activeSessionId: notePanelId })
+      return
+    }
     splitRight(notePanelId)
     const { splitRoot: root } = useUIStore.getState()
     if (root) {

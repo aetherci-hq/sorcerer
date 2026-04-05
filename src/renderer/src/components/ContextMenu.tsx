@@ -7,7 +7,7 @@ import { useAgentStore } from '../stores/useAgentStore'
 import { useToastStore } from '../stores/useToastStore'
 import {
   PlusIcon, CopyIcon, TrashIcon, SplitHorizontalIcon, SplitVerticalIcon,
-  RefreshIcon, UploadIcon, ExternalLinkIcon, ArchiveIcon, RotateCcwIcon, EditIcon, PlayIcon, StopIcon, TerminalIcon, MergeIcon, NotesIcon, SmartphoneIcon, FolderIcon, SettingsIcon
+  RefreshIcon, UploadIcon, ExternalLinkIcon, ArchiveIcon, RotateCcwIcon, EditIcon, PlayIcon, StopIcon, TerminalIcon, MergeIcon, NotesIcon, SmartphoneIcon, FolderIcon, SettingsIcon, MaximizeIcon
 } from './icons'
 import { useQuickNotesStore } from '../stores/useQuickNotesStore'
 
@@ -16,7 +16,7 @@ type MenuItem =
   | { type: 'separator' }
 
 export function ContextMenu() {
-  const { contextMenu, closeContextMenu, openDialog, splitRight, splitDown, setRenamingId } = useUIStore()
+  const { contextMenu, closeContextMenu, openDialog, splitRight, splitDown, setRenamingId, enterFocusMode } = useUIStore()
   const { projects } = useProjectStore()
   const { sessions, resumeSession, restartSession, restoreSession, pushBranch, createQuickTerminal } = useSessionStore()
   const { agents, startAgent, resumeAgent, restartAgent, killAgent } = useAgentStore()
@@ -148,7 +148,7 @@ export function ContextMenu() {
 
   // Same as fillEmptyOrSplit but for Quick Notes panels (not sessions).
   // Falls back to focusing the target session's panel and splitting next to it.
-  const fillEmptyOrSplitNotes = (notePanelId: string, parentSessionId: string) => {
+  const fillEmptyOrSplitNotes = (notePanelId: string) => {
     const { splitRoot: root, focusedPanelId, setPanelSession, setFocusedPanel } = useUIStore.getState()
     if (root && focusedPanelId) {
       const focused = findLeaf(root, focusedPanelId)
@@ -157,9 +157,11 @@ export function ContextMenu() {
         setFocusedPanel(focusedPanelId)
         return
       }
+      setPanelSession(focusedPanelId, notePanelId)
+      setFocusedPanel(focusedPanelId)
+      return
     }
-    focusTargetPanel(parentSessionId)
-    splitRight(notePanelId)
+    useSessionStore.setState({ activeSessionId: notePanelId })
   }
 
   let items: MenuItem[]
@@ -171,21 +173,17 @@ export function ContextMenu() {
       ...(isRunning ? [
         { label: 'Stop Agent', icon: <StopIcon className={iconClass} />, action: async () => {
           await killAgent(contextMenu.targetId)
-          addToast('Agent stopped', 'info')
         }}
       ] : targetAgent?.mission ? [
         { label: 'Start Mission', icon: <PlayIcon className={iconClass} />, action: async () => {
           await startAgent(contextMenu.targetId)
-          addToast('Agent mission started', 'info')
         }}
       ] : [
         { label: 'Resume Agent', icon: <PlayIcon className={iconClass} />, eager: true, action: async () => {
           await resumeAgent(contextMenu.targetId)
-          addToast('Agent resumed', 'info')
         }},
         { label: 'Start New Session', icon: <RefreshIcon className={iconClass} />, eager: true, action: async () => {
           await restartAgent(contextMenu.targetId)
-          addToast('New agent session started', 'info')
         }}
       ]),
       { label: agentRcEnabled ? 'Disable Session Remote Control' : 'Enable Session Remote Control',
@@ -367,18 +365,10 @@ export function ContextMenu() {
       }},
       { type: 'separator' },
       { label: 'Rename', icon: <EditIcon className={iconClass} />, shortcut: 'F2', action: () => setRenamingId(contextMenu.targetId) },
-      { label: 'Copy Project Path', icon: <CopyIcon className={iconClass} />, action: () => copyToClipboard(findProjectPath(contextMenu.targetId), 'Path') },
+      { label: 'Copy Project Path', icon: <CopyIcon className={iconClass} />, action: () => copyToClipboard(findProjectPath(contextMenu.targetId)) },
       { label: 'Sync Worktrees', icon: <RefreshIcon className={iconClass} />, action: async () => {
-        const result = await getApi().project.syncWorktrees(contextMenu.targetId)
+        await getApi().project.syncWorktrees(contextMenu.targetId)
         await useSessionStore.getState().loadSessions()
-        if (result.created === 0 && result.removed === 0) {
-          addToast('All worktrees in sync', 'info')
-        } else {
-          const parts: string[] = []
-          if (result.created > 0) parts.push(`${result.created} session${result.created > 1 ? 's' : ''} found`)
-          if (result.removed > 0) parts.push(`${result.removed} stale removed`)
-          addToast(parts.join(', '), 'success')
-        }
       }},
       ...groupItems,
       { type: 'separator' },
@@ -396,6 +386,7 @@ export function ContextMenu() {
     items = [
       { label: 'Split Right', icon: <SplitHorizontalIcon className={iconClass} />, action: () => { focusTargetPanel(contextMenu.targetId); splitRight(contextMenu.targetId) } },
       { label: 'Split Down', icon: <SplitVerticalIcon className={iconClass} />, action: () => { focusTargetPanel(contextMenu.targetId); splitDown(contextMenu.targetId) } },
+      { label: 'Focus Mode', icon: <MaximizeIcon className={iconClass} />, action: () => enterFocusMode(contextMenu.targetId) },
       { type: 'separator' as const },
       { label: 'Delete Notes', icon: <TrashIcon className={iconClass} />, danger: true, action: async () => {
         const parts = contextMenu.targetId.split(':')
@@ -511,11 +502,9 @@ export function ContextMenu() {
       { label: 'Rename', icon: <EditIcon className={iconClass} />, shortcut: 'F2', action: () => setRenamingId(contextMenu.targetId) },
       { label: 'Resume Session', icon: <PlayIcon className={iconClass} />, eager: true, action: async () => {
         await resumeSession(contextMenu.targetId)
-        addToast('Session resumed', 'info')
       }},
       { label: 'New Session', icon: <RefreshIcon className={iconClass} />, eager: true, action: async () => {
         await restartSession(contextMenu.targetId)
-        addToast('New session started', 'info')
       }},
       { label: targetSession?.remote_control ? 'Disable Session Remote Control' : 'Enable Session Remote Control',
         icon: <SmartphoneIcon className={iconClass} />,
@@ -534,11 +523,8 @@ export function ContextMenu() {
       ...(targetSession?.branch ? [
         { type: 'separator' as const },
         { label: 'Push Branch', icon: <UploadIcon className={iconClass} />, action: async () => {
-          addToast('Pushing branch...', 'info')
           const result = await pushBranch(contextMenu.targetId)
-          if (result.pushed) {
-            addToast('Branch pushed to remote', 'success')
-          } else {
+          if (!result.pushed) {
             addToast(result.error || 'Push failed', 'error')
           }
         }},

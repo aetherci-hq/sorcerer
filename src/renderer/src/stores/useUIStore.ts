@@ -15,6 +15,8 @@ interface ContextMenu {
 export const SIDEBAR_MIN = 200
 export const SIDEBAR_MAX = 420
 export const SIDEBAR_DEFAULT = 260
+export const AGENT_PANE_MIN = 120
+export const AGENT_PANE_DEFAULT = 240
 
 interface UIState {
   activeDialog: DialogType
@@ -46,6 +48,8 @@ interface UIState {
   toggleSidebarCollapse: () => void
   sidebarWidth: number
   setSidebarWidth: (width: number) => void
+  agentPaneHeight: number
+  setAgentPaneHeight: (height: number) => void
   searchQuery: string
   setSearchQuery: (query: string) => void
 
@@ -53,6 +57,7 @@ interface UIState {
   splitRoot: SplitNode | null
   focusedPanelId: string | null
   maximizedPanelId: string | null
+  focusModeSessionId: string | null
   splitRight: (sessionId: string) => void
   splitDown: (sessionId: string) => void
   closePanel: (panelId: string) => void
@@ -62,6 +67,8 @@ interface UIState {
   setPanelSession: (panelId: string, sessionId: string | null) => void
   toggleMaximizePanel: (panelId: string) => void
   unmaximizePanel: () => void
+  enterFocusMode: (sessionId: string) => void
+  exitFocusMode: () => void
 
   // Remote control — sessions being viewed remotely
   remoteSessionIds: Set<string>
@@ -313,11 +320,16 @@ export const useUIStore = create<UIState>()(
       setSidebarWidth: (width) => set({
         sidebarWidth: Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, width))
       }),
+      agentPaneHeight: AGENT_PANE_DEFAULT,
+      setAgentPaneHeight: (height) => set({
+        agentPaneHeight: Math.max(AGENT_PANE_MIN, height)
+      }),
 
       // Split view
       splitRoot: null,
       focusedPanelId: null,
       maximizedPanelId: null,
+      focusModeSessionId: null,
 
       splitRight: (sessionId) => {
         const state = get()
@@ -408,11 +420,13 @@ export const useUIStore = create<UIState>()(
       closePanel: (panelId) => {
         const state = get()
         if (!state.splitRoot) return
+        const panel = findLeaf(state.splitRoot, panelId)
+        const clearFocusMode = panel?.sessionId && state.focusModeSessionId === panel.sessionId ? null : state.focusModeSessionId
 
         const clearMaximized = state.maximizedPanelId === panelId ? null : state.maximizedPanelId
         const result = removeLeaf(state.splitRoot, panelId)
         if (!result || result.type === 'leaf') {
-          set({ splitRoot: null, focusedPanelId: null, maximizedPanelId: null })
+          set({ splitRoot: null, focusedPanelId: null, maximizedPanelId: null, focusModeSessionId: clearFocusMode })
           if (result && result.type === 'leaf' && result.sessionId) {
             useSessionStore.setState({ activeSessionId: result.sessionId })
           }
@@ -420,7 +434,7 @@ export const useUIStore = create<UIState>()(
           const newFocused = state.focusedPanelId === panelId
             ? getFirstLeaf(result).id
             : state.focusedPanelId
-          set({ splitRoot: result, focusedPanelId: newFocused, maximizedPanelId: clearMaximized })
+          set({ splitRoot: result, focusedPanelId: newFocused, maximizedPanelId: clearMaximized, focusModeSessionId: clearFocusMode })
         }
       },
 
@@ -448,6 +462,8 @@ export const useUIStore = create<UIState>()(
       },
 
       unmaximizePanel: () => set({ maximizedPanelId: null }),
+      enterFocusMode: (sessionId) => set({ focusModeSessionId: sessionId, maximizedPanelId: null }),
+      exitFocusMode: () => set({ focusModeSessionId: null }),
 
       remoteSessionIds: new Set(),
       setRemoteSessionIds: (ids) => set({ remoteSessionIds: new Set(ids) }),
@@ -476,6 +492,7 @@ export const useUIStore = create<UIState>()(
         expandedGroups: state.expandedGroups,
         sidebarCollapsed: state.sidebarCollapsed,
         sidebarWidth: state.sidebarWidth,
+        agentPaneHeight: state.agentPaneHeight,
         showProviderBadges: state.showProviderBadges
       })
     }

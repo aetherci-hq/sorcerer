@@ -140,7 +140,7 @@ function IdleAgentPanel({ agent }: { agent: Agent }) {
   )
 }
 
-function TerminalPanel({ session, agent, particlesEnabled }: { session: Session | undefined; agent: Agent | undefined; particlesEnabled?: boolean }) {
+function TerminalPanel({ session, agent, particlesEnabled, isFocused = true }: { session: Session | undefined; agent: Agent | undefined; particlesEnabled?: boolean; isFocused?: boolean }) {
   const activeItem = session || agent
 
   if (!activeItem) {
@@ -179,7 +179,7 @@ function TerminalPanel({ session, agent, particlesEnabled }: { session: Session 
     return <IdleSessionPanel session={session!} />
   }
 
-  return <TerminalView sessionId={activeItem.id} isFocused={true} />
+  return <TerminalView sessionId={activeItem.id} isFocused={isFocused} />
 }
 
 function SplitDivider({ direction, onDrag }: { direction: 'horizontal' | 'vertical'; onDrag: (ratio: number) => void }) {
@@ -258,6 +258,56 @@ function PanelHeaderInfo({ session, agent }: { session?: Session; agent?: Agent 
         </span>
       )}
     </span>
+  )
+}
+
+function FocusModeOverlay({
+  sessionId,
+  onClose,
+}: {
+  sessionId: string
+  onClose: () => void
+}) {
+  const sessions = useSessionStore((s) => s.sessions)
+  const agents = useAgentStore((s) => s.agents)
+  const quickNotes = sessionId.startsWith('quicknotes:') ? parseQuickNotesPanelId(sessionId) : null
+  const session = !quickNotes ? sessions.find((s) => s.id === sessionId) : undefined
+  const agent = !quickNotes && !session ? agents.find((a) => a.id === sessionId) : undefined
+  const isWide = !quickNotes
+
+  let quickNotesName = 'Notes'
+  if (quickNotes) {
+    if (quickNotes.parentType === 'session') {
+      const parentSession = sessions.find((x) => x.id === quickNotes.parentId)
+      quickNotesName = `Notes: ${parentSession?.name ?? 'Session'}`
+    } else {
+      const parentAgent = agents.find((x) => x.id === quickNotes.parentId)
+      quickNotesName = `Notes: ${parentAgent?.name ?? 'Agent'}`
+    }
+  }
+
+  return (
+    <div className="focus-mode-overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}>
+      <div className={`focus-mode-shell${isWide ? ' focus-mode-shell--wide' : ''}`} onMouseDown={(e) => e.stopPropagation()}>
+        <div className="focus-mode-shell__titlebar">
+          {quickNotes ? (
+            <span className="split-panel-name">{quickNotesName}</span>
+          ) : (
+            <PanelHeaderInfo session={session} agent={agent} />
+          )}
+          <div className="focus-mode-shell__actions">
+            <button className="focus-mode-shell__close" onClick={onClose}>Exit Focus Mode</button>
+          </div>
+        </div>
+        <div className="focus-mode-shell__content">
+          {quickNotes ? (
+            <QuickNotesPanel panelSessionId={sessionId} />
+          ) : (
+            <TerminalPanel session={session} agent={agent} isFocused particlesEnabled={false} />
+          )}
+        </div>
+      </div>
+    </div>
   )
 }
 
@@ -600,7 +650,7 @@ export function MainContent() {
   const { sessions, activeSessionId, setActiveSession, deleteSession, createQuickTerminal, addLocalSession } = useSessionStore()
   const { projects } = useProjectStore()
   const { agents: agentsList } = useAgentStore()
-  const { splitRoot, splitRight, splitDown, maximizedPanelId } = useUIStore()
+  const { splitRoot, splitRight, splitDown, maximizedPanelId, focusModeSessionId, exitFocusMode } = useUIStore()
   const updateAvailable = useUpdateCheck()
   const particles = useParticleSettings()
 
@@ -608,10 +658,39 @@ export function MainContent() {
   const activeAgent = !activeSession && activeSessionId
     ? agentsList.find((a) => a.id === activeSessionId)
     : undefined
+  const activeQuickNotes = activeSessionId?.startsWith('quicknotes:')
+    ? parseQuickNotesPanelId(activeSessionId)
+    : null
 
   const hasActiveSessions = sessions.some((s) => s.status === 'active')
   // Empty state = no split layout and no active item selected
-  const showingEmptyState = !splitRoot && !activeSession && !activeAgent
+  const showingEmptyState = !splitRoot && !activeSession && !activeAgent && !activeQuickNotes
+
+  useEffect(() => {
+    if (!focusModeSessionId) return
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        exitFocusMode()
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [focusModeSessionId, exitFocusMode])
+
+  useEffect(() => {
+    if (!focusModeSessionId) return
+    const focusQuickNotes = focusModeSessionId.startsWith('quicknotes:') ? parseQuickNotesPanelId(focusModeSessionId) : null
+    if (focusQuickNotes) {
+      const parentExists = focusQuickNotes.parentType === 'session'
+        ? sessions.some((s) => s.id === focusQuickNotes.parentId)
+        : agentsList.some((a) => a.id === focusQuickNotes.parentId)
+      if (!parentExists) exitFocusMode()
+      return
+    }
+    const itemExists = sessions.some((s) => s.id === focusModeSessionId) || agentsList.some((a) => a.id === focusModeSessionId)
+    if (!itemExists) exitFocusMode()
+  }, [focusModeSessionId, sessions, agentsList, exitFocusMode])
 
   return (
     <div className="main-content">
@@ -644,6 +723,23 @@ export function MainContent() {
         </div>
       ) : splitRoot ? (
         <SplitNodeView node={splitRoot} />
+      ) : activeQuickNotes && activeSessionId ? (
+        <div className="split-panel split-panel--focused">
+          <div className="split-panel-titlebar">
+            <span className="split-panel-name">
+              {activeQuickNotes.parentType === 'session'
+                ? `Notes: ${sessions.find((s) => s.id === activeQuickNotes.parentId)?.name ?? 'Session'}`
+                : `Notes: ${agentsList.find((a) => a.id === activeQuickNotes.parentId)?.name ?? 'Agent'}`}
+            </span>
+            <div className="split-panel-actions">
+              <button className="split-panel-close" onClick={() => {
+                useQuickNotesStore.getState().removeNotePanel(activeQuickNotes.parentId)
+                useSessionStore.setState({ activeSessionId: null })
+              }}>&times;</button>
+            </div>
+          </div>
+          <QuickNotesPanel panelSessionId={activeSessionId} />
+        </div>
       ) : (activeSession || activeAgent) ? (
         <div className="split-panel split-panel--focused">
           <div className="split-panel-titlebar">
@@ -659,6 +755,10 @@ export function MainContent() {
                       useQuickNotesStore.getState().addNotePanel(activeSession.id)
                       if (!useUIStore.getState().expandedSessions.has(activeSession.id)) {
                         useUIStore.getState().toggleSession(activeSession.id)
+                      }
+                      if (!useUIStore.getState().splitRoot) {
+                        useSessionStore.setState({ activeSessionId: notePanelId })
+                        return
                       }
                       const originalId = activeSession.id
                       useSessionStore.setState({ activeSessionId: originalId })
@@ -713,6 +813,10 @@ export function MainContent() {
                       useQuickNotesStore.getState().addNotePanel(activeAgent.id)
                       if (!useUIStore.getState().expandedSessions.has(activeAgent.id)) {
                         useUIStore.getState().toggleSession(activeAgent.id)
+                      }
+                      if (!useUIStore.getState().splitRoot) {
+                        useSessionStore.setState({ activeSessionId: notePanelId })
+                        return
                       }
                       const originalId = activeAgent.id
                       useSessionStore.setState({ activeSessionId: originalId })
@@ -771,7 +875,9 @@ export function MainContent() {
       ) : (
         <TerminalPanel session={activeSession} agent={activeAgent} particlesEnabled={particles.enabled} />
       )}
-
+      {focusModeSessionId && (
+        <FocusModeOverlay sessionId={focusModeSessionId} onClose={exitFocusMode} />
+      )}
     </div>
   )
 }
