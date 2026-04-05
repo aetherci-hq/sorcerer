@@ -80,28 +80,80 @@ function findMostRecentConversation(cwd: string): string | null {
  * Pre-trust a directory for an AI provider so it skips the interactive trust prompt.
  */
 export function ensureProviderTrust(provider: string, cwd: string): void {
-  // Only Claude Code uses the hasTrustDialogAccepted pattern.
-  // Gemini CLI and Codex CLI don't have an equivalent trust config — skip them.
-  if (provider !== 'claude') return
-
-  // Use forward slashes — Claude Code normalises to this on all platforms
-  const key = cwd.replace(/\\/g, '/')
-  const configPath = path.join(os.homedir(), '.claude.json')
+  const normalizedProvider = provider.toLowerCase()
   try {
-    const data = fs.existsSync(configPath)
-      ? JSON.parse(fs.readFileSync(configPath, 'utf8'))
-      : {}
-    if (!data.projects) data.projects = {}
-    if (data.projects[key]?.hasTrustDialogAccepted) return // already trusted
-    data.projects[key] = {
-      ...(data.projects[key] || {}),
-      allowedTools: [],
-      hasTrustDialogAccepted: true
+    if (normalizedProvider === 'claude') {
+      ensureClaudeTrust(cwd)
+      return
     }
-    fs.writeFileSync(configPath, JSON.stringify(data, null, 2))
+    if (normalizedProvider === 'codex') {
+      ensureCodexTrust(cwd)
+      return
+    }
   } catch {
     // Best effort — don't block agent launch if we can't write
   }
+}
+
+function ensureClaudeTrust(cwd: string): void {
+  const key = cwd.replace(/\\/g, '/')
+  const configPath = path.join(os.homedir(), '.claude.json')
+  const data = fs.existsSync(configPath)
+    ? JSON.parse(fs.readFileSync(configPath, 'utf8'))
+    : {}
+  if (!data.projects) data.projects = {}
+  if (data.projects[key]?.hasTrustDialogAccepted) return
+  data.projects[key] = {
+    ...(data.projects[key] || {}),
+    allowedTools: [],
+    hasTrustDialogAccepted: true
+  }
+  fs.writeFileSync(configPath, JSON.stringify(data, null, 2))
+}
+
+function ensureCodexTrust(cwd: string): void {
+  const codexDir = path.join(os.homedir(), '.codex')
+  const configPath = path.join(codexDir, 'config.toml')
+  const section = `[projects.'${cwd.replace(/'/g, "\\'")}']`
+  const trustLine = 'trust_level = "trusted"'
+
+  if (!fs.existsSync(codexDir)) {
+    fs.mkdirSync(codexDir, { recursive: true })
+  }
+
+  const source = fs.existsSync(configPath) ? fs.readFileSync(configPath, 'utf8') : ''
+  const lines = source.length > 0 ? source.split(/\r?\n/) : []
+  const sectionIndex = lines.findIndex((line) => line.trim() === section)
+
+  if (sectionIndex === -1) {
+    const next = source.trimEnd()
+    const prefix = next.length > 0 ? `${next}\n\n` : ''
+    fs.writeFileSync(configPath, `${prefix}${section}\n${trustLine}\n`)
+    return
+  }
+
+  let endIndex = lines.length
+  for (let i = sectionIndex + 1; i < lines.length; i++) {
+    if (lines[i].trim().startsWith('[')) {
+      endIndex = i
+      break
+    }
+  }
+
+  const trustIndex = lines.findIndex((line, index) =>
+    index > sectionIndex &&
+    index < endIndex &&
+    line.trim().startsWith('trust_level')
+  )
+
+  if (trustIndex !== -1) {
+    if (lines[trustIndex].trim() === trustLine) return
+    lines[trustIndex] = trustLine
+  } else {
+    lines.splice(endIndex, 0, trustLine)
+  }
+
+  fs.writeFileSync(configPath, `${lines.join('\n').trimEnd()}\n`)
 }
 
 // ── Resume failure detection ────────────────────────────────
@@ -377,6 +429,7 @@ export async function createSession(
   const claudeSessionId = uuidv4()
   const skipPerms = bypassPermissions !== false  // default true
   const rc = remoteControl ? 1 : 0
+  const startedAt = Math.floor(Date.now() / 1000)
   const session = db.addSession({
     id,
     project_id: projectId,
@@ -386,6 +439,7 @@ export async function createSession(
     bypass_permissions: skipPerms ? 1 : 0,
     remote_control: rc,
     claude_session_id: claudeSessionId,
+    started_at: startedAt,
     provider,
     model
   })
@@ -462,6 +516,7 @@ export function createQuickTerminal(
   }
 
   const id = uuidv4()
+  const startedAt = Math.floor(Date.now() / 1000)
   const session = db.addSession({
     id,
     project_id: source.project_id as string,
@@ -469,7 +524,8 @@ export function createQuickTerminal(
     branch: source.branch as string,
     worktree_path: source.worktree_path as string,
     type: 'quick-terminal',
-    parent_session_id: sourceSessionId
+    parent_session_id: sourceSessionId,
+    started_at: startedAt
   })
 
   // Spawn plain shell (no command = default shell)
@@ -647,7 +703,7 @@ export async function restartSession(
     }
   }
   const pid = pty.getPid(sessionId)
-  db.updateSession(sessionId, { status: 'active', pid: pid ?? null })
+  db.updateSession(sessionId, { status: 'active', pid: pid ?? null, started_at: Math.floor(Date.now() / 1000) })
 
   return db.getSession(sessionId)
 }
@@ -727,7 +783,7 @@ export async function resumeSession(
     }
   }
   const pid = pty.getPid(sessionId)
-  db.updateSession(sessionId, { status: 'active', pid: pid ?? null })
+  db.updateSession(sessionId, { status: 'active', pid: pid ?? null, started_at: Math.floor(Date.now() / 1000) })
 
   return db.getSession(sessionId)
 }
@@ -945,6 +1001,7 @@ export function addAgent(
   // Create scratch directory for this agent
   const cwd = path.join(os.homedir(), '.sorcerer', 'agents', id)
   fs.mkdirSync(cwd, { recursive: true })
+  ensureProviderTrust(data.provider || 'claude', cwd)
   const agent = db.addAgent({
     id, ...data,
     bypass_permissions: (data.bypass_permissions !== false) ? 1 : 0,

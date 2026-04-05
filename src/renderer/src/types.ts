@@ -31,6 +31,7 @@ export interface Session {
   remote_control?: number
   pid?: number | null
   created_at?: number
+  started_at?: number | null
   archived_at?: number | null
   provider?: string
   model?: string
