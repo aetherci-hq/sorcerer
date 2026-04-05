@@ -312,5 +312,12 @@ describe('ScrollbackBuffer', () => {
       // "hello world" = 11 chars, buffer=10, last 10 = "ello world"
       expect(small.getScrollback('s1')).toBe('ello world')
     })
+
+    it('decodes large scrollback without overflowing the call stack', () => {
+      const large = new ScrollbackBuffer(30000)
+      const data = 'x'.repeat(30000)
+      large.append('s1', data)
+      expect(large.getScrollback('s1')).toBe(data)
+    })
   })
 })

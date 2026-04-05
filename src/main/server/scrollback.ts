@@ -26,6 +26,7 @@ interface SessionBuffer {
 }
 
 export class ScrollbackBuffer {
+  private static readonly DECODE_CHUNK_SIZE = 8192
   private sessions: Map<string, SessionBuffer> = new Map()
   private maxSize: number
 
@@ -95,14 +96,13 @@ export class ScrollbackBuffer {
     if (!session) return ''
 
     if (!session.wrapped) {
-      return String.fromCharCode.apply(null, session.buf.subarray(0, session.length) as any)
+      return this.decodeBuffer(session.buf.subarray(0, session.length))
     }
 
     // Buffer has wrapped: oldest data starts at writePos
     const tail = session.buf.subarray(session.writePos)
     const head = session.buf.subarray(0, session.writePos)
-    const result = String.fromCharCode.apply(null, tail as any)
-      + String.fromCharCode.apply(null, head as any)
+    const result = this.decodeBuffer(tail) + this.decodeBuffer(head)
 
     return this.trimLeadingBrokenSurrogate(result)
   }
@@ -140,5 +140,16 @@ export class ScrollbackBuffer {
       return str.slice(1)
     }
     return str
+  }
+
+  private decodeBuffer(buf: Uint16Array): string {
+    if (buf.length === 0) return ''
+
+    let result = ''
+    for (let index = 0; index < buf.length; index += ScrollbackBuffer.DECODE_CHUNK_SIZE) {
+      const chunk = buf.subarray(index, index + ScrollbackBuffer.DECODE_CHUNK_SIZE)
+      result += String.fromCharCode(...chunk)
+    }
+    return result
   }
 }
