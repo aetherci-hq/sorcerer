@@ -890,6 +890,13 @@ body {
   position: relative;
 }
 
+.tree-children > .tree-item,
+.tree-children > .tree-project,
+.tree-children > .tree-group,
+.tree-children > .tree-teammate-group {
+  margin-left: 8px;
+}
+
 .tree-children::before {
   content: '';
   position: absolute;

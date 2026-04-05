@@ -145,97 +145,6 @@ function formatTokenCount(n: number): string {
   return String(n)
 }
 
-interface ClaudeStats {
-  today: { messages: number; sessions: number; toolCalls: number; tokens: number }
-  week: { messages: number; toolCalls: number; tokens: number }
-  allTime: { totalSessions: number; totalMessages: number; firstSessionDate: string | null }
-  subscription: string
-  rateLimitTier: string
-}
-
-interface RateLimitData {
-  rateLimits?: {
-    five_hour?: { used_percentage: number; resets_at: number }
-    seven_day?: { used_percentage: number; resets_at: number }
-  }
-  cost?: { total_cost_usd: number }
-  model?: string
-  timestamp?: number
-}
-
-function useRateLimits() {
-  const [data, setData] = useState<RateLimitData | null>(null)
-  useEffect(() => {
-    const api = getApi()
-    if (!api.system.onRateLimits) return
-    const cleanup = api.system.onRateLimits(setData)
-    return () => { cleanup?.() }
-  }, [])
-  return data
-}
-
-function RateLimitBars({ data }: { data: RateLimitData }) {
-  const fiveHour = data.rateLimits?.five_hour
-  const sevenDay = data.rateLimits?.seven_day
-  if (!fiveHour && !sevenDay) return null
-
-  const barColor = (pct: number) =>
-    pct >= 90 ? '#f7768e' : pct >= 70 ? '#e0af68' : '#34d399'
-
-  const formatReset = (epoch: number) => {
-    const diff = epoch - Math.floor(Date.now() / 1000)
-    if (diff <= 0) return null // already reset
-    if (diff < 3600) return `resets in ${Math.ceil(diff / 60)}m`
-    return `resets in ${Math.floor(diff / 3600)}h ${Math.floor((diff % 3600) / 60)}m`
-  }
-
-  return (
-    <div className="rate-limit-bars">
-      {fiveHour && (
-        <div className="rate-limit-bar">
-          <div className="rate-limit-bar-header">
-            <span className="rate-limit-bar-label">5-hour</span>
-            <span className="rate-limit-bar-value">{Math.round(fiveHour.used_percentage)}%</span>
-          </div>
-          <div className="rate-limit-bar-track">
-            <div
-              className="rate-limit-bar-fill"
-              style={{ width: `${Math.min(fiveHour.used_percentage, 100)}%`, background: barColor(fiveHour.used_percentage) }}
-            />
-          </div>
-          {fiveHour.resets_at > 0 && formatReset(fiveHour.resets_at) && (
-            <span className="rate-limit-bar-reset">{formatReset(fiveHour.resets_at)}</span>
-          )}
-        </div>
-      )}
-      {sevenDay && (
-        <div className="rate-limit-bar">
-          <div className="rate-limit-bar-header">
-            <span className="rate-limit-bar-label">7-day</span>
-            <span className="rate-limit-bar-value">{Math.round(sevenDay.used_percentage)}%</span>
-          </div>
-          <div className="rate-limit-bar-track">
-            <div
-              className="rate-limit-bar-fill"
-              style={{ width: `${Math.min(sevenDay.used_percentage, 100)}%`, background: barColor(sevenDay.used_percentage) }}
-            />
-          </div>
-          {sevenDay.resets_at > 0 && formatReset(sevenDay.resets_at) && (
-            <span className="rate-limit-bar-reset">{formatReset(sevenDay.resets_at)}</span>
-          )}
-        </div>
-      )}
-    </div>
-  )
-}
-
-function formatTier(sub: string, tier: string): string {
-  // e.g. "max" + "default_claude_max_5x" → "Max 5x"
-  const label = sub ? sub.charAt(0).toUpperCase() + sub.slice(1) : 'Free'
-  const multiplier = tier.match(/(\d+)x$/)?.[1]
-  return multiplier ? `${label} ${multiplier}x` : label
-}
-
 function useMemoryUsage() {
   const [memoryMB, setMemoryMB] = useState<number | null>(null)
   useEffect(() => {
@@ -257,27 +166,66 @@ function formatMemory(mb: number): string {
   return `${mb} MB`
 }
 
+function getSessionRunStart(session: { started_at?: number | null; created_at?: number }): number | null {
+  return session.started_at || session.created_at || null
+}
+
+function normalizeProvider(provider?: string | null): string {
+  const value = (provider || 'claude').toLowerCase()
+  if (value === 'google' || value === 'gemini') return 'Gemini'
+  if (value === 'openai') return 'OpenAI'
+  if (value === 'anthropic' || value === 'claude') return 'Claude'
+  return value.charAt(0).toUpperCase() + value.slice(1)
+}
+
+function formatProviderSummary(sessions: any[]): string {
+  const counts = new Map<string, number>()
+  for (const session of sessions) {
+    const provider = normalizeProvider(session.provider)
+    counts.set(provider, (counts.get(provider) || 0) + 1)
+  }
+
+  return Array.from(counts.entries())
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .map(([provider, count]) => `${provider} ${count}`)
+    .join(' · ')
+}
+
+function getTopProviders(sessions: any[], limit = 4): Array<{ provider: string; count: number }> {
+  const counts = new Map<string, number>()
+  for (const session of sessions) {
+    const provider = normalizeProvider(session.provider)
+    counts.set(provider, (counts.get(provider) || 0) + 1)
+  }
+
+  return Array.from(counts.entries())
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .slice(0, limit)
+    .map(([provider, count]) => ({ provider, count }))
+}
+
 function StatsPopover({ sessions, onClose, pinned, onTogglePin }: { sessions: any[]; onClose: () => void; pinned: boolean; onTogglePin: () => void }) {
   const popoverRef = useRef<HTMLDivElement>(null)
-  const [claudeStats, setClaudeStats] = useState<ClaudeStats | null>(null)
-  const rateLimits = useRateLimits()
   const memoryMB = useMemoryUsage()
 
   // Today boundary (midnight local time) in unix seconds
   const todayStart = Math.floor(new Date().setHours(0, 0, 0, 0) / 1000)
 
-  const activeSessions = sessions.filter((s) => s.status === 'active')
-  const todaySessions = sessions.filter((s) => s.created_at && s.created_at >= todayStart)
+  const liveSessions = sessions.filter((s) => s.status !== 'deleted' && s.status !== 'archived')
+  const activeSessions = liveSessions.filter((s) => s.status === 'active')
+  const idleSessions = liveSessions.filter((s) => s.status === 'idle')
+  const todaySessions = liveSessions.filter((s) => s.created_at && s.created_at >= todayStart)
+  const activeProviders = new Set(activeSessions.map((s) => normalizeProvider(s.provider)))
+  const todayProviders = new Set(todaySessions.map((s) => normalizeProvider(s.provider)))
+  const todayProviderSummary = formatProviderSummary(todaySessions)
+  const activeProviderSummary = formatProviderSummary(activeSessions)
+  const topTodayProviders = getTopProviders(todaySessions)
 
-  // Earliest active session today for "running since"
+  // Oldest active session for "running since"
   const earliestActive = activeSessions
-    .filter((s) => s.created_at && s.created_at >= todayStart)
-    .sort((a, b) => (a.created_at || 0) - (b.created_at || 0))[0]
-
-  // Load Claude Code stats
-  useEffect(() => {
-    getApi().system.claudeStats().then(setClaudeStats).catch(() => {})
-  }, [])
+    .filter((s) => getSessionRunStart(s))
+    .sort((a, b) => (getSessionRunStart(a) || 0) - (getSessionRunStart(b) || 0))[0]
+  const earliestActiveStart = earliestActive ? getSessionRunStart(earliestActive) : null
 
   // Close on click outside
   useEffect(() => {
@@ -307,9 +255,6 @@ function StatsPopover({ sessions, onClose, pinned, onTogglePin }: { sessions: an
       <div className="stats-popover-header">
         Today's Activity
         <div className="stats-popover-header-actions">
-          {claudeStats?.subscription && (
-            <span className="stats-popover-tier">{formatTier(claudeStats.subscription, claudeStats.rateLimitTier)}</span>
-          )}
           <button
             className={`stats-popover-pin ${pinned ? 'stats-popover-pin--active' : ''}`}
             onClick={onTogglePin}
@@ -319,11 +264,7 @@ function StatsPopover({ sessions, onClose, pinned, onTogglePin }: { sessions: an
           </button>
         </div>
       </div>
-      {claudeStats?.subscription && (
-        <div style={{ padding: '8px 12px', background: '#78350f22', borderBottom: '1px solid #92400e44', color: '#fbbf24', fontSize: 11, lineHeight: 1.4 }}>
-          Subscription auth detected. Sorcerer is designed for API key usage — consider switching to an API key for multi-session workflows.
-        </div>
-      )}
+      <div className="stats-popover-header stats-popover-header--sub">Sorcerer Sessions</div>
       <div className="stats-popover-grid">
         <div className="stats-popover-stat">
           <span className="stats-popover-value">{activeSessions.length}</span>
@@ -333,104 +274,81 @@ function StatsPopover({ sessions, onClose, pinned, onTogglePin }: { sessions: an
           <span className="stats-popover-value">{todaySessions.length}</span>
           <span className="stats-popover-label">Created today</span>
         </div>
-        {claudeStats && (claudeStats.today.messages > 0 || claudeStats.today.toolCalls > 0 || claudeStats.today.tokens > 0) && (
-          <>
-            <div className="stats-popover-stat">
-              <span className="stats-popover-value">{claudeStats.today.messages}</span>
-              <span className="stats-popover-label">Messages</span>
-            </div>
-            <div className="stats-popover-stat">
-              <span className="stats-popover-value">{claudeStats.today.toolCalls}</span>
-              <span className="stats-popover-label">Tool calls</span>
-            </div>
-            <div className="stats-popover-stat">
-              <span className="stats-popover-value">{formatTokenCount(claudeStats.today.tokens)}</span>
-              <span className="stats-popover-label">Tokens</span>
-            </div>
-          </>
-        )}
+        <div className="stats-popover-stat">
+          <span className="stats-popover-value">{idleSessions.length}</span>
+          <span className="stats-popover-label">Idle now</span>
+        </div>
+        <div className="stats-popover-stat">
+          <span className="stats-popover-value">{todayProviders.size}</span>
+          <span className="stats-popover-label">Providers today</span>
+        </div>
       </div>
-      {earliestActive && (
+      {earliestActiveStart && (
         <div className="stats-popover-uptime">
-          <span className="stats-popover-uptime-label">Running since</span>
+          <span className="stats-popover-uptime-label">Active since</span>
           <span className="stats-popover-uptime-value">
-            {formatTime(earliestActive.created_at)} ({formatUptime(earliestActive.created_at)})
+            {formatTime(earliestActiveStart)} ({formatUptime(earliestActiveStart)})
           </span>
         </div>
       )}
-      {rateLimits?.rateLimits && <RateLimitBars data={rateLimits} />}
-      {claudeStats && (
-        <>
-          <div className="stats-popover-header stats-popover-header--sub">Last 7 Days</div>
-          <div className="stats-popover-grid">
-            <div className="stats-popover-stat">
-              <span className="stats-popover-value">{claudeStats.week.messages.toLocaleString()}</span>
-              <span className="stats-popover-label">Messages</span>
+      <div className="stats-popover-header stats-popover-header--sub">Provider Mix</div>
+      <div className="stats-popover-grid">
+        {topTodayProviders.length > 0 ? (
+          topTodayProviders.map(({ provider, count }) => (
+            <div key={provider} className="stats-popover-stat">
+              <span className="stats-popover-value">{count}</span>
+              <span className="stats-popover-label">{provider} today</span>
             </div>
-            <div className="stats-popover-stat">
-              <span className="stats-popover-value">{claudeStats.week.toolCalls.toLocaleString()}</span>
-              <span className="stats-popover-label">Tool calls</span>
-            </div>
-            <div className="stats-popover-stat">
-              <span className="stats-popover-value">{formatTokenCount(claudeStats.week.tokens)}</span>
-              <span className="stats-popover-label">Tokens</span>
-            </div>
+          ))
+        ) : (
+          <div className="stats-popover-stat">
+            <span className="stats-popover-value">0</span>
+            <span className="stats-popover-label">No sessions today</span>
           </div>
-          <div className="stats-popover-footer">
-            {claudeStats.allTime.totalSessions.toLocaleString()} sessions · {claudeStats.allTime.totalMessages.toLocaleString()} messages all time
-            {memoryMB !== null && <> · {formatMemory(memoryMB)}</>}
-          </div>
-        </>
-      )}
-      {!claudeStats && memoryMB !== null && (
-        <div className="stats-popover-footer">
-          {formatMemory(memoryMB)}
-        </div>
-      )}
+        )}
+      </div>
+      <div className="stats-popover-footer">
+        {todayProviderSummary || 'No sessions created today'}
+      </div>
+      <div className="stats-popover-footer">
+        {activeProviders.size > 0 ? `Active now: ${activeProviderSummary}` : 'No active sessions'}
+        {memoryMB !== null && <> · {formatMemory(memoryMB)}</>}
+      </div>
     </div>
   )
 }
 
 export function PinnedStats() {
-  const [stats, setStats] = useState<ClaudeStats | null>(null)
-
-  useEffect(() => {
-    let mounted = true
-    const load = () => {
-      getApi().system.claudeStats().then((s) => { if (mounted) setStats(s) }).catch(() => {})
-    }
-    load()
-    const interval = setInterval(load, 30_000)
-    return () => { mounted = false; clearInterval(interval) }
-  }, [])
-
-  if (!stats) return null
-
-  const hasToday = stats.today.messages > 0 || stats.today.toolCalls > 0 || stats.today.tokens > 0
-  const msgs = hasToday ? stats.today.messages : stats.week.messages
-  const tools = hasToday ? stats.today.toolCalls : stats.week.toolCalls
-  const tokens = hasToday ? stats.today.tokens : stats.week.tokens
-  const periodLabel = hasToday ? 'today' : '7d'
+  const sessions = useSessionStore((s) => s.sessions)
+  const todayStart = Math.floor(new Date().setHours(0, 0, 0, 0) / 1000)
+  const liveSessions = sessions.filter((s) => s.status !== 'deleted' && s.status !== 'archived')
+  const activeCount = liveSessions.filter((s) => s.status === 'active').length
+  const todayCount = liveSessions.filter((s) => s.created_at && s.created_at >= todayStart).length
+  const providerCount = new Set(liveSessions.map((s) => normalizeProvider(s.provider))).size
+  const earliestActive = liveSessions
+    .filter((s) => s.status === 'active')
+    .filter((s) => getSessionRunStart(s))
+    .sort((a, b) => (getSessionRunStart(a) || 0) - (getSessionRunStart(b) || 0))[0]
+  const earliestActiveStart = earliestActive ? getSessionRunStart(earliestActive) : null
 
   return (
     <div className="pinned-stats">
       <div className="pinned-stats-row">
         <span className="pinned-stats-item">
-          <span className="pinned-stats-value">{msgs.toLocaleString()}</span>
-          <span className="pinned-stats-label">msgs</span>
+          <span className="pinned-stats-value">{activeCount.toLocaleString()}</span>
+          <span className="pinned-stats-label">active</span>
         </span>
         <span className="pinned-stats-item">
-          <span className="pinned-stats-value">{tools.toLocaleString()}</span>
-          <span className="pinned-stats-label">tools</span>
+          <span className="pinned-stats-value">{todayCount.toLocaleString()}</span>
+          <span className="pinned-stats-label">today</span>
         </span>
         <span className="pinned-stats-item">
-          <span className="pinned-stats-value">{formatTokenCount(tokens)}</span>
-          <span className="pinned-stats-label">tokens</span>
+          <span className="pinned-stats-value">{providerCount.toLocaleString()}</span>
+          <span className="pinned-stats-label">providers</span>
         </span>
-        <span className="pinned-stats-period">{periodLabel}</span>
-        {stats.subscription && (
-          <span className="pinned-stats-tier">{formatTier(stats.subscription, stats.rateLimitTier)}</span>
-        )}
+        <span className="pinned-stats-period">
+          {earliestActiveStart ? `since ${formatUptime(earliestActiveStart)}` : 'all providers'}
+        </span>
       </div>
     </div>
   )
