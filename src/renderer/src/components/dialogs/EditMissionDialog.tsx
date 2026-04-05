@@ -3,13 +3,11 @@ import { Dialog, DialogField, DialogActions, DialogButton } from '../Dialog'
 import { getApi } from '../../api/client'
 import { useUIStore } from '../../stores/useUIStore'
 import { useAgentStore } from '../../stores/useAgentStore'
-import { useToastStore } from '../../stores/useToastStore'
 import { ChevronIcon } from '../icons'
 
 export function EditMissionDialog() {
   const { activeDialog, dialogTargetId, closeDialog } = useUIStore()
   const agents = useAgentStore((s) => s.agents)
-  const { addToast } = useToastStore()
   const [mission, setMission] = useState('')
   const [scheduleMinutes, setScheduleMinutes] = useState('0')
   const [autoStart, setAutoStart] = useState(false)
@@ -57,7 +55,6 @@ export function EditMissionDialog() {
       }
       await getApi().agent.update(dialogTargetId, updates)
       useAgentStore.getState().updateAgentInStore(dialogTargetId, updates)
-      addToast('Agent settings updated', 'success')
       handleClose()
     } finally {
       setLoading(false)

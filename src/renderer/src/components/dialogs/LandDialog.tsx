@@ -3,7 +3,6 @@ import { Dialog, DialogActions, DialogButton } from '../Dialog'
 import { getApi } from '../../api/client'
 import { useUIStore } from '../../stores/useUIStore'
 import { useSessionStore } from '../../stores/useSessionStore'
-import { useToastStore } from '../../stores/useToastStore'
 
 interface HealthCheck {
   behind: number
@@ -55,7 +54,6 @@ function HealthCheckInfo({ health }: { health: HealthCheck }) {
 export function LandDialog() {
   const { activeDialog, dialogTargetId, closeDialog } = useUIStore()
   const { sessions, landOnMain } = useSessionStore()
-  const { addToast } = useToastStore()
   const [landing, setLanding] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [health, setHealth] = useState<HealthCheck>({ behind: 0, ahead: 0, loading: true })
@@ -87,7 +85,6 @@ export function LandDialog() {
     setError(null)
     try {
       await landOnMain(dialogTargetId)
-      addToast(`"${sessionName}" landed on main`, 'success')
       closeDialog()
     } catch (err: any) {
       console.error('[LandDialog] land-on-main failed:', err)

@@ -85,7 +85,6 @@ function useSetting(key: string, fallback: string) {
 }
 
 function ProfileTab() {
-  const { addToast } = useToastStore()
   const [displayName, setDisplayName] = useSetting('display_name', '')
   const [email, setEmail] = useSetting('gravatar_email', '')
   const [osUsername, setOsUsername] = useState('')
@@ -137,7 +136,6 @@ function ProfileTab() {
   const handleSave = () => {
     // Notify SidebarFooter to re-fetch
     window.dispatchEvent(new CustomEvent('sorcerer:profile-updated'))
-    addToast('Profile updated', 'success')
   }
 
   return (
@@ -188,7 +186,6 @@ function ProfileTab() {
 }
 
 function SessionsTab() {
-  const { addToast } = useToastStore()
   const [shell, setShell] = useSetting('shell', '')
   const [fontSize, setFontSize] = useSetting('terminalFontSize', '13')
   const [branchPrefix, setBranchPrefix] = useSetting('branchPrefix', 'sorcerer/')
@@ -224,7 +221,6 @@ function SessionsTab() {
                 const result = await getApi().project.add()
                 if (result) {
                   setShell(result.path)
-                  addToast('Shell setting saved', 'success')
                 }
               }}
             >
@@ -371,6 +367,14 @@ function RemoteTab() {
   const [token, setToken] = useState('')
   const [tokenVisible, setTokenVisible] = useState(false)
   const [toggling, setToggling] = useState(false)
+  const [copiedTarget, setCopiedTarget] = useState<'token' | 'url' | 'rc' | null>(null)
+
+  const flashCopied = (target: 'token' | 'url' | 'rc') => {
+    setCopiedTarget(target)
+    setTimeout(() => {
+      setCopiedTarget((current) => current === target ? null : current)
+    }, 1500)
+  }
 
   const fetchStatus = async () => {
     try {
@@ -403,11 +407,9 @@ function RemoteTab() {
         const result = await getApi().remote.enable()
         setRunning(true)
         setToken(result.token)
-        addToast(`Remote desktop started on ${result.bindAddress}:${result.port}`, 'success')
       } else {
         await getApi().remote.disable()
         setRunning(false)
-        addToast('Remote desktop stopped', 'success')
       }
     } catch (err: any) {
       addToast(`Failed to ${enable ? 'start' : 'stop'} remote desktop: ${err.message}`, 'error')
@@ -420,15 +422,17 @@ function RemoteTab() {
     try {
       const newToken = await getApi().remote.regenerateToken()
       setToken(newToken)
-      addToast('Auth token regenerated', 'success')
     } catch (err: any) {
       addToast(`Failed to regenerate token: ${err.message}`, 'error')
     }
   }
 
   const handleCopyToken = () => {
-    navigator.clipboard.writeText(token)
-    addToast('Token copied to clipboard', 'success')
+    navigator.clipboard.writeText(token).then(() => {
+      flashCopied('token')
+    }).catch((err: any) => {
+      addToast(`Failed to copy token: ${err?.message || 'Clipboard error'}`, 'error')
+    })
   }
 
   const host = bindAddress === '0.0.0.0' ? 'localhost' : bindAddress
@@ -437,8 +441,11 @@ function RemoteTab() {
   const rcUrl = `http://${rcHost}:${port}/rc?token=${token}`
 
   const handleCopyUrl = () => {
-    navigator.clipboard.writeText(accessUrl)
-    addToast('URL copied to clipboard', 'success')
+    navigator.clipboard.writeText(accessUrl).then(() => {
+      flashCopied('url')
+    }).catch((err: any) => {
+      addToast(`Failed to copy URL: ${err?.message || 'Clipboard error'}`, 'error')
+    })
   }
 
   if (loading) {
@@ -462,8 +469,8 @@ function RemoteTab() {
             </div>
             <div className="settings-remote-preview-url-row">
               <code className="settings-remote-preview-url">{`http://${host}:${port}?token=${tokenVisible ? token : '\u2022'.repeat(8)}`}</code>
-              <button className="settings-copy-inline-btn" type="button" onClick={handleCopyUrl} title="Copy URL">
-                <CopyIcon style={{ width: 13, height: 13 }} />
+              <button className="settings-copy-inline-btn" type="button" onClick={handleCopyUrl} title={copiedTarget === 'url' ? 'Copied' : 'Copy URL'}>
+                {copiedTarget === 'url' ? 'Copied' : <CopyIcon style={{ width: 13, height: 13 }} />}
               </button>
             </div>
             <span className="settings-remote-preview-hint">
@@ -479,10 +486,13 @@ function RemoteTab() {
             <div className="settings-remote-preview-url-row">
               <code className="settings-remote-preview-url">{`http://${rcHost}:${port}/rc?token=${tokenVisible ? token : '\u2022'.repeat(8)}`}</code>
               <button className="settings-copy-inline-btn" type="button" onClick={() => {
-                navigator.clipboard.writeText(rcUrl)
-                addToast('Remote Control URL copied', 'success')
+                navigator.clipboard.writeText(rcUrl).then(() => {
+                  flashCopied('rc')
+                }).catch((err: any) => {
+                  addToast(`Failed to copy URL: ${err?.message || 'Clipboard error'}`, 'error')
+                })
               }} title="Copy URL">
-                <CopyIcon style={{ width: 13, height: 13 }} />
+                {copiedTarget === 'rc' ? 'Copied' : <CopyIcon style={{ width: 13, height: 13 }} />}
               </button>
             </div>
             <span className="settings-remote-preview-hint">
@@ -544,7 +554,7 @@ function RemoteTab() {
             onClick={handleCopyToken}
             title="Copy token"
           >
-            <CopyIcon style={{ width: 14, height: 14 }} />
+            {copiedTarget === 'token' ? 'Copied' : <CopyIcon style={{ width: 14, height: 14 }} />}
           </button>
           <button
             className="settings-browse-btn"
@@ -569,7 +579,6 @@ function useUpdateCheck() {
 }
 
 function GeneralTab() {
-  const { addToast } = useToastStore()
   const [checkUpdates, setCheckUpdates] = useSetting('checkForUpdates', 'true')
   const update = useUpdateCheck()
 
@@ -595,13 +604,12 @@ function GeneralTab() {
       )}
 
       <SectionTitle>Data</SectionTitle>
-      <SettingRow label="Reset sidebar layout" description="Restore default sidebar width and expanded state">
+      <SettingRow label="Reset sidebar layout" description="Restore default sidebar width, agent/projects split, and expanded state">
         <button
           className="settings-action-btn"
           type="button"
           onClick={() => {
             localStorage.removeItem('sorcerer-ui-store')
-            addToast('Layout reset — reload to apply', 'success')
           }}
         >
           Reset
@@ -616,7 +624,6 @@ function GeneralTab() {
               getApi().settings.set('dismissedWorkspaces', '[]'),
               getApi().settings.set('dismissedAgents', '[]')
             ])
-            addToast('Dismissed items cleared — banner will re-scan on next load', 'success')
           }}
         >
           Reset
@@ -628,7 +635,6 @@ function GeneralTab() {
           type="button"
           onClick={() => {
             localStorage.clear()
-            addToast('All data cleared — reload to see defaults', 'info')
           }}
         >
           Clear Data

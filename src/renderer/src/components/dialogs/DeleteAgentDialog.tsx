@@ -3,13 +3,11 @@ import { Dialog, DialogActions, DialogButton } from '../Dialog'
 import { useUIStore } from '../../stores/useUIStore'
 import { useAgentStore } from '../../stores/useAgentStore'
 import { useSessionStore } from '../../stores/useSessionStore'
-import { useToastStore } from '../../stores/useToastStore'
 
 export function DeleteAgentDialog() {
   const { activeDialog, dialogTargetId, closeDialog } = useUIStore()
   const { agents, removeAgent } = useAgentStore()
   const { activeSessionId } = useSessionStore()
-  const { addToast } = useToastStore()
   const [deleting, setDeleting] = useState(false)
 
   const open = activeDialog === 'delete-agent'
@@ -24,7 +22,6 @@ export function DeleteAgentDialog() {
       if (activeSessionId === agent.id) {
         useSessionStore.setState({ activeSessionId: null })
       }
-      addToast(`Agent "${agent.name}" deleted`, 'info')
       closeDialog()
     } finally {
       setDeleting(false)

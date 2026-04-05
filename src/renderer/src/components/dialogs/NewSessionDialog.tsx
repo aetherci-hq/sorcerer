@@ -90,7 +90,6 @@ export function NewSessionDialog() {
       if (!result?.session) {
         addToast(result?.error || 'Failed to create session', 'error')
       } else {
-        addToast(`Session "${name.trim()}" created`, 'success')
         handleClose()
       }
     } finally {

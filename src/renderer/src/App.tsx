@@ -124,8 +124,9 @@ export function App() {
 
     // Listen for completed agent runs — show toast with findings
     const unsubAgentRunComplete = getApi().terminal.onAgentRunComplete((agentId: string, agentName: string, preview: string, level: string) => {
-      const type = level === 'error' ? 'error' : level === 'warning' ? 'info' : 'success'
-      useToastStore.getState().addToast(`${agentName}: ${preview}`, type as any)
+      if (level === 'error') {
+        useToastStore.getState().addToast(`${agentName}: ${preview}`, 'error')
+      }
     })
 
     // Track which sessions are popped out to separate windows

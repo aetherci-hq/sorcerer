@@ -40,7 +40,6 @@ export function AddProjectDialog() {
         if (nameOverride && nameOverride !== project.name) {
           await useProjectStore.getState().updateProject(project.id, { name: nameOverride })
         }
-        addToast(`Project "${nameOverride || project.name}" added`, 'success')
         handleClose()
       }
     } catch (err) {
@@ -58,7 +57,6 @@ export function AddProjectDialog() {
     try {
       const project = await addProjectByPath(path.trim(), effectiveName || undefined)
       if (project) {
-        addToast(`Project "${effectiveName || project.name}" added`, 'success')
         handleClose()
       }
     } catch (err) {

@@ -3,13 +3,11 @@ import { Dialog, DialogActions, DialogButton } from '../Dialog'
 import { useUIStore } from '../../stores/useUIStore'
 import { useProjectStore } from '../../stores/useProjectStore'
 import { useSessionStore } from '../../stores/useSessionStore'
-import { useToastStore } from '../../stores/useToastStore'
 
 export function DeleteDialog() {
   const { activeDialog, dialogTargetId, closeDialog } = useUIStore()
   const { projects, removeProject } = useProjectStore()
   const { sessions, deleteSession } = useSessionStore()
-  const { addToast } = useToastStore()
   const [deleting, setDeleting] = useState(false)
 
   const open = activeDialog === 'delete-session'
@@ -38,10 +36,8 @@ export function DeleteDialog() {
     try {
       if (targetType === 'project') {
         await removeProject(dialogTargetId)
-        addToast(`Project "${targetName}" removed`, 'success')
       } else {
         await deleteSession(dialogTargetId)
-        addToast(`Session "${targetName}" deleted`, 'success')
       }
       closeDialog()
     } finally {

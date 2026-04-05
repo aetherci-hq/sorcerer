@@ -104,7 +104,6 @@ export function OrphanWorkspaceBanner() {
       await loadSessions()
 
       setOrphans((prev) => prev.filter((o) => o.dirName !== orphan.dirName))
-      addToast(`Linked "${orphan.dirName}" — ${result.created} session${result.created !== 1 ? 's' : ''} recovered`, 'success')
     } catch (err: any) {
       addToast(err.message || 'Failed to link project', 'error')
     } finally {
@@ -122,7 +121,6 @@ export function OrphanWorkspaceBanner() {
     try {
       await getApi().workspace.deleteOrphan(orphan.dirName)
       setOrphans((prev) => prev.filter((o) => o.dirName !== orphan.dirName))
-      addToast(`Deleted orphaned workspace "${orphan.dirName}"`, 'success')
     } catch (err: any) {
       addToast(err.message || 'Failed to delete workspace', 'error')
     } finally {
@@ -145,7 +143,6 @@ export function OrphanWorkspaceBanner() {
       await getApi().agent.add(data)
       await loadAgents()
       setOrphanAgents((prev) => prev.filter((o) => o.dirName !== orphan.dirName))
-      addToast(`Re-imported agent "${orphan.agentName}"`, 'success')
     } catch (err: any) {
       addToast(err.message || 'Failed to re-import agent', 'error')
     } finally {
@@ -163,7 +160,6 @@ export function OrphanWorkspaceBanner() {
     try {
       await getApi().workspace.deleteOrphanAgent(orphan.dirName)
       setOrphanAgents((prev) => prev.filter((o) => o.dirName !== orphan.dirName))
-      addToast(`Deleted orphaned agent directory`, 'success')
     } catch (err: any) {
       addToast(err.message || 'Failed to delete agent', 'error')
     } finally {

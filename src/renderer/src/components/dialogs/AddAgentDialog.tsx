@@ -4,7 +4,6 @@ import { getApi } from '../../api/client'
 import { useUIStore } from '../../stores/useUIStore'
 import { useAgentStore } from '../../stores/useAgentStore'
 import { useSessionStore } from '../../stores/useSessionStore'
-import { useToastStore } from '../../stores/useToastStore'
 import { ChevronIcon, BotIcon, TerminalIcon } from '../icons'
 import { PROVIDERS } from '../../constants'
 
@@ -14,7 +13,6 @@ export function AddAgentDialog() {
   const { activeDialog, closeDialog } = useUIStore()
   const { addAgent, startAgent } = useAgentStore()
   const { setActiveSession } = useSessionStore()
-  const { addToast } = useToastStore()
   const [mode, setMode] = useState<AgentMode>(null)
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
@@ -94,7 +92,6 @@ export function AddAgentDialog() {
       if (id) {
         await startAgent(id)
         setActiveSession(id)
-        addToast(`Agent "${name.trim()}" created${mode === 'autonomous' ? ' — mission started' : ''}`, 'success')
         handleClose()
       }
     } finally {

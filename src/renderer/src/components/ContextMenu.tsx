@@ -93,10 +93,8 @@ export function ContextMenu() {
     return project?.path ?? ''
   }
 
-  const copyToClipboard = (text: string, label: string) => {
-    navigator.clipboard.writeText(text).then(() => {
-      addToast(`${label} copied`, 'success')
-    }).catch(() => {
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text).catch(() => {
       addToast('Failed to copy', 'error')
     })
   }
@@ -195,12 +193,12 @@ export function ContextMenu() {
         action: async () => {
           await getApi().agent.setRemoteControl(contextMenu.targetId, !agentRcEnabled)
           useAgentStore.getState().updateAgentInStore(contextMenu.targetId, { remote_control: agentRcEnabled ? 0 : 1 })
-          addToast(agentRcEnabled ? 'Session Remote Control disabled for future sessions' : 'Session Remote Control enabled — check terminal for connection URL', 'success')
         }
       },
       { type: 'separator' as const },
       { label: 'Split Right', icon: <SplitHorizontalIcon className={iconClass} />, action: () => { focusTargetPanel(contextMenu.targetId); splitRight(contextMenu.targetId) } },
       { label: 'Split Down', icon: <SplitVerticalIcon className={iconClass} />, action: () => { focusTargetPanel(contextMenu.targetId); splitDown(contextMenu.targetId) } },
+      { label: 'Focus Mode', icon: <MaximizeIcon className={iconClass} />, action: () => enterFocusMode(contextMenu.targetId) },
       { label: 'Pop Out', icon: <ExternalLinkIcon className={iconClass} />, action: async () => {
         await getApi().popout.open('terminal', contextMenu.targetId, targetAgent?.name || 'Agent')
         // Clear the panel in the main app so it's not shown in two places
@@ -232,7 +230,7 @@ export function ContextMenu() {
         const notePanelId = `quicknotes:agent:${contextMenu.targetId}`
         useQuickNotesStore.getState().addNotePanel(contextMenu.targetId)
         ensureExpanded(contextMenu.targetId)
-        fillEmptyOrSplitNotes(notePanelId, contextMenu.targetId)
+        fillEmptyOrSplitNotes(notePanelId)
         const { splitRoot: root, setFocusedPanel } = useUIStore.getState()
         if (root) {
           const leaf = findLeafBySession(root, notePanelId)
@@ -249,7 +247,6 @@ export function ContextMenu() {
           await killAgent(contextMenu.targetId)
           await getApi().agent.update(contextMenu.targetId, { mission: '', auto_start: 0, auto_restart: 0, schedule_minutes: 0 })
           useAgentStore.getState().updateAgentInStore(contextMenu.targetId, { mission: '', auto_start: 0, auto_restart: 0, schedule_minutes: 0 })
-          addToast('Mission disabled — agent is now interactive', 'info')
         }}
       ] : []),
       ...(() => {
@@ -308,7 +305,6 @@ export function ContextMenu() {
       { type: 'separator' },
       { label: 'Delete Group', icon: <TrashIcon className={iconClass} />, danger: true, action: async () => {
         await useAgentStore.getState().removeAgentGroup(contextMenu.targetId)
-        addToast('Group deleted', 'info')
       }}
     ]
   } else if (contextMenu.type === 'projects-header') {
@@ -338,7 +334,6 @@ export function ContextMenu() {
       { type: 'separator' },
       { label: 'Delete Group', icon: <TrashIcon className={iconClass} />, danger: true, action: async () => {
         await useProjectStore.getState().removeGroup(contextMenu.targetId)
-        addToast('Group deleted', 'info')
       }}
     ]
   } else if (contextMenu.type === 'project') {
@@ -410,7 +405,6 @@ export function ContextMenu() {
           await getApi().quickNotes.delete(parentId, parentType)
           useQuickNotesStore.getState().clearSaved(parentId)
           useQuickNotesStore.getState().removeNotePanel(parentId)
-          addToast('Notes deleted', 'success')
         }
         const { splitRoot: root } = useUIStore.getState()
         if (root) {
@@ -434,14 +428,14 @@ export function ContextMenu() {
     items = [
       { label: 'Split Right', icon: <SplitHorizontalIcon className={iconClass} />, action: () => { focusTargetPanel(contextMenu.targetId); splitRight(contextMenu.targetId) } },
       { label: 'Split Down', icon: <SplitVerticalIcon className={iconClass} />, action: () => { focusTargetPanel(contextMenu.targetId); splitDown(contextMenu.targetId) } },
+      { label: 'Focus Mode', icon: <MaximizeIcon className={iconClass} />, action: () => enterFocusMode(contextMenu.targetId) },
       ...(targetSession?.parent_session_id ? [
         { label: 'Open Quick Notes', icon: <NotesIcon className={iconClass} />, action: () => {
           const parentId = targetSession!.parent_session_id!
           const notePanelId = `quicknotes:session:${parentId}`
           useQuickNotesStore.getState().addNotePanel(parentId)
           ensureExpanded(parentId)
-          focusTargetPanel(contextMenu.targetId)
-          splitRight(notePanelId)
+          fillEmptyOrSplitNotes(notePanelId)
           const { splitRoot: root, setFocusedPanel } = useUIStore.getState()
           if (root) {
             const leaf = findLeafBySession(root, notePanelId)
@@ -452,7 +446,6 @@ export function ContextMenu() {
       { type: 'separator' },
       { label: 'Restart Shell', icon: <RefreshIcon className={iconClass} />, action: async () => {
         await restartSession(contextMenu.targetId)
-        addToast('Shell restarted', 'info')
       }},
       { type: 'separator' },
       { label: 'Close Terminal', icon: <TrashIcon className={iconClass} />, danger: true, action: () => openDialog('delete-session', contextMenu.targetId) }
@@ -461,12 +454,11 @@ export function ContextMenu() {
     items = [
       { label: 'Restore Session', icon: <RotateCcwIcon className={iconClass} />, action: async () => {
         await restoreSession(contextMenu.targetId)
-        addToast(`"${targetSession!.name}" restored`, 'info')
       }},
       { type: 'separator' },
       { label: 'Rename', icon: <EditIcon className={iconClass} />, shortcut: 'F2', action: () => setRenamingId(contextMenu.targetId) },
       { label: 'Copy Worktree Path', icon: <CopyIcon className={iconClass} />, action: () => {
-        if (targetSession) copyToClipboard(targetSession.worktree_path, 'Worktree path')
+        if (targetSession) copyToClipboard(targetSession.worktree_path)
       }},
       { label: 'Open Worktree Path', icon: <FolderIcon className={iconClass} />, action: () => {
         if (targetSession) window.sorcerer?.window.openPath(targetSession.worktree_path)
@@ -478,6 +470,7 @@ export function ContextMenu() {
     items = [
       { label: 'Split Right', icon: <SplitHorizontalIcon className={iconClass} />, action: () => { focusTargetPanel(contextMenu.targetId); splitRight(contextMenu.targetId) } },
       { label: 'Split Down', icon: <SplitVerticalIcon className={iconClass} />, action: () => { focusTargetPanel(contextMenu.targetId); splitDown(contextMenu.targetId) } },
+      { label: 'Focus Mode', icon: <MaximizeIcon className={iconClass} />, action: () => enterFocusMode(contextMenu.targetId) },
       { label: 'Pop Out', icon: <ExternalLinkIcon className={iconClass} />, action: async () => {
         await getApi().popout.open('terminal', contextMenu.targetId, targetSession?.name || 'Session')
         // Clear the panel in the main app so it's not shown in two places
@@ -507,7 +500,7 @@ export function ContextMenu() {
         const notePanelId = `quicknotes:session:${contextMenu.targetId}`
         useQuickNotesStore.getState().addNotePanel(contextMenu.targetId)
         ensureExpanded(contextMenu.targetId)
-        fillEmptyOrSplitNotes(notePanelId, contextMenu.targetId)
+        fillEmptyOrSplitNotes(notePanelId)
         const { splitRoot: root, setFocusedPanel } = useUIStore.getState()
         if (root) {
           const leaf = findLeafBySession(root, notePanelId)
@@ -530,11 +523,10 @@ export function ContextMenu() {
           const enabling = !targetSession?.remote_control
           await getApi().session.setRemoteControl(contextMenu.targetId, enabling)
           useSessionStore.getState().updateSessionInStore(contextMenu.targetId, { remote_control: enabling ? 1 : 0 })
-          addToast(enabling ? 'Session Remote Control enabled — check terminal for connection URL' : 'Session Remote Control disabled for future sessions', 'success')
         }
       },
       { label: targetSession?.branch ? 'Copy Worktree Path' : 'Copy Path', icon: <CopyIcon className={iconClass} />, action: () => {
-        if (targetSession) copyToClipboard(targetSession.worktree_path, 'Path')
+        if (targetSession) copyToClipboard(targetSession.worktree_path)
       }},
       { label: targetSession?.branch ? 'Open Worktree Path' : 'Open Path', icon: <FolderIcon className={iconClass} />, action: () => {
         if (targetSession) window.sorcerer?.window.openPath(targetSession.worktree_path)

@@ -14,8 +14,10 @@ interface QuickNotesEditorProps {
 export function QuickNotesEditor({ parentId, parentType, parentName, onDeleted }: QuickNotesEditorProps) {
   const [content, setContent] = useState('')
   const [noteId, setNoteId] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const { addToast } = useToastStore()
 
   // Load note on mount
@@ -54,6 +56,7 @@ export function QuickNotesEditor({ parentId, parentType, parentName, onDeleted }
   useEffect(() => {
     return () => {
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current)
     }
   }, [])
 
@@ -65,7 +68,9 @@ export function QuickNotesEditor({ parentId, parentType, parentName, onDeleted }
 
   const handleCopy = () => {
     navigator.clipboard.writeText(content).then(() => {
-      addToast('Notes copied', 'success')
+      setCopied(true)
+      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current)
+      copiedTimerRef.current = setTimeout(() => setCopied(false), 1500)
     }).catch(() => {
       addToast('Failed to copy', 'error')
     })
@@ -77,7 +82,6 @@ export function QuickNotesEditor({ parentId, parentType, parentName, onDeleted }
     useQuickNotesStore.getState().clearSaved(parentId)
     setContent('')
     setNoteId(null)
-    addToast('Notes deleted', 'success')
     onDeleted?.()
   }
 
@@ -88,7 +92,7 @@ export function QuickNotesEditor({ parentId, parentType, parentName, onDeleted }
         <div className="quick-notes-toolbar-actions">
           <button className="quick-notes-copy-btn" onClick={handleCopy} title="Copy notes">
             <CopyIcon />
-            Copy
+            {copied ? 'Copied' : 'Copy'}
           </button>
           {(content.length > 0 || noteId) && (
             <button className="quick-notes-delete-btn" onClick={handleDelete} title="Delete notes">

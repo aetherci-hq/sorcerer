@@ -380,24 +380,18 @@
     cursor: default;
   }
 
-  /* ── Toast ──────────────────────────────────── */
-  .toast {
-    position: fixed;
-    bottom: 20px;
-    left: 50%;
-    transform: translateX(-50%);
-    background: var(--bg-elevated);
-    border: 1px solid var(--border-medium);
-    color: var(--text);
-    padding: 10px 20px;
-    border-radius: 8px;
+  .idle-inline-error {
+    margin-top: 12px;
+    padding: 10px 12px;
+    background: rgba(226, 85, 85, 0.08);
+    border: 1px solid rgba(226, 85, 85, 0.28);
+    color: var(--red);
+    border-radius: 10px;
     font-size: 13px;
-    z-index: 100;
-    opacity: 0;
-    transition: opacity 0.2s;
-    pointer-events: none;
+    line-height: 1.4;
+    max-width: 320px;
+    text-align: center;
   }
-  .toast.visible { opacity: 1; }
 </style>
 </head>
 <body>
@@ -415,8 +409,6 @@
 </div>
 
 <div id="idleOverlay" style="display:none"></div>
-<div class="toast" id="toast"></div>
-
 <script>
 (function() {
   'use strict';
@@ -439,6 +431,7 @@
   let projects = [];
   let expandedId = null;
   let idleOverlayItem = null;  // item being shown in fullscreen idle view
+  let idleOverlayError = '';
   let scrollbackCache = {};
   let ws = null;
   let connected = false;
@@ -495,16 +488,6 @@
       root.style.setProperty('--green', colors['green']);
       root.style.setProperty('--red', colors['danger']);
     } catch { /* use defaults */ }
-  }
-
-  // ── Toast ───────────────────────────────────
-  let toastTimer = null;
-  function showToast(msg) {
-    const el = document.getElementById('toast');
-    el.textContent = msg;
-    el.classList.add('visible');
-    clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => el.classList.remove('visible'), 2000);
   }
 
   // ── WebSocket ───────────────────────────────
@@ -737,6 +720,7 @@
       list.style.display = '';
       overlay.style.display = 'none';
       overlay.innerHTML = '';
+      idleOverlayError = '';
       return;
     }
 
@@ -777,6 +761,7 @@
               New Session
             </button>
           </div>
+          ${idleOverlayError ? `<div class="idle-inline-error">${esc(idleOverlayError)}</div>` : ''}
         </div>
       </div>
     `;
@@ -819,6 +804,7 @@
 
     closeIdle() {
       idleOverlayItem = null;
+      idleOverlayError = '';
       renderIdleOverlay();
     },
 
@@ -829,7 +815,6 @@
       if (!text) return;
       wsSend({ action: 'terminal:write', sessionId: id, data: text + '\n' });
       input.value = '';
-      showToast('Sent');
     },
 
     async resume(id, type) {
@@ -839,12 +824,13 @@
         } else {
           await rpc('session:resume', id);
         }
-        showToast('Resuming...');
+        idleOverlayError = '';
         idleOverlayItem = null;
         renderIdleOverlay();
         setTimeout(loadState, 1000);
       } catch (err) {
-        showToast('Error: ' + err.message);
+        idleOverlayError = err.message;
+        renderIdleOverlay();
       }
     },
 
@@ -855,12 +841,13 @@
         } else {
           await rpc('session:restart', id);
         }
-        showToast('Starting new session...');
+        idleOverlayError = '';
         idleOverlayItem = null;
         renderIdleOverlay();
         setTimeout(loadState, 1000);
       } catch (err) {
-        showToast('Error: ' + err.message);
+        idleOverlayError = err.message;
+        renderIdleOverlay();
       }
     }
   };
