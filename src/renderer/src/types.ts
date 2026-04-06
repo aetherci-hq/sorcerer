@@ -63,7 +63,7 @@ export interface TaskData {
   blockedBy: string[]
 }
 
-// ── Agent (standalone Claude Code session) ────────────────────────
+// ── Agent (standalone AI CLI session) ─────────────────────────────
 
 export interface Agent {
   id: string

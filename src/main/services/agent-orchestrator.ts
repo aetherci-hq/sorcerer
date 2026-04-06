@@ -1,13 +1,13 @@
 /**
  * Agent Orchestrator — Schedules and runs autonomous agent missions.
  *
- * Instead of bending Claude Code into a daemon, Sorcerer acts as the
+ * Instead of bending any provider CLI into a daemon, Sorcerer acts as the
  * orchestration layer: it runs the mission on a schedule, captures the
  * output, stores results, and notifies the user.
  *
- * Each run is a fresh `claude -p "{mission}"` call (or `--continue` to
- * maintain conversation context). Output is captured via the scrollback
- * buffer and stored in the agent_runs table.
+ * Each run launches the selected provider with the mission and any
+ * provider-specific resume behavior. Output is captured via the
+ * scrollback buffer and stored in the agent_runs table.
  */
 
 import { BrowserWindow } from 'electron'

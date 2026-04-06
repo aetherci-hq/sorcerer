@@ -61,6 +61,14 @@ export function NewSessionDialog() {
 
   const isGitProject = gitInfo?.hasGit && gitInfo?.hasCommits
   const isEmptyGit = gitInfo?.hasGit && !gitInfo?.hasCommits
+  const bypassHint =
+    provider === 'claude'
+      ? 'Claude runs with --dangerously-skip-permissions.'
+      : provider === 'gemini'
+        ? 'Gemini runs with --yolo.'
+        : provider === 'codex'
+          ? 'Codex runs with --dangerously-bypass-approvals-and-sandbox.'
+          : 'Runs with the provider’s closest unattended mode.'
 
   const handleClose = () => {
     setName('')
@@ -189,6 +197,11 @@ export function NewSessionDialog() {
           />
           Auto-accept permissions
         </label>
+        {bypassPermissions && (
+          <div className="dialog-hint" style={{ marginTop: 4 }}>
+            {bypassHint}
+          </div>
+        )}
         {provider === 'claude' && (
           <label className="dialog-checkbox">
             <input

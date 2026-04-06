@@ -190,8 +190,9 @@ export class CodexRunner implements ProviderRunner {
     model?: string
   }): string[] {
     const args: string[] = []
-    // --full-auto skips all approval prompts
-    if (data.bypassPermissions) args.push('--full-auto')
+    // Closest equivalent to Claude's --dangerously-skip-permissions:
+    // skip approvals and disable sandboxing for unattended runs.
+    if (data.bypassPermissions) args.push('--dangerously-bypass-approvals-and-sandbox')
     if (data.model) args.push('--model', data.model)
 
     // Codex CLI has no session resume — hasHistory is ignored

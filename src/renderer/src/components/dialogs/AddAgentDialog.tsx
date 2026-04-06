@@ -29,6 +29,14 @@ export function AddAgentDialog() {
   const [submitting, setSubmitting] = useState(false)
 
   const open = activeDialog === 'add-agent'
+  const bypassHint =
+    provider === 'claude'
+      ? 'Claude runs with --dangerously-skip-permissions.'
+      : provider === 'gemini'
+        ? 'Gemini runs with --yolo.'
+        : provider === 'codex'
+          ? 'Codex runs with --dangerously-bypass-approvals-and-sandbox.'
+          : 'Runs with the provider’s closest unattended mode.'
 
   // Load user defaults when dialog opens
   useEffect(() => {
@@ -229,6 +237,11 @@ export function AddAgentDialog() {
           <input type="checkbox" checked={bypassPermissions} onChange={(e) => setBypassPermissions(e.target.checked)} />
           Auto-accept permissions
         </label>
+        {bypassPermissions && (
+          <div className="dialog-hint" style={{ marginTop: 4 }}>
+            {bypassHint}
+          </div>
+        )}
         {mode === 'interactive' && provider === 'claude' && (
           <label className="dialog-checkbox">
             <input type="checkbox" checked={remoteControl} onChange={(e) => setRemoteControl(e.target.checked)} />

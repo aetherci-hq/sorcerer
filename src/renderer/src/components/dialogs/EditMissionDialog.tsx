@@ -64,6 +64,15 @@ export function EditMissionDialog() {
   if (!open || !agent) return null
 
   const hasMission = mission.trim().length > 0
+  const provider = agent.provider || 'claude'
+  const bypassHint =
+    provider === 'claude'
+      ? 'Claude runs with --dangerously-skip-permissions.'
+      : provider === 'gemini'
+        ? 'Gemini runs with --yolo.'
+        : provider === 'codex'
+          ? 'Codex runs with --dangerously-bypass-approvals-and-sandbox.'
+          : 'Runs with the provider’s closest unattended mode.'
 
   return (
     <Dialog open={open} onClose={handleClose} title={`Edit Agent — ${agent.name}`}>
@@ -120,6 +129,11 @@ export function EditMissionDialog() {
         <input type="checkbox" checked={bypassPermissions} onChange={(e) => setBypassPermissions(e.target.checked)} />
         Auto-accept permissions
       </label>
+      {bypassPermissions && (
+        <div className="dialog-hint" style={{ marginTop: 4 }}>
+          {bypassHint}
+        </div>
+      )}
 
       <button
         type="button"

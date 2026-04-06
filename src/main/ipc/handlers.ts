@@ -683,7 +683,7 @@ export function registerIPC(
     }
   })
 
-  // ── Claude Code stats ──────────────────────────────────────
+  // ── Claude integration stats ───────────────────────────────
 
   ipcMain.handle('system:claude-stats', () => {
     const statsPath = path.join(os.homedir(), '.claude', 'stats-cache.json')
