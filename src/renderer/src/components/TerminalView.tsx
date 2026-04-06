@@ -55,7 +55,7 @@ window.addEventListener('sorcerer:themeChange', (e: Event) => {
   const termBg = theme.colors['terminal-bg']
   for (const [, cached] of terminalCache) {
     cached.terminal.options.theme = {
-      background: 'transparent',
+      background: termBg,
       foreground: theme.colors['text-primary'],
       cursor: theme.colors['accent'],
       cursorAccent: termBg,
