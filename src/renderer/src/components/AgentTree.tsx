@@ -254,7 +254,7 @@ function AgentItem({ agent, staggerClass }: { agent: Agent; staggerClass?: strin
           />
         )}
         <BotIcon className="tree-icon tree-icon--agent" />
-        <div className="tree-label-group tree-label-group--stacked">
+        <div className="tree-label-group">
           {isRenaming ? (
             <input
               ref={renameInputRef}
@@ -267,14 +267,12 @@ function AgentItem({ agent, staggerClass }: { agent: Agent; staggerClass?: strin
             />
           ) : (
             <>
-              <div className="tree-label-row">
-                <span className="tree-label" onDoubleClick={handleDoubleClick}>{agent.name}</span>
-                {showProviderBadges && agent.provider && agent.provider !== 'claude' && (
-                  <span className="teammate-badge" style={{ fontSize: '9px' }}>{agent.provider}</span>
-                )}
-              </div>
+              <span className="tree-label" onDoubleClick={handleDoubleClick}>{agent.name}</span>
+              {showProviderBadges && agent.provider && agent.provider !== 'claude' && (
+                <span className="teammate-badge" style={{ fontSize: '9px' }}>{agent.provider}</span>
+              )}
               {agent.description && (
-                <span className="tree-hint">{agent.description}</span>
+                <span className="tree-hint tree-hint--inline">{agent.description}</span>
               )}
             </>
           )}
