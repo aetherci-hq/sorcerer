@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { getApi } from '../api/client'
 import { useUIStore, findLeaf, findLeafBySession } from '../stores/useUIStore'
 import { useProjectStore } from '../stores/useProjectStore'
@@ -22,7 +23,7 @@ export function ContextMenu() {
   const { agents, startAgent, resumeAgent, restartAgent, killAgent } = useAgentStore()
   const { addToast } = useToastStore()
   const menuRef = useRef<HTMLDivElement>(null)
-  const [pos, setPos] = useState<{ top: number; left: number } | null>(null)
+  const [pos, setPos] = useState<{ top: number; left: number; maxHeight: number } | null>(null)
   const [loadingItem, setLoadingItem] = useState<number | null>(null)
 
   // Clamp menu position to viewport before paint
@@ -30,12 +31,16 @@ export function ContextMenu() {
     if (!contextMenu || !menuRef.current) { setPos(null); return }
     const rect = menuRef.current.getBoundingClientRect()
     const pad = 8
-    const maxLeft = Math.max(pad, window.innerWidth - rect.width - pad)
-    const maxTop = Math.max(pad, window.innerHeight - rect.height - pad)
+    const viewportWidth = window.innerWidth
+    const viewportHeight = window.innerHeight
+    const maxHeight = Math.max(120, viewportHeight - pad * 2)
+    const clampedHeight = Math.min(rect.height, maxHeight)
+    const maxLeft = Math.max(pad, viewportWidth - rect.width - pad)
+    const maxTop = Math.max(pad, viewportHeight - clampedHeight - pad)
     const left = Math.min(Math.max(contextMenu.x, pad), maxLeft)
     const top = Math.min(Math.max(contextMenu.y, pad), maxTop)
 
-    setPos({ top, left })
+    setPos({ top, left, maxHeight })
   }, [contextMenu])
 
   // Focus first item when menu opens
@@ -542,11 +547,15 @@ export function ContextMenu() {
     ]
   }
 
-  return (
+  return createPortal(
     <div
       className="context-menu"
       ref={menuRef}
-      style={{ top: pos?.top ?? contextMenu.y, left: pos?.left ?? contextMenu.x }}
+      style={{
+        top: pos?.top ?? contextMenu.y,
+        left: pos?.left ?? contextMenu.x,
+        maxHeight: pos?.maxHeight ?? undefined
+      }}
     >
       {items.map((item, i) =>
         'type' in item ? (
@@ -583,6 +592,7 @@ export function ContextMenu() {
           </button>
         )
       )}
-    </div>
+    </div>,
+    document.body
   )
 }
