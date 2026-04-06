@@ -707,6 +707,19 @@ body {
   flex: none;
 }
 
+.tree-label-row {
+  width: 100%;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tree-label-row .tree-label {
+  flex: 1;
+  min-width: 0;
+}
+
 .tree-hint {
   font-size: 11px;
   font-family: var(--font-mono);
