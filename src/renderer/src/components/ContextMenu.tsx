@@ -30,17 +30,10 @@ export function ContextMenu() {
     if (!contextMenu || !menuRef.current) { setPos(null); return }
     const rect = menuRef.current.getBoundingClientRect()
     const pad = 8
-
-    let top = contextMenu.y
-    let left = contextMenu.x
-    if (rect.right > window.innerWidth - pad) {
-      left = window.innerWidth - rect.width - pad
-    }
-    if (rect.bottom > window.innerHeight - pad) {
-      top = window.innerHeight - rect.height - pad
-    }
-    if (left < pad) left = pad
-    if (top < pad) top = pad
+    const maxLeft = Math.max(pad, window.innerWidth - rect.width - pad)
+    const maxTop = Math.max(pad, window.innerHeight - rect.height - pad)
+    const left = Math.min(Math.max(contextMenu.x, pad), maxLeft)
+    const top = Math.min(Math.max(contextMenu.y, pad), maxTop)
 
     setPos({ top, left })
   }, [contextMenu])

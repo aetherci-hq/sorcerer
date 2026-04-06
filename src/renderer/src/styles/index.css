@@ -1791,6 +1791,9 @@ body {
   position: fixed;
   z-index: 1000;
   min-width: 180px;
+  max-height: calc(100vh - 16px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
   background: var(--bg-elevated);
   border: 1px solid var(--border-medium);
   border-radius: var(--radius-md);
