@@ -11,6 +11,7 @@ import { PopoutService } from './services/popout-service'
 import { registerIPC } from './ipc/handlers'
 import { syncWorktrees, checkResumeFailed } from './ipc/shared-handlers'
 import { AgentOrchestrator } from './services/agent-orchestrator'
+import { refreshProviders as refreshProviderRegistry } from './services/provider-registry'
 
 // On macOS/Linux, Electron doesn't inherit the user's shell PATH.
 // Fix process.env.PATH so spawned processes (e.g. 'claude') can be found.
@@ -151,93 +152,12 @@ async function createWindow(): Promise<void> {
     console.error('[startup] Service initialization failed:', err)
   }
 
-  // Crash recovery: auto-commit orphaned worktrees
-  try {
-    const allProjects = dbService.listProjects()
-    const allSessions = dbService.listSessions()
-    for (const project of allProjects) {
-      try {
-        // Skip non-git projects — no worktrees to recover
-        const gitDir = path.join(project.path as string, '.git')
-        if (!fs.existsSync(gitDir)) continue
-
-        const worktrees = await worktreeService.list(project.path)
-        const root = worktreeService.getWorkspacesRoot()
-
-        for (const wt of worktrees) {
-          // Only process worktrees under our managed root
-          if (!wt.startsWith(root)) continue
-
-          // Check if there's a matching non-deleted session
-          const hasSession = allSessions.some(
-            (s: any) => s.worktree_path === wt && s.status !== 'deleted'
-          )
-
-          if (!hasSession) {
-            console.log('[crash-recovery] Orphaned worktree found:', wt)
-            const commitResult = await worktreeService.autoCommit(wt)
-            if (commitResult.committed) {
-              console.log('[crash-recovery] Auto-committed orphaned work:', commitResult.message)
-            }
-          }
-        }
-      } catch (err) {
-        console.log('[crash-recovery] Failed to check project:', project.name, err)
-      }
-    }
-  } catch (err) {
-    console.error('[crash-recovery] Failed:', err)
-  }
-
-  // Recover orphaned worktree directories that lack DB session records
-  // (e.g. session was deleted from DB but worktree dir still exists on disk)
-  try {
-    const services = { db: dbService, pty: ptyService, worktree: worktreeService, fileWatcher: fileWatcherService }
-    const allProjects = dbService.listProjects()
-    for (const project of allProjects) {
-      try {
-        const result = await syncWorktrees(services, project.id)
-        if (result.created > 0 || result.removed > 0) {
-          console.log(`[startup-sync] ${project.name}: recovered ${result.created}, cleaned ${result.removed}`)
-        }
-      } catch (err) {
-        console.log('[startup-sync] Failed for project:', project.name, err)
-      }
-    }
-  } catch (err) {
-    console.error('[startup-sync] Failed:', err)
-  }
-
-  // One-time cleanup: clear mock team_name values from sessions
-  if (!dbService.getSetting('teamLinkCleanupDone')) {
-    const allSessions = dbService.listSessions()
-    for (const s of allSessions) {
-      if (s.team_name) {
-        dbService.updateSession(s.id, { team_name: null })
-      }
-    }
-    dbService.setSetting('teamLinkCleanupDone', '1')
-  }
-
   // Register IPC handlers
   registerIPC(ptyService, dbService, worktreeService, fileWatcherService)
 
   // Start the agent orchestrator — handles scheduled runs, output capture, decisions
   const orchestrator = new AgentOrchestrator(dbService, ptyService, mainWindow)
   orchestrator.start()
-
-  // Auto-start agents configured for auto_start (immediate, outside of schedule)
-  const autoStartAgents = dbService.listAgents().filter((a: any) => a.auto_start === 1 && a.mission)
-  if (autoStartAgents.length > 0) {
-    for (const agent of autoStartAgents) {
-      try {
-        orchestrator.runNow(agent.id)
-        console.log(`[startup] Auto-started agent: ${agent.name}`)
-      } catch (err) {
-        console.error(`[startup] Failed to auto-start agent ${agent.name}:`, err)
-      }
-    }
-  }
 
   // Detect failed resumes (e.g. "No conversation found to continue")
   ptyService.onExit((sessionId, exitCode) => {
@@ -265,111 +185,6 @@ async function createWindow(): Promise<void> {
   // Note: Scheduled agents are managed by the AgentOrchestrator (schedule-based).
   // The old auto-restart handler was removed — orchestrator handles all scheduling.
 
-  // Auto-start remote access if previously enabled
-  const remoteEnabled = dbService.getSetting('remoteEnabled')
-  if (remoteEnabled === 'true') {
-    import('./server/api-server').then(async ({ ApiServer }) => {
-      const { getOrCreateAuthToken } = await import('./server/auth')
-      const port = parseInt(dbService.getSetting('remotePort') || '7437')
-      const bindAddress = dbService.getSetting('remoteBindAddress') || '127.0.0.1'
-      const authToken = getOrCreateAuthToken(dbService)
-
-      // Check if port is already in use (e.g. previous instance still running)
-      const net = await import('net')
-      const portAvailable = await new Promise<boolean>((resolve) => {
-        const tester = net.createServer()
-        tester.once('error', () => resolve(false))
-        tester.listen(port, bindAddress, () => {
-          tester.close(() => resolve(true))
-        })
-      })
-
-      if (!portAvailable) {
-        console.log(`[remote-access] Port ${port} already in use, skipping auto-start (another instance may be running)`)
-        return
-      }
-
-      const { setGlobalApiServer } = await import('./ipc/handlers')
-      const server = new ApiServer(
-        { db: dbService, pty: ptyService, worktree: worktreeService, fileWatcher: fileWatcherService },
-        { port, bindAddress, authToken }
-      )
-      await server.start()
-      setGlobalApiServer(server)
-      console.log(`[remote-access] Auto-started on ${bindAddress}:${port}`)
-    }).catch((err) => {
-      console.error('[remote-access] Auto-start failed:', err)
-    })
-  }
-
-  // ── Statusline: auto-configure + watch rate limits ────────
-  // Install the statusline script and configure Claude Code to use it.
-  // Claude Code calls this script after every response with rate limit data.
-  const sorcererDir = path.join(os.homedir(), '.sorcerer')
-  const statuslineScript = path.join(sorcererDir, 'statusline.cjs')
-  try {
-    // Embed the script inline — avoids asset bundling concerns
-    const src = [
-      '// Sorcerer statusline script for Claude Code.',
-      '// Claude Code pipes JSON on stdin after every response.',
-      'const fs = require("fs"), path = require("path");',
-      'let input = "";',
-      'process.stdin.setEncoding("utf8");',
-      'process.stdin.on("data", (c) => { input += c });',
-      'process.stdin.on("end", () => {',
-      '  try {',
-      '    const d = JSON.parse(input), out = {};',
-      '    if (d.rate_limits) out.rateLimits = d.rate_limits;',
-      '    if (d.cost) out.cost = d.cost;',
-      '    out.model = (d.model && (d.model.display_name || d.model.id)) || "";',
-      '    out.timestamp = Date.now();',
-      '    const dir = path.join(require("os").homedir(), ".sorcerer");',
-      '    fs.mkdirSync(dir, { recursive: true });',
-      '    fs.writeFileSync(path.join(dir, "rate-limits.json"), JSON.stringify(out));',
-      '  } catch {}',
-      '});',
-    ].join('\n')
-    fs.mkdirSync(sorcererDir, { recursive: true })
-    // Only write if changed (avoid unnecessary fs events)
-    const existing = fs.existsSync(statuslineScript) ? fs.readFileSync(statuslineScript, 'utf8') : ''
-    if (src !== existing) fs.writeFileSync(statuslineScript, src)
-
-    // Auto-configure Claude Code settings to use our statusline
-    const claudeSettingsPath = path.join(os.homedir(), '.claude', 'settings.json')
-    if (fs.existsSync(claudeSettingsPath)) {
-      const settings = JSON.parse(fs.readFileSync(claudeSettingsPath, 'utf8'))
-      const expectedCmd = `node "${statuslineScript.replace(/\\/g, '/')}"`
-      if (!settings.statusLine || settings.statusLine.command !== expectedCmd) {
-        settings.statusLine = { type: 'command', command: expectedCmd }
-        fs.writeFileSync(claudeSettingsPath, JSON.stringify(settings, null, 2))
-        console.log('[statusline] Configured Claude Code to use Sorcerer statusline')
-      }
-    }
-  } catch (err) {
-    console.log('[statusline] Setup failed (non-fatal):', err)
-  }
-
-  // Watch rate-limits.json for changes pushed by the statusline script
-  const rateLimitsPath = path.join(sorcererDir, 'rate-limits.json')
-  try {
-    // Ensure the file exists so fs.watch has something to watch
-    if (!fs.existsSync(rateLimitsPath)) fs.writeFileSync(rateLimitsPath, '{}')
-    let debounce: ReturnType<typeof setTimeout> | null = null
-    fs.watch(rateLimitsPath, () => {
-      if (debounce) clearTimeout(debounce)
-      debounce = setTimeout(() => {
-        try {
-          const data = JSON.parse(fs.readFileSync(rateLimitsPath, 'utf8'))
-          if (mainWindow && !mainWindow.isDestroyed()) {
-            mainWindow.webContents.send('rate-limits:updated', data)
-          }
-        } catch { /* ignore parse errors */ }
-      }, 200)
-    })
-  } catch (err) {
-    console.log('[statusline] Rate limit watcher failed (non-fatal):', err)
-  }
-
   // Save window bounds on resize/move
   mainWindow.on('resize', saveWindowBounds)
   mainWindow.on('move', saveWindowBounds)
@@ -392,6 +207,205 @@ async function createWindow(): Promise<void> {
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url)
     return { action: 'deny' }
+  })
+
+  setImmediate(() => {
+    void (async () => {
+      try {
+        refreshProviderRegistry(dbService)
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('providers:updated')
+        }
+      } catch (err) {
+        console.error('[providers] Startup refresh failed (non-fatal):', err)
+      }
+
+      // One-time cleanup: clear mock team_name values from sessions
+      try {
+        if (!dbService.getSetting('teamLinkCleanupDone')) {
+          const allSessions = dbService.listSessions()
+          for (const s of allSessions) {
+            if (s.team_name) {
+              dbService.updateSession(s.id, { team_name: null })
+            }
+          }
+          dbService.setSetting('teamLinkCleanupDone', '1')
+        }
+      } catch (err) {
+        console.error('[startup] Team cleanup failed:', err)
+      }
+
+      // Crash recovery: auto-commit orphaned worktrees
+      try {
+        const allProjects = dbService.listProjects()
+        const allSessions = dbService.listSessions()
+        for (const project of allProjects) {
+          try {
+            const gitDir = path.join(project.path as string, '.git')
+            if (!fs.existsSync(gitDir)) continue
+
+            const worktrees = await worktreeService.list(project.path)
+            const root = worktreeService.getWorkspacesRoot()
+
+            for (const wt of worktrees) {
+              if (!wt.startsWith(root)) continue
+
+              const hasSession = allSessions.some(
+                (s: any) => s.worktree_path === wt && s.status !== 'deleted'
+              )
+
+              if (!hasSession) {
+                console.log('[crash-recovery] Orphaned worktree found:', wt)
+                const commitResult = await worktreeService.autoCommit(wt)
+                if (commitResult.committed) {
+                  console.log('[crash-recovery] Auto-committed orphaned work:', commitResult.message)
+                }
+              }
+            }
+          } catch (err) {
+            console.log('[crash-recovery] Failed to check project:', project.name, err)
+          }
+        }
+      } catch (err) {
+        console.error('[crash-recovery] Failed:', err)
+      }
+
+      // Recover orphaned worktree directories that lack DB session records
+      try {
+        const services = { db: dbService, pty: ptyService, worktree: worktreeService, fileWatcher: fileWatcherService }
+        const allProjects = dbService.listProjects()
+        for (const project of allProjects) {
+          try {
+            const result = await syncWorktrees(services, project.id)
+            if (result.created > 0 || result.removed > 0) {
+              console.log(`[startup-sync] ${project.name}: recovered ${result.created}, cleaned ${result.removed}`)
+            }
+          } catch (err) {
+            console.log('[startup-sync] Failed for project:', project.name, err)
+          }
+        }
+      } catch (err) {
+        console.error('[startup-sync] Failed:', err)
+      }
+
+      // Auto-start agents configured for auto_start (immediate, outside of schedule)
+      try {
+        const autoStartAgents = dbService.listAgents().filter((a: any) => a.auto_start === 1 && a.mission)
+        if (autoStartAgents.length > 0) {
+          for (const agent of autoStartAgents) {
+            try {
+              orchestrator.runNow(agent.id)
+              console.log(`[startup] Auto-started agent: ${agent.name}`)
+            } catch (err) {
+              console.error(`[startup] Failed to auto-start agent ${agent.name}:`, err)
+            }
+          }
+        }
+      } catch (err) {
+        console.error('[startup] Auto-start agent scan failed:', err)
+      }
+
+      // Auto-start remote access if previously enabled
+      try {
+        const remoteEnabled = dbService.getSetting('remoteEnabled')
+        if (remoteEnabled === 'true') {
+          import('./server/api-server').then(async ({ ApiServer }) => {
+            const { getOrCreateAuthToken } = await import('./server/auth')
+            const port = parseInt(dbService.getSetting('remotePort') || '7437')
+            const bindAddress = dbService.getSetting('remoteBindAddress') || '127.0.0.1'
+            const authToken = getOrCreateAuthToken(dbService)
+
+            const net = await import('net')
+            const portAvailable = await new Promise<boolean>((resolve) => {
+              const tester = net.createServer()
+              tester.once('error', () => resolve(false))
+              tester.listen(port, bindAddress, () => {
+                tester.close(() => resolve(true))
+              })
+            })
+
+            if (!portAvailable) {
+              console.log(`[remote-access] Port ${port} already in use, skipping auto-start (another instance may be running)`)
+              return
+            }
+
+            const { setGlobalApiServer } = await import('./ipc/handlers')
+            const server = new ApiServer(
+              { db: dbService, pty: ptyService, worktree: worktreeService, fileWatcher: fileWatcherService },
+              { port, bindAddress, authToken }
+            )
+            await server.start()
+            setGlobalApiServer(server)
+            console.log(`[remote-access] Auto-started on ${bindAddress}:${port}`)
+          }).catch((err) => {
+            console.error('[remote-access] Auto-start failed:', err)
+          })
+        }
+      } catch (err) {
+        console.error('[remote-access] Startup check failed:', err)
+      }
+
+      // ── Statusline: auto-configure + watch rate limits ────────
+      const sorcererDir = path.join(os.homedir(), '.sorcerer')
+      const statuslineScript = path.join(sorcererDir, 'statusline.cjs')
+      try {
+        const src = [
+          '// Sorcerer statusline script for Claude Code.',
+          '// Claude Code pipes JSON on stdin after every response.',
+          'const fs = require("fs"), path = require("path");',
+          'let input = "";',
+          'process.stdin.setEncoding("utf8");',
+          'process.stdin.on("data", (c) => { input += c });',
+          'process.stdin.on("end", () => {',
+          '  try {',
+          '    const d = JSON.parse(input), out = {};',
+          '    if (d.rate_limits) out.rateLimits = d.rate_limits;',
+          '    if (d.cost) out.cost = d.cost;',
+          '    out.model = (d.model && (d.model.display_name || d.model.id)) || "";',
+          '    out.timestamp = Date.now();',
+          '    const dir = path.join(require("os").homedir(), ".sorcerer");',
+          '    fs.mkdirSync(dir, { recursive: true });',
+          '    fs.writeFileSync(path.join(dir, "rate-limits.json"), JSON.stringify(out));',
+          '  } catch {}',
+          '});',
+        ].join('\n')
+        fs.mkdirSync(sorcererDir, { recursive: true })
+        const existing = fs.existsSync(statuslineScript) ? fs.readFileSync(statuslineScript, 'utf8') : ''
+        if (src !== existing) fs.writeFileSync(statuslineScript, src)
+
+        const claudeSettingsPath = path.join(os.homedir(), '.claude', 'settings.json')
+        if (fs.existsSync(claudeSettingsPath)) {
+          const settings = JSON.parse(fs.readFileSync(claudeSettingsPath, 'utf8'))
+          const expectedCmd = `node "${statuslineScript.replace(/\\/g, '/')}"`
+          if (!settings.statusLine || settings.statusLine.command !== expectedCmd) {
+            settings.statusLine = { type: 'command', command: expectedCmd }
+            fs.writeFileSync(claudeSettingsPath, JSON.stringify(settings, null, 2))
+            console.log('[statusline] Configured Claude Code to use Sorcerer statusline')
+          }
+        }
+      } catch (err) {
+        console.log('[statusline] Setup failed (non-fatal):', err)
+      }
+
+      const rateLimitsPath = path.join(sorcererDir, 'rate-limits.json')
+      try {
+        if (!fs.existsSync(rateLimitsPath)) fs.writeFileSync(rateLimitsPath, '{}')
+        let debounce: ReturnType<typeof setTimeout> | null = null
+        fs.watch(rateLimitsPath, () => {
+          if (debounce) clearTimeout(debounce)
+          debounce = setTimeout(() => {
+            try {
+              const data = JSON.parse(fs.readFileSync(rateLimitsPath, 'utf8'))
+              if (mainWindow && !mainWindow.isDestroyed()) {
+                mainWindow.webContents.send('rate-limits:updated', data)
+              }
+            } catch { /* ignore parse errors */ }
+          }, 200)
+        })
+      } catch (err) {
+        console.log('[statusline] Rate limit watcher failed (non-fatal):', err)
+      }
+    })()
   })
 }
 
