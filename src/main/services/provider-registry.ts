@@ -36,6 +36,27 @@ export function getDefaultProviderId(db: DatabaseService): string {
   return providers.find((provider) => provider.isDefault)?.id || providers[0]?.id || 'claude'
 }
 
+export function resolveLaunchModel(
+  db: DatabaseService,
+  providerId: string,
+  requestedModel?: string,
+  options?: { refresh?: boolean }
+): string {
+  const providers = options?.refresh ? refreshProviders(db) : listProviders(db)
+  const provider = providers.find((entry) => entry.id === providerId)
+  if (!provider || !provider.supportsModelOverride) return ''
+
+  const normalizedRequested = requestedModel?.trim() || ''
+  if (providerId === 'codex') {
+    if (normalizedRequested && !provider.models.includes(normalizedRequested)) {
+      return normalizedRequested
+    }
+    return provider.defaultModel || normalizedRequested || provider.models[0] || ''
+  }
+
+  return normalizedRequested || provider.defaultModel || provider.models[0] || ''
+}
+
 export function listProviders(db: DatabaseService): ProviderRegistryEntry[] {
   const cached = readStoredRegistry(db)
   if (!cached || cached.providers.length === 0) {

@@ -19,6 +19,7 @@ import { DatabaseService } from './database-service'
 import { PTYService } from './pty-service'
 import { ensureProviderTrust } from '../ipc/shared-handlers'
 import { getProviderRunner } from './provider-runners'
+import { resolveLaunchModel } from './provider-registry'
 
 interface RunningAgent {
   agentId: string
@@ -106,6 +107,7 @@ export class AgentOrchestrator {
     fs.mkdirSync(cwd, { recursive: true })
 
     const providerId = (agent.provider as string) || 'claude'
+    const resolvedModel = resolveLaunchModel(this.db, providerId, agent.model as string, { refresh: providerId === 'codex' })
     const runner = getProviderRunner(providerId)
 
     ensureProviderTrust(providerId, cwd)
@@ -118,7 +120,7 @@ export class AgentOrchestrator {
       mcpConfig: agent.mcp_config as string,
       bypassPermissions: agent.bypass_permissions !== 0,
       hasHistory,
-      model: agent.model as string
+      model: resolvedModel
     })
 
     const startedAt = Math.floor(Date.now() / 1000)
@@ -131,6 +133,9 @@ export class AgentOrchestrator {
       args,
       env: runner.getEnv(agentId)
     })
+    if (resolvedModel !== (agent.model as string)) {
+      this.db.updateAgent(agentId, { model: resolvedModel })
+    }
 
     const pid = this.pty.getPid(agentId)
     this.db.updateAgent(agentId, { status: 'active', pid: pid ?? null, last_run_at: startedAt })

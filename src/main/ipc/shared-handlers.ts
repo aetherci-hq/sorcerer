@@ -3,12 +3,13 @@ import path from 'path'
 import fs from 'fs'
 import os from 'os'
 import simpleGit from 'simple-git'
+import initSqlJs from 'sql.js'
 import { PTYService } from '../services/pty-service'
 import { DatabaseService } from '../services/database-service'
 import { WorktreeService } from '../services/worktree-service'
 import { FileWatcherService } from '../services/file-watcher-service'
 import { getProviderRunner } from '../services/provider-runners'
-import { getDefaultProviderId, listProviders as listProviderRegistry, refreshProviders as refreshProviderRegistry } from '../services/provider-registry'
+import { getDefaultProviderId, listProviders as listProviderRegistry, refreshProviders as refreshProviderRegistry, resolveLaunchModel } from '../services/provider-registry'
 
 // ── Services interface ──────────────────────────────────────
 
@@ -19,6 +20,8 @@ export interface HandlerServices {
   fileWatcher: FileWatcherService
 }
 
+let sqlJsPromise: Promise<any> | null = null
+
 // ── Helpers ─────────────────────────────────────────────────
 
 /**
@@ -28,15 +31,7 @@ export interface HandlerServices {
  * Returns true if at least one .jsonl conversation file exists.
  */
 export function hasClaudeConversation(cwd: string): boolean {
-  const encoded = cwd.replace(/[^a-zA-Z0-9]/g, '-')
-  const convDir = path.join(os.homedir(), '.claude', 'projects', encoded)
-  if (!fs.existsSync(convDir)) return false
-  try {
-    const entries = fs.readdirSync(convDir)
-    return entries.some((e) => e.endsWith('.jsonl'))
-  } catch {
-    return false
-  }
+  return hasClaudeRuntimeSession(cwd) || hasClaudeTranscript(cwd)
 }
 
 /**
@@ -47,6 +42,67 @@ function getConvDir(cwd: string): string {
   return path.join(os.homedir(), '.claude', 'projects', encoded)
 }
 
+function getClaudeSessionsDir(): string {
+  return path.join(os.homedir(), '.claude', 'sessions')
+}
+
+function readClaudeRuntimeSessions(cwd?: string): Array<{ sessionId: string; cwd: string; startedAt: number }> {
+  const sessionsDir = getClaudeSessionsDir()
+  if (!fs.existsSync(sessionsDir)) return []
+
+  const normalizedCwd = cwd ? normalizeComparablePath(cwd) : null
+
+  try {
+    return fs.readdirSync(sessionsDir)
+      .filter((entry) => entry.endsWith('.json'))
+      .map((entry) => {
+        try {
+          const raw = JSON.parse(fs.readFileSync(path.join(sessionsDir, entry), 'utf8')) as {
+            sessionId?: string
+            cwd?: string
+            startedAt?: number
+          }
+          if (!raw.sessionId || !raw.cwd) return null
+          if (normalizedCwd && normalizeComparablePath(raw.cwd) !== normalizedCwd) return null
+          return {
+            sessionId: String(raw.sessionId),
+            cwd: String(raw.cwd),
+            startedAt: Number(raw.startedAt || 0)
+          }
+        } catch {
+          return null
+        }
+      })
+      .filter((entry): entry is { sessionId: string; cwd: string; startedAt: number } => entry !== null)
+      .sort((left, right) => right.startedAt - left.startedAt)
+  } catch {
+    return []
+  }
+}
+
+function hasClaudeRuntimeSession(cwd: string): boolean {
+  return readClaudeRuntimeSessions(cwd).length > 0
+}
+
+function hasClaudeTranscript(cwd: string): boolean {
+  const convDir = getConvDir(cwd)
+  if (!fs.existsSync(convDir)) return false
+  try {
+    const entries = fs.readdirSync(convDir)
+    return entries.some((entry) => entry.endsWith('.jsonl'))
+  } catch {
+    return false
+  }
+}
+
+function runtimeSessionExists(cwd: string, claudeSessionId: string): boolean {
+  return readClaudeRuntimeSessions(cwd).some((entry) => entry.sessionId === claudeSessionId)
+}
+
+function findMostRecentClaudeRuntimeSession(cwd: string): string | null {
+  return readClaudeRuntimeSessions(cwd)[0]?.sessionId || null
+}
+
 /**
  * Check whether a specific claude_session_id has a conversation file on disk.
  */
@@ -54,6 +110,10 @@ function conversationFileExists(cwd: string, claudeSessionId: string): boolean {
   const convDir = getConvDir(cwd)
   const filePath = path.join(convDir, `${claudeSessionId}.jsonl`)
   return fs.existsSync(filePath)
+}
+
+function claudeSessionExists(cwd: string, claudeSessionId: string): boolean {
+  return runtimeSessionExists(cwd, claudeSessionId) || conversationFileExists(cwd, claudeSessionId)
 }
 
 /**
@@ -93,6 +153,105 @@ export function ensureProviderTrust(provider: string, cwd: string): void {
     }
   } catch {
     // Best effort — don't block agent launch if we can't write
+  }
+}
+
+function normalizeComparablePath(targetPath: string): string {
+  return targetPath.replace(/^\\\\\?\\/, '').replace(/\//g, '\\').toLowerCase()
+}
+
+function getLatestCodexStateDbPath(): string | null {
+  const codexDir = path.join(os.homedir(), '.codex')
+  if (!fs.existsSync(codexDir)) return null
+
+  try {
+    const entries = fs.readdirSync(codexDir)
+      .filter((entry) => /^state.*\.sqlite$/i.test(entry))
+      .map((entry) => ({
+        name: entry,
+        mtime: fs.statSync(path.join(codexDir, entry)).mtimeMs
+      }))
+      .sort((a, b) => b.mtime - a.mtime)
+    return entries.length > 0 ? path.join(codexDir, entries[0].name) : null
+  } catch {
+    return null
+  }
+}
+
+async function getSqlJs(): Promise<any> {
+  if (!sqlJsPromise) {
+    const sqlJsDir = path.dirname(require.resolve('sql.js'))
+    const wasmPath = path.join(sqlJsDir, 'sql-wasm.wasm')
+    sqlJsPromise = initSqlJs({
+      locateFile: () => wasmPath
+    })
+  }
+  return sqlJsPromise
+}
+
+export function extractCodexThreadIdFromOutput(output: string): string | null {
+  const cleaned = output.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '').replace(/\r/g, '')
+  const match = cleaned.match(/\bcodex resume(?:\s+--)?\s+([0-9a-fA-F-]{36})\b/)
+  return match?.[1] || null
+}
+
+export async function findCodexThreadIdForCwd(
+  cwd: string,
+  startedAt?: number | null
+): Promise<string | null> {
+  const stateDbPath = getLatestCodexStateDbPath()
+  if (!stateDbPath || !fs.existsSync(stateDbPath)) return null
+
+  const SQL = await getSqlJs()
+  const stateDb = new SQL.Database(fs.readFileSync(stateDbPath))
+  const wantedCwd = normalizeComparablePath(cwd)
+
+  try {
+    const stmt = stateDb.prepare(`
+      SELECT id, cwd, created_at, updated_at
+      FROM threads
+      WHERE archived = 0 AND source = 'cli'
+      ORDER BY updated_at DESC
+      LIMIT 200
+    `)
+
+    const matches: Array<{ id: string; created_at: number; updated_at: number }> = []
+    while (stmt.step()) {
+      const row = stmt.getAsObject() as {
+        id?: string
+        cwd?: string
+        created_at?: number
+        updated_at?: number
+      }
+      if (!row.id || !row.cwd) continue
+      if (normalizeComparablePath(String(row.cwd)) !== wantedCwd) continue
+      matches.push({
+        id: String(row.id),
+        created_at: Number(row.created_at || 0),
+        updated_at: Number(row.updated_at || 0)
+      })
+    }
+    stmt.free()
+
+    if (matches.length === 0) return null
+
+    if (startedAt) {
+      const recentMatches = matches.filter((match) => match.created_at >= startedAt - 300)
+      const pool = recentMatches.length > 0 ? recentMatches : matches
+      pool.sort((left, right) => {
+        const leftDistance = Math.abs(left.created_at - startedAt)
+        const rightDistance = Math.abs(right.created_at - startedAt)
+        if (leftDistance !== rightDistance) return leftDistance - rightDistance
+        return right.updated_at - left.updated_at
+      })
+      return pool[0]?.id || null
+    }
+
+    return matches[0]?.id || null
+  } catch {
+    return null
+  } finally {
+    stateDb.close()
   }
 }
 
@@ -173,7 +332,8 @@ const RESUME_FAILURE_PATTERNS = [
   'No conversation found',
   'no conversation found',
   'Could not find conversation',
-  'could not find conversation'
+  'could not find conversation',
+  'No saved session found with ID'
 ]
 
 /**
@@ -389,6 +549,7 @@ export async function createSession(
   model: string = ''
 ): Promise<any> {
   const resolvedProvider = provider || getDefaultProviderId(db)
+  const resolvedModel = resolveLaunchModel(db, resolvedProvider, model, { refresh: resolvedProvider === 'codex' })
   console.log('[session:create] Starting:', { projectId, sessionName, useMainRepo, remoteControl })
   const project = db.getProject(projectId)
   if (!project) throw new Error('Project not found')
@@ -441,9 +602,10 @@ export async function createSession(
     bypass_permissions: skipPerms ? 1 : 0,
     remote_control: rc,
     claude_session_id: claudeSessionId,
+    provider_session_id: null,
     started_at: startedAt,
     provider: resolvedProvider,
-    model
+    model: resolvedModel
   })
   console.log('[session:create] Session saved:', { id, claudeSessionId, status: session?.status })
 
@@ -452,7 +614,7 @@ export async function createSession(
 
   const args = runner.getArgs({
     bypassPermissions: skipPerms,
-    model
+    model: resolvedModel
   })
 
   // Add provider-specific session pinning
@@ -679,25 +841,35 @@ export async function restartSession(
     pty.spawn(sessionId, cwd)
   } else {
     const provider = (session.provider as string) || 'claude'
+    const resolvedModel = resolveLaunchModel(db, provider, session.model as string, { refresh: provider === 'codex' })
     const runner = getProviderRunner(provider)
     ensureProviderTrust(provider, cwd)
 
     const args = runner.getArgs({
       bypassPermissions: session.bypass_permissions !== 0,
-      model: session.model as string
+      model: resolvedModel
     })
 
     if (provider === 'claude') {
       const newClaudeSessionId = uuidv4()
       db.updateSession(sessionId, { claude_session_id: newClaudeSessionId })
       args.push('--session-id', newClaudeSessionId)
+    } else if (provider === 'codex') {
+      db.updateSession(sessionId, { provider_session_id: null })
     }
 
+    const updates: Record<string, unknown> = {}
+    if (resolvedModel !== (session.model as string)) {
+      updates.model = resolvedModel
+    }
     pty.spawn(sessionId, cwd, {
       command: runner.resolveBinary(),
       args,
       env: runner.getEnv(sessionId)
     })
+    if (Object.keys(updates).length > 0) {
+      db.updateSession(sessionId, updates)
+    }
 
     // Re-enable Remote Control if previously set
     if (session.remote_control && provider === 'claude') {
@@ -729,9 +901,11 @@ export async function resumeSession(
 
   if (session.type === 'quick-terminal') {
     // Quick terminal: just restart the shell
+    console.log(`[session:resume] ${sessionId}: quick-terminal restart in ${cwd}`)
     pty.spawn(sessionId, cwd)
   } else {
     const provider = (session.provider as string) || 'claude'
+    const resolvedModel = resolveLaunchModel(db, provider, session.model as string, { refresh: provider === 'codex' })
     const runner = getProviderRunner(provider)
     ensureProviderTrust(provider, cwd)
 
@@ -739,38 +913,83 @@ export async function resumeSession(
 
     if (provider === 'claude') {
       let claudeSessionId = session.claude_session_id as string | undefined
-      if (claudeSessionId && !conversationFileExists(cwd, claudeSessionId)) {
-        console.log(`[session:resume] Stored claude_session_id ${claudeSessionId} not found on disk, searching for conversation...`)
-        const actual = findMostRecentConversation(cwd)
+      let selectionSource = claudeSessionId ? 'stored' : 'none'
+      if (claudeSessionId && !claudeSessionExists(cwd, claudeSessionId)) {
+        console.log(`[session:resume] Stored claude_session_id ${claudeSessionId} not found in Claude state, searching for recoverable session...`)
+        const actual =
+          findMostRecentConversation(cwd) ||
+          findMostRecentClaudeRuntimeSession(cwd)
         if (actual) {
-          console.log(`[session:resume] Found conversation on disk: ${actual}`)
+          console.log(`[session:resume] Recovered Claude session: ${actual}`)
           claudeSessionId = actual
+          selectionSource = 'recovered'
           db.updateSession(sessionId, { claude_session_id: claudeSessionId })
         } else {
-          console.log(`[session:resume] No conversation files found for cwd: ${cwd}`)
+          console.log(`[session:resume] No Claude resume target found for cwd: ${cwd}`)
           claudeSessionId = undefined
+          selectionSource = 'fresh'
+        }
+      } else if (claudeSessionId && !conversationFileExists(cwd, claudeSessionId)) {
+        const transcriptSessionId = findMostRecentConversation(cwd)
+        if (transcriptSessionId && transcriptSessionId !== claudeSessionId) {
+          console.log(`[session:resume] Replacing runtime-only Claude session ${claudeSessionId} with transcript session ${transcriptSessionId}`)
+          claudeSessionId = transcriptSessionId
+          selectionSource = 'transcript-upgrade'
+          db.updateSession(sessionId, { claude_session_id: claudeSessionId })
         }
       }
 
       args = runner.getArgs({
         bypassPermissions: session.bypass_permissions !== 0,
-        model: session.model as string
+        model: resolvedModel
       })
 
       if (claudeSessionId) {
         args.push('--resume', claudeSessionId)
+        console.log(`[session:resume] ${sessionId}: provider=claude mode=resume source=${selectionSource} target=${claudeSessionId} cwd=${cwd}`)
       } else {
         claudeSessionId = uuidv4()
         db.updateSession(sessionId, { claude_session_id: claudeSessionId })
         args.push('--session-id', claudeSessionId)
+        console.log(`[session:resume] ${sessionId}: provider=claude mode=fresh-session-id target=${claudeSessionId} cwd=${cwd}`)
       }
       trackResume(sessionId)
+    } else if (provider === 'codex') {
+      let providerSessionId = session.provider_session_id as string | undefined
+      let selectionSource = providerSessionId ? 'stored' : 'none'
+      if (!providerSessionId) {
+        providerSessionId =
+          extractCodexThreadIdFromOutput(pty.scrollback.getScrollback(sessionId)) ||
+          await findCodexThreadIdForCwd(cwd, session.started_at as number | null)
+        if (providerSessionId) {
+          console.log(`[session:resume] Found Codex thread: ${providerSessionId}`)
+          selectionSource = 'discovered'
+          db.updateSession(sessionId, { provider_session_id: providerSessionId })
+        } else {
+          console.log(`[session:resume] No Codex thread id stored for ${sessionId}; falling back to fresh launch`)
+          selectionSource = 'fresh'
+        }
+      }
+
+      const baseArgs = runner.getArgs({
+        bypassPermissions: session.bypass_permissions !== 0,
+        model: resolvedModel
+      })
+
+      args = providerSessionId ? ['resume', providerSessionId, ...baseArgs] : baseArgs
+      if (providerSessionId) {
+        console.log(`[session:resume] ${sessionId}: provider=codex mode=resume source=${selectionSource} target=${providerSessionId} cwd=${cwd}`)
+      } else {
+        console.log(`[session:resume] ${sessionId}: provider=codex mode=fresh cwd=${cwd}`)
+      }
+      if (providerSessionId) trackResume(sessionId)
     } else {
       args = runner.getArgs({
         bypassPermissions: session.bypass_permissions !== 0,
-        model: session.model as string,
+        model: resolvedModel,
         hasHistory: true
       })
+      console.log(`[session:resume] ${sessionId}: provider=${provider} mode=history cwd=${cwd}`)
     }
 
     pty.spawn(sessionId, cwd, {
@@ -778,6 +997,9 @@ export async function resumeSession(
       args,
       env: runner.getEnv(sessionId)
     })
+    if (resolvedModel !== (session.model as string)) {
+      db.updateSession(sessionId, { model: resolvedModel })
+    }
 
     // Re-enable Remote Control if previously set
     if (session.remote_control && provider === 'claude') {
@@ -1001,6 +1223,7 @@ export function addAgent(
 ): any {
   const id = data.id || uuidv4()
   const resolvedProvider = data.provider || getDefaultProviderId(db)
+  const resolvedModel = resolveLaunchModel(db, resolvedProvider, data.model, { refresh: resolvedProvider === 'codex' })
   // Create scratch directory for this agent
   const cwd = path.join(os.homedir(), '.sorcerer', 'agents', id)
   fs.mkdirSync(cwd, { recursive: true })
@@ -1016,9 +1239,9 @@ export function addAgent(
     max_restarts: data.max_restarts ?? 10,
     schedule_minutes: data.schedule_minutes ?? 0,
     provider: resolvedProvider,
-    model: data.model || ''
+    model: resolvedModel
   })
-  writeAgentManifest(id, { ...data, provider: resolvedProvider })
+  writeAgentManifest(id, { ...data, provider: resolvedProvider, model: resolvedModel })
   return agent
 }
 
@@ -1079,6 +1302,7 @@ export function startAgent(
   fs.mkdirSync(cwd, { recursive: true })
   
   const provider = (agent.provider as string) || 'claude'
+  const resolvedModel = resolveLaunchModel(db, provider, agent.model as string, { refresh: provider === 'codex' })
   const runner = getProviderRunner(provider)
   ensureProviderTrust(provider, cwd)
 
@@ -1087,7 +1311,7 @@ export function startAgent(
     systemPrompt: agent.system_prompt as string,
     mcpConfig: agent.mcp_config as string,
     bypassPermissions: agent.bypass_permissions !== 0,
-    model: agent.model as string
+    model: resolvedModel
   })
 
   if (provider === 'claude') {
@@ -1100,6 +1324,9 @@ export function startAgent(
     args,
     env: runner.getEnv(agentId)
   })
+  if (resolvedModel !== (agent.model as string)) {
+    db.updateAgent(agentId, { model: resolvedModel })
+  }
   const pid = pty.getPid(agentId)
   db.updateAgent(agentId, { status: 'active', pid: pid ?? null })
 
@@ -1126,6 +1353,7 @@ export function resumeAgent(
   fs.mkdirSync(cwd, { recursive: true })
   
   const provider = (agent.provider as string) || 'claude'
+  const resolvedModel = resolveLaunchModel(db, provider, agent.model as string, { refresh: provider === 'codex' })
   const runner = getProviderRunner(provider)
   ensureProviderTrust(provider, cwd)
 
@@ -1134,7 +1362,7 @@ export function resumeAgent(
     systemPrompt: agent.system_prompt as string,
     mcpConfig: agent.mcp_config as string,
     bypassPermissions: agent.bypass_permissions !== 0,
-    model: agent.model as string,
+    model: resolvedModel,
     hasHistory: true
   })
 
@@ -1147,6 +1375,9 @@ export function resumeAgent(
     args,
     env: runner.getEnv(agentId)
   })
+  if (resolvedModel !== (agent.model as string)) {
+    db.updateAgent(agentId, { model: resolvedModel })
+  }
   const pid = pty.getPid(agentId)
   db.updateAgent(agentId, { status: 'active', pid: pid ?? null })
 
@@ -1173,6 +1404,7 @@ export function restartAgent(
   fs.mkdirSync(cwd, { recursive: true })
   
   const provider = (agent.provider as string) || 'claude'
+  const resolvedModel = resolveLaunchModel(db, provider, agent.model as string, { refresh: provider === 'codex' })
   const runner = getProviderRunner(provider)
   ensureProviderTrust(provider, cwd)
 
@@ -1181,7 +1413,7 @@ export function restartAgent(
     systemPrompt: agent.system_prompt as string,
     mcpConfig: agent.mcp_config as string,
     bypassPermissions: agent.bypass_permissions !== 0,
-    model: agent.model as string,
+    model: resolvedModel,
     hasHistory: false
   })
 
@@ -1195,6 +1427,9 @@ export function restartAgent(
     args,
     env: runner.getEnv(agentId)
   })
+  if (resolvedModel !== (agent.model as string)) {
+    db.updateAgent(agentId, { model: resolvedModel })
+  }
   const pid = pty.getPid(agentId)
   db.updateAgent(agentId, { status: 'active', pid: pid ?? null })
 
