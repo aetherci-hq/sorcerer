@@ -8,7 +8,7 @@ import { DatabaseService } from '../services/database-service'
 import { WorktreeService } from '../services/worktree-service'
 import { FileWatcherService } from '../services/file-watcher-service'
 import { getProviderRunner } from '../services/provider-runners'
-import { listProviders as listProviderRegistry, refreshProviders as refreshProviderRegistry } from '../services/provider-registry'
+import { getDefaultProviderId, listProviders as listProviderRegistry, refreshProviders as refreshProviderRegistry } from '../services/provider-registry'
 
 // ── Services interface ──────────────────────────────────────
 
@@ -385,9 +385,10 @@ export async function createSession(
   useMainRepo?: boolean,
   bypassPermissions?: boolean,
   remoteControl?: boolean,
-  provider: string = 'claude',
+  provider?: string,
   model: string = ''
 ): Promise<any> {
+  const resolvedProvider = provider || getDefaultProviderId(db)
   console.log('[session:create] Starting:', { projectId, sessionName, useMainRepo, remoteControl })
   const project = db.getProject(projectId)
   if (!project) throw new Error('Project not found')
@@ -441,13 +442,13 @@ export async function createSession(
     remote_control: rc,
     claude_session_id: claudeSessionId,
     started_at: startedAt,
-    provider,
+    provider: resolvedProvider,
     model
   })
   console.log('[session:create] Session saved:', { id, claudeSessionId, status: session?.status })
 
-  const runner = getProviderRunner(provider)
-  ensureProviderTrust(provider, worktreePath)
+  const runner = getProviderRunner(resolvedProvider)
+  ensureProviderTrust(resolvedProvider, worktreePath)
 
   const args = runner.getArgs({
     bypassPermissions: skipPerms,
@@ -455,7 +456,7 @@ export async function createSession(
   })
 
   // Add provider-specific session pinning
-  if (provider === 'claude') {
+  if (resolvedProvider === 'claude') {
     args.push('--session-id', claudeSessionId)
   }
 
@@ -465,7 +466,7 @@ export async function createSession(
     env: runner.getEnv(id)
   })
   const pid = pty.getPid(id)
-  console.log(`[session:create] ${provider} spawned, pid:`, pid)
+  console.log(`[session:create] ${resolvedProvider} spawned, pid:`, pid)
   if (pid) {
     db.updateSession(id, { pid })
   }
@@ -983,7 +984,7 @@ function writeAgentManifest(
     mcp_config: data.mcp_config || '',
     mission: data.mission || '',
     created_at: data.created_at || Math.floor(Date.now() / 1000),
-    provider: data.provider || 'claude',
+    provider: data.provider || '',
     model: data.model || ''
   }
   fs.writeFileSync(path.join(dir, 'agent.json'), JSON.stringify(manifest, null, 2), 'utf8')
@@ -999,10 +1000,11 @@ export function addAgent(
   }
 ): any {
   const id = data.id || uuidv4()
+  const resolvedProvider = data.provider || getDefaultProviderId(db)
   // Create scratch directory for this agent
   const cwd = path.join(os.homedir(), '.sorcerer', 'agents', id)
   fs.mkdirSync(cwd, { recursive: true })
-  ensureProviderTrust(data.provider || 'claude', cwd)
+  ensureProviderTrust(resolvedProvider, cwd)
   const agent = db.addAgent({
     id, ...data,
     bypass_permissions: (data.bypass_permissions !== false) ? 1 : 0,
@@ -1013,10 +1015,10 @@ export function addAgent(
     restart_delay: data.restart_delay ?? 30,
     max_restarts: data.max_restarts ?? 10,
     schedule_minutes: data.schedule_minutes ?? 0,
-    provider: data.provider || 'claude',
+    provider: resolvedProvider,
     model: data.model || ''
   })
-  writeAgentManifest(id, data)
+  writeAgentManifest(id, { ...data, provider: resolvedProvider })
   return agent
 }
 

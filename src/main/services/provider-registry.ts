@@ -31,6 +31,11 @@ export interface ProviderRegistryEntry extends StoredProviderEntry {
   isDefault: boolean
 }
 
+export function getDefaultProviderId(db: DatabaseService): string {
+  const providers = listProviders(db)
+  return providers.find((provider) => provider.isDefault)?.id || providers[0]?.id || 'claude'
+}
+
 export function listProviders(db: DatabaseService): ProviderRegistryEntry[] {
   const cached = readStoredRegistry(db)
   if (!cached || cached.providers.length === 0) {

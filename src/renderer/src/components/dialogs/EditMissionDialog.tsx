@@ -5,6 +5,7 @@ import { getApi } from '../../api/client'
 import { useUIStore } from '../../stores/useUIStore'
 import { useAgentStore } from '../../stores/useAgentStore'
 import { ChevronIcon } from '../icons'
+import { useProviders } from '../../hooks/useProviders'
 
 export function EditMissionDialog() {
   const { activeDialog, dialogTargetId, closeDialog } = useUIStore()
@@ -18,6 +19,7 @@ export function EditMissionDialog() {
   const [bypassPermissions, setBypassPermissions] = useState(true)
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [loading, setLoading] = useState(false)
+  const { defaultProvider } = useProviders()
 
   const open = activeDialog === 'edit-agent-mission'
   const agent = agents.find((a) => a.id === dialogTargetId)
@@ -65,7 +67,7 @@ export function EditMissionDialog() {
   if (!open || !agent) return null
 
   const hasMission = mission.trim().length > 0
-  const provider = agent.provider || 'claude'
+  const provider = agent.provider || defaultProvider?.id || 'claude'
   const bypassHint =
     provider === 'claude'
       ? 'Claude runs with --dangerously-skip-permissions.'

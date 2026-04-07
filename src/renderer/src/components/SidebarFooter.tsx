@@ -171,7 +171,8 @@ function getSessionRunStart(session: { started_at?: number | null; created_at?: 
 }
 
 function normalizeProvider(provider?: string | null): string {
-  const value = (provider || 'claude').toLowerCase()
+  if (!provider) return 'Default'
+  const value = provider.toLowerCase()
   if (value === 'google' || value === 'gemini') return 'Gemini'
   if (value === 'openai') return 'OpenAI'
   if (value === 'anthropic' || value === 'claude') return 'Claude'

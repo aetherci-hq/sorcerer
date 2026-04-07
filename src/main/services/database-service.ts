@@ -41,6 +41,10 @@ export class DatabaseService {
     await this.ready
   }
 
+  private getDefaultProviderFallback(): string {
+    return this.getSetting('defaultProvider') || 'claude'
+  }
+
   private runMigrations(): void {
     if (!this.db) return
 
@@ -436,7 +440,7 @@ export class DatabaseService {
        data.status || 'active',
        data.type || 'session', data.team_name || null, data.parent_session_id || null,
        data.bypass_permissions ?? 1, data.remote_control ?? 0, data.claude_session_id || null, data.started_at ?? null,
-       data.provider || 'claude', data.model || '']
+       data.provider || this.getDefaultProviderFallback(), data.model || '']
     )
     this.save()
     return this.getSession(data.id)
@@ -526,7 +530,7 @@ export class DatabaseService {
        data.bypass_permissions ?? 1, data.remote_control ?? 0,
        data.mission || '', data.auto_start ?? 0, data.auto_restart ?? 0,
        data.restart_delay ?? 30, data.max_restarts ?? 10, data.schedule_minutes ?? 0,
-       data.provider || 'claude', data.model || '']
+       data.provider || this.getDefaultProviderFallback(), data.model || '']
     )
     this.save()
     return this.getAgent(data.id)
