@@ -28,6 +28,20 @@
   --accent-dim:     #c48a2a;
   --accent-glow:    rgba(226, 164, 69, 0.12);
   --accent-glow-strong: rgba(226, 164, 69, 0.22);
+  --accent-line-faint: color-mix(in srgb, var(--accent) 3%, transparent);
+  --accent-line-soft: color-mix(in srgb, var(--accent) 6%, transparent);
+  --accent-surface-subtle: color-mix(in srgb, var(--accent) 10%, transparent);
+  --accent-border-faint: color-mix(in srgb, var(--accent) 20%, transparent);
+  --accent-border-soft: color-mix(in srgb, var(--accent) 25%, transparent);
+  --accent-border-medium: color-mix(in srgb, var(--accent) 30%, transparent);
+  --accent-border-regular: color-mix(in srgb, var(--accent) 35%, transparent);
+  --accent-border-strong: color-mix(in srgb, var(--accent) 40%, transparent);
+  --accent-border-stronger: color-mix(in srgb, var(--accent) 45%, transparent);
+  --accent-border-heavy: color-mix(in srgb, var(--accent) 50%, transparent);
+  --accent-surface-active: color-mix(in srgb, var(--accent) 28%, transparent);
+  --accent-shadow-faint: color-mix(in srgb, var(--accent) 6%, transparent);
+  --accent-shadow-soft: color-mix(in srgb, var(--accent) 8%, transparent);
+  --accent-shadow-medium: color-mix(in srgb, var(--accent) 10%, transparent);
 
   /* Status */
   --status-active:   #5ec269;
@@ -121,8 +135,8 @@ body {
   background: linear-gradient(
     to bottom,
     transparent 0%,
-    rgba(226, 164, 69, 0.06) 30%,
-    rgba(226, 164, 69, 0.03) 70%,
+    var(--accent-line-soft) 30%,
+    var(--accent-line-faint) 70%,
     transparent 100%
   );
   z-index: -1;
@@ -262,7 +276,7 @@ body {
 
 .action-btn--primary {
   background: var(--accent-glow);
-  border-color: rgba(226, 164, 69, 0.25);
+  border-color: var(--accent-border-soft);
   color: var(--accent);
   flex: 1;
   min-width: 34px;
@@ -286,13 +300,13 @@ body {
 
 .action-btn--primary:hover {
   background: var(--accent-glow-strong);
-  border-color: rgba(226, 164, 69, 0.4);
+  border-color: var(--accent-border-strong);
   color: var(--accent);
-  box-shadow: 0 0 20px rgba(226, 164, 69, 0.08);
+  box-shadow: 0 0 20px var(--accent-shadow-soft);
 }
 
 .action-btn--primary:active {
-  background: rgba(226, 164, 69, 0.28);
+  background: var(--accent-surface-active);
 }
 
 .action-btn--icon {
@@ -332,9 +346,9 @@ body {
 }
 
 .search-input:focus {
-  border-color: rgba(226, 164, 69, 0.35);
+  border-color: var(--accent-border-regular);
   background: var(--bg-sidebar);
-  box-shadow: 0 0 0 2px rgba(226, 164, 69, 0.06);
+  box-shadow: 0 0 0 2px var(--accent-shadow-faint);
 }
 
 .search-icon {
@@ -886,11 +900,11 @@ body {
   font-weight: 400;
   color: var(--text-primary);
   background: var(--bg-root);
-  border: 1px solid rgba(226, 164, 69, 0.35);
+  border: 1px solid var(--accent-border-regular);
   border-radius: var(--radius-sm);
   padding: 1px 6px;
   outline: none;
-  box-shadow: 0 0 0 2px rgba(226, 164, 69, 0.06);
+  box-shadow: 0 0 0 2px var(--accent-shadow-faint);
   flex: 1;
 }
 
@@ -1630,15 +1644,15 @@ body {
 /* Primary icon-only in collapsed mode */
 .action-btn--primary-icon {
   background: var(--accent-glow);
-  border-color: rgba(226, 164, 69, 0.25);
+  border-color: var(--accent-border-soft);
   color: var(--accent);
 }
 
 .action-btn--primary-icon:hover {
   background: var(--accent-glow-strong);
-  border-color: rgba(226, 164, 69, 0.4);
+  border-color: var(--accent-border-strong);
   color: var(--accent);
-  box-shadow: 0 0 20px rgba(226, 164, 69, 0.08);
+  box-shadow: 0 0 20px var(--accent-shadow-soft);
 }
 
 /* Collapsed tree — status dot buttons */
@@ -2051,8 +2065,8 @@ body {
 }
 
 .dialog-input:focus {
-  border-color: rgba(226, 164, 69, 0.35);
-  box-shadow: 0 0 0 2px rgba(226, 164, 69, 0.06);
+  border-color: var(--accent-border-regular);
+  box-shadow: 0 0 0 2px var(--accent-shadow-faint);
 }
 
 .dialog-select {
@@ -2397,14 +2411,14 @@ select.dialog-input option {
 
 .dialog-btn--primary {
   background: var(--accent-glow-strong);
-  border-color: rgba(226, 164, 69, 0.35);
+  border-color: var(--accent-border-regular);
   color: var(--accent);
 }
 
 .dialog-btn--primary:hover {
-  background: rgba(226, 164, 69, 0.28);
-  border-color: rgba(226, 164, 69, 0.5);
-  box-shadow: 0 0 16px rgba(226, 164, 69, 0.1);
+  background: var(--accent-surface-active);
+  border-color: var(--accent-border-heavy);
+  box-shadow: 0 0 16px var(--accent-shadow-medium);
 }
 
 .dialog-btn--danger {
@@ -2607,7 +2621,7 @@ select.dialog-input option {
   height: 34px;
   padding: 0 16px;
   background: var(--accent-glow);
-  border: 1px solid rgba(226, 164, 69, 0.25);
+  border: 1px solid var(--accent-border-soft);
   border-radius: var(--radius-md);
   color: var(--accent);
   font-family: var(--font-sans);
@@ -2619,8 +2633,8 @@ select.dialog-input option {
 
 .empty-state-btn:hover {
   background: var(--accent-glow-strong);
-  border-color: rgba(226, 164, 69, 0.4);
-  box-shadow: 0 0 20px rgba(226, 164, 69, 0.08);
+  border-color: var(--accent-border-strong);
+  box-shadow: 0 0 20px var(--accent-shadow-soft);
 }
 
 .empty-state-btn:active {
@@ -2693,7 +2707,7 @@ button:focus-visible,
 .dialog-select__trigger:focus-visible,
 .empty-state-btn:focus-visible,
 .tree-item-actions:focus-visible {
-  outline: 2px solid rgba(226, 164, 69, 0.4);
+  outline: 2px solid var(--accent-border-strong);
   outline-offset: 1px;
 }
 
@@ -2935,7 +2949,7 @@ button:focus-visible,
   content: '';
   position: absolute;
   inset: 1px;
-  border: 1px solid rgba(226, 164, 69, 0.3);
+  border: 1px solid var(--accent-border-medium);
   border-radius: 2px;
   pointer-events: none;
   z-index: 2;
@@ -3071,7 +3085,7 @@ button:focus-visible,
 }
 
 .split-panel--maximized-container .split-panel--focused::after {
-  border-color: rgba(226, 164, 69, 0.45);
+  border-color: var(--accent-border-stronger);
 }
 
 .focus-mode-overlay {
@@ -3610,8 +3624,8 @@ button:focus-visible,
 }
 
 .provider-status-badge--default {
-  border-color: rgba(226, 164, 69, 0.2);
-  background: rgba(226, 164, 69, 0.1);
+  border-color: var(--accent-border-faint);
+  background: var(--accent-surface-subtle);
   color: var(--accent);
 }
 
@@ -4123,7 +4137,7 @@ button:focus-visible,
 }
 
 .orphan-banner-link {
-  border: 1px solid rgba(226, 164, 69, 0.3);
+  border: 1px solid var(--accent-border-medium);
   background: var(--accent-glow-strong);
   color: var(--accent);
   font-family: var(--font-sans);
@@ -4136,8 +4150,8 @@ button:focus-visible,
 }
 
 .orphan-banner-link:hover {
-  background: rgba(226, 164, 69, 0.28);
-  border-color: rgba(226, 164, 69, 0.5);
+  background: var(--accent-surface-active);
+  border-color: var(--accent-border-heavy);
 }
 
 .orphan-banner-link:disabled {
