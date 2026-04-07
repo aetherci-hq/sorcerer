@@ -48,6 +48,8 @@ import {
   getTeamInbox,
   getSetting,
   setSetting,
+  listProviders,
+  refreshProviders,
   getUserInfo,
   getNetworkIp,
   hasClaudeConversation,
@@ -331,6 +333,14 @@ export function registerIPC(
 
   ipcMain.handle('session:create', (_e, projectId: string, name: string, useMainRepo?: boolean, bypassPermissions?: boolean, remoteControl?: boolean, provider?: string, model?: string) => {
     return createSession(services, projectId, name, useMainRepo, bypassPermissions, remoteControl, provider, model)
+  })
+
+  ipcMain.handle('provider:list', () => {
+    return listProviders(services)
+  })
+
+  ipcMain.handle('provider:refresh', () => {
+    return refreshProviders(services)
   })
 
   ipcMain.handle('session:spawn-shell', (_event, sessionId: string, cwd: string) => {

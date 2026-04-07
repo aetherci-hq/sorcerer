@@ -2,9 +2,19 @@ import os from 'os'
 import path from 'path'
 import fs from 'fs'
 
+export interface ProviderCapabilities {
+  supportsMcpConfig: boolean
+  supportsModelOverride: boolean
+  supportsRemoteControl: boolean
+  supportsSystemPrompt: boolean
+}
+
 export interface ProviderRunner {
   id: string
   name: string
+  apiKeyEnv: string | null
+  capabilities: ProviderCapabilities
+  fallbackModels: string[]
   resolveBinary(): string
   getArgs(data: {
     mission?: string
@@ -15,11 +25,20 @@ export interface ProviderRunner {
     model?: string
   }): string[]
   getEnv(id: string): Record<string, string>
+  discoverModels?(): { models: string[]; usesFallback: boolean }
 }
 
 export class ClaudeRunner implements ProviderRunner {
   id = 'claude'
   name = 'Claude Code'
+  apiKeyEnv = 'ANTHROPIC_API_KEY'
+  capabilities: ProviderCapabilities = {
+    supportsMcpConfig: true,
+    supportsModelOverride: true,
+    supportsRemoteControl: true,
+    supportsSystemPrompt: true
+  }
+  fallbackModels = ['claude-sonnet-4-6', 'claude-opus-4-6', 'claude-haiku-4-5', 'claude-3-7-sonnet-latest', 'claude-3-5-sonnet-latest']
 
   private _binary: string | null = null
 
@@ -82,11 +101,23 @@ export class ClaudeRunner implements ProviderRunner {
       CLAUDE_CODE_TASK_LIST_ID: id
     }
   }
+
+  discoverModels(): { models: string[]; usesFallback: boolean } {
+    return { models: this.fallbackModels, usesFallback: true }
+  }
 }
 
 export class GeminiRunner implements ProviderRunner {
   id = 'gemini'
   name = 'Gemini CLI'
+  apiKeyEnv = 'GEMINI_API_KEY'
+  capabilities: ProviderCapabilities = {
+    supportsMcpConfig: false,
+    supportsModelOverride: true,
+    supportsRemoteControl: false,
+    supportsSystemPrompt: false
+  }
+  fallbackModels = ['gemini-2.5-pro', 'gemini-2.5-flash', 'gemini-2.5-flash-lite']
 
   private _binary: string | null = null
 
@@ -145,11 +176,23 @@ export class GeminiRunner implements ProviderRunner {
   getEnv(_id: string): Record<string, string> {
     return {}
   }
+
+  discoverModels(): { models: string[]; usesFallback: boolean } {
+    return { models: this.fallbackModels, usesFallback: true }
+  }
 }
 
 export class CodexRunner implements ProviderRunner {
   id = 'codex'
   name = 'Codex CLI'
+  apiKeyEnv = 'OPENAI_API_KEY'
+  capabilities: ProviderCapabilities = {
+    supportsMcpConfig: false,
+    supportsModelOverride: true,
+    supportsRemoteControl: false,
+    supportsSystemPrompt: false
+  }
+  fallbackModels = ['gpt-5', 'gpt-5-codex', 'gpt-5-mini', 'gpt-5-nano', 'o4-mini', 'o3']
 
   private _binary: string | null = null
 
@@ -206,11 +249,27 @@ export class CodexRunner implements ProviderRunner {
   getEnv(_id: string): Record<string, string> {
     return {}
   }
+
+  discoverModels(): { models: string[]; usesFallback: boolean } {
+    const configuredModel = readCodexConfiguredModel()
+    const merged = configuredModel && !this.fallbackModels.includes(configuredModel)
+      ? [configuredModel, ...this.fallbackModels]
+      : this.fallbackModels
+    return { models: merged, usesFallback: true }
+  }
 }
 
 export class OpenCodeRunner implements ProviderRunner {
   id = 'opencode'
   name = 'OpenCode'
+  apiKeyEnv = null
+  capabilities: ProviderCapabilities = {
+    supportsMcpConfig: false,
+    supportsModelOverride: true,
+    supportsRemoteControl: false,
+    supportsSystemPrompt: false
+  }
+  fallbackModels = ['anthropic/claude-sonnet-4-6', 'anthropic/claude-opus-4-6', 'google/gemini-2.5-pro', 'google/gemini-2.5-flash', 'openai/gpt-4.1', 'openai/o4-mini', 'openai/o3']
 
   private _binary: string | null = null
 
@@ -271,6 +330,10 @@ export class OpenCodeRunner implements ProviderRunner {
   getEnv(_id: string): Record<string, string> {
     return {}
   }
+
+  discoverModels(): { models: string[]; usesFallback: boolean } {
+    return { models: this.fallbackModels, usesFallback: true }
+  }
 }
 
 const runners: ProviderRunner[] = [
@@ -282,4 +345,20 @@ const runners: ProviderRunner[] = [
 
 export function getProviderRunner(id: string): ProviderRunner {
   return runners.find((r) => r.id === id) || runners[0]
+}
+
+export function getProviderRunners(): ProviderRunner[] {
+  return runners
+}
+
+function readCodexConfiguredModel(): string | null {
+  try {
+    const configPath = path.join(os.homedir(), '.codex', 'config.toml')
+    if (!fs.existsSync(configPath)) return null
+    const source = fs.readFileSync(configPath, 'utf8')
+    const match = source.match(/^\s*model\s*=\s*["']([^"']+)["']/m)
+    return match?.[1] || null
+  } catch {
+    return null
+  }
 }

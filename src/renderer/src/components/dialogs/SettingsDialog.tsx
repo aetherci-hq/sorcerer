@@ -7,9 +7,11 @@ import {
 } from '../icons'
 import { THEMES, getThemeById, applyTheme } from '../../themes'
 import { gravatarUrl } from '../SidebarFooter'
-import { PROVIDERS } from '../../constants'
+import { Tooltip } from '../Tooltip'
+import { DialogSelect } from '../DialogSelect'
+import { useProviders } from '../../hooks/useProviders'
 
-type SettingsTab = 'profile' | 'appearance' | 'sessions' | 'git' | 'remote' | 'briefing' | 'general' | 'keybindings'
+type SettingsTab = 'profile' | 'appearance' | 'sessions' | 'providers' | 'git' | 'remote' | 'briefing' | 'general' | 'keybindings'
 
 const TABS: { id: SettingsTab; label: string; icon: React.ReactNode }[] = [
   { id: 'general', label: 'General', icon: <SettingsIcon /> },
@@ -17,6 +19,7 @@ const TABS: { id: SettingsTab; label: string; icon: React.ReactNode }[] = [
   { id: 'profile', label: 'Profile', icon: <UserIcon /> },
   { id: 'appearance', label: 'Appearance', icon: <PaletteIcon /> },
   { id: 'sessions', label: 'Sessions', icon: <TerminalIcon /> },
+  { id: 'providers', label: 'Providers', icon: <BotIcon /> },
   { id: 'git', label: 'Git', icon: <GitBranchIcon /> },
   { id: 'remote', label: 'Remote', icon: <WifiIcon /> },
   { id: 'briefing', label: 'Briefing', icon: <BotIcon /> }
@@ -193,14 +196,6 @@ function SessionsTab() {
   const [idleTimeout, setIdleTimeout] = useSetting('idleTimeout', '30m')
   const [confirmDelete, setConfirmDelete] = useSetting('confirmDelete', 'true')
   const { showProviderBadges, setShowProviderBadges } = useUIStore()
-  const [defaultProvider, setDefaultProvider] = useSetting('defaultProvider', 'claude')
-  const [defaultModel, setDefaultModel] = useSetting('defaultModel', PROVIDERS[0].models[0])
-
-  const handleDefaultProviderChange = (id: string) => {
-    setDefaultProvider(id)
-    const p = PROVIDERS.find((p) => p.id === id)
-    if (p) setDefaultModel(p.models[0])
-  }
 
   return (
     <>
@@ -232,24 +227,25 @@ function SessionsTab() {
 
       <SectionTitle>Terminal</SectionTitle>
       <SettingRow label="Font size" description="Font size for terminal text in pixels">
-        <select
-          className="settings-select"
+        <DialogSelect
           value={fontSize}
-          onChange={(e) => {
-            setFontSize(e.target.value)
-            window.dispatchEvent(new CustomEvent('sorcerer:fontSizeChange', { detail: Number(e.target.value) }))
+          onChange={(nextValue) => {
+            setFontSize(nextValue)
+            window.dispatchEvent(new CustomEvent('sorcerer:fontSizeChange', { detail: Number(nextValue) }))
           }}
-        >
-          <option value="10">10</option>
-          <option value="11">11</option>
-          <option value="12">12</option>
-          <option value="13">13</option>
-          <option value="14">14</option>
-          <option value="15">15</option>
-          <option value="16">16</option>
-          <option value="18">18</option>
-          <option value="20">20</option>
-        </select>
+          style={{ width: 88 }}
+          options={[
+            { value: '10', label: '10' },
+            { value: '11', label: '11' },
+            { value: '12', label: '12' },
+            { value: '13', label: '13' },
+            { value: '14', label: '14' },
+            { value: '15', label: '15' },
+            { value: '16', label: '16' },
+            { value: '18', label: '18' },
+            { value: '20', label: '20' }
+          ]}
+        />
       </SettingRow>
 
       <SectionTitle>Branch &amp; Worktrees</SectionTitle>
@@ -266,44 +262,21 @@ function SessionsTab() {
         <Toggle checked={autoArchive === 'true'} onChange={(v) => setAutoArchive(v ? 'true' : 'false')} />
       </SettingRow>
       <SettingRow label="Idle timeout" description="How long before a session is considered idle">
-        <select
-          className="settings-select"
+        <DialogSelect
           value={idleTimeout}
-          onChange={(e) => setIdleTimeout(e.target.value)}
+          onChange={setIdleTimeout}
           disabled={autoArchive !== 'true'}
-        >
-          <option value="15m">15 minutes</option>
-          <option value="30m">30 minutes</option>
-          <option value="1h">1 hour</option>
-          <option value="2h">2 hours</option>
-        </select>
+          style={{ width: 128 }}
+          options={[
+            { value: '15m', label: '15 minutes' },
+            { value: '30m', label: '30 minutes' },
+            { value: '1h', label: '1 hour' },
+            { value: '2h', label: '2 hours' }
+          ]}
+        />
       </SettingRow>
       <SettingRow label="Confirm before delete" description="Show confirmation dialog when deleting sessions">
         <Toggle checked={confirmDelete === 'true'} onChange={(v) => setConfirmDelete(v ? 'true' : 'false')} />
-      </SettingRow>
-
-      <SectionTitle>Agents</SectionTitle>
-      <SettingRow label="Default provider" description="Provider pre-selected when creating new sessions or agents">
-        <select
-          className="settings-select"
-          value={defaultProvider}
-          onChange={(e) => handleDefaultProviderChange(e.target.value)}
-        >
-          {PROVIDERS.map((p) => (
-            <option key={p.id} value={p.id}>{p.name}</option>
-          ))}
-        </select>
-      </SettingRow>
-      <SettingRow label="Default model" description={`Default model for ${PROVIDERS.find(p => p.id === defaultProvider)?.name || 'the selected provider'}`}>
-        <select
-          className="settings-select"
-          value={defaultModel}
-          onChange={(e) => setDefaultModel(e.target.value)}
-        >
-          {PROVIDERS.find((p) => p.id === defaultProvider)?.models.map((m) => (
-            <option key={m} value={m}>{m}</option>
-          ))}
-        </select>
       </SettingRow>
 
       <SectionTitle>Sidebar</SectionTitle>
@@ -517,18 +490,19 @@ function RemoteTab() {
         />
       </SettingRow>
       <SettingRow label="Bind address" description="Network interface to listen on (127.0.0.1 = local only, 0.0.0.0 = all)">
-        <select
-          className="settings-select"
+        <DialogSelect
           value={bindAddress}
-          onChange={(e) => {
-            setBindAddress(e.target.value)
-            getApi().remote.updateConfig({ bindAddress: e.target.value })
+          onChange={(nextValue) => {
+            setBindAddress(nextValue)
+            getApi().remote.updateConfig({ bindAddress: nextValue })
           }}
           disabled={running}
-        >
-          <option value="127.0.0.1">127.0.0.1 (localhost only)</option>
-          <option value="0.0.0.0">0.0.0.0 (all interfaces)</option>
-        </select>
+          style={{ width: 200 }}
+          options={[
+            { value: '127.0.0.1', label: '127.0.0.1 (localhost only)' },
+            { value: '0.0.0.0', label: '0.0.0.0 (all interfaces)' }
+          ]}
+        />
       </SettingRow>
 
       <SectionTitle>Authentication</SectionTitle>
@@ -645,6 +619,188 @@ function GeneralTab() {
   )
 }
 
+function ProvidersTab() {
+  const { addToast } = useToastStore()
+  const { providers, detectedProviders, defaultProvider, loading, reload, refresh } = useProviders()
+  const [refreshing, setRefreshing] = useState(false)
+  const [modelDrafts, setModelDrafts] = useState<Record<string, string>>({})
+
+  useEffect(() => {
+    if (providers.length === 0) return
+    setModelDrafts((current) => {
+      const next = { ...current }
+      for (const provider of providers) {
+        next[provider.id] = current[provider.id] ?? provider.defaultModel
+      }
+      return next
+    })
+  }, [providers])
+
+  const refreshRegistry = async () => {
+    setRefreshing(true)
+    try {
+      await refresh()
+      window.dispatchEvent(new CustomEvent('sorcerer:providers-updated'))
+    } catch (err: any) {
+      addToast(`Failed to refresh providers: ${err?.message || 'Unknown error'}`, 'error')
+    } finally {
+      setRefreshing(false)
+    }
+  }
+
+  const setDefaultProvider = async (providerId: string) => {
+    try {
+      await getApi().settings.set('defaultProvider', providerId)
+      await reload()
+      window.dispatchEvent(new CustomEvent('sorcerer:providers-updated'))
+    } catch (err: any) {
+      addToast(`Failed to save default provider: ${err?.message || 'Unknown error'}`, 'error')
+    }
+  }
+
+  const saveDefaultModel = async (providerId: string) => {
+    try {
+      await getApi().settings.set(`defaultModel.${providerId}`, modelDrafts[providerId] || '')
+      await reload()
+      window.dispatchEvent(new CustomEvent('sorcerer:providers-updated'))
+    } catch (err: any) {
+      addToast(`Failed to save default model: ${err?.message || 'Unknown error'}`, 'error')
+    }
+  }
+
+  const lastCheckedAt = providers.reduce((latest, provider) => Math.max(latest, provider.lastCheckedAt || 0), 0)
+  const lastCheckedLabel = lastCheckedAt
+    ? new Date(lastCheckedAt * 1000).toLocaleString()
+    : 'Not checked yet'
+
+  if (loading && providers.length === 0) {
+    return <div className="settings-row"><span className="settings-row-label">Loading...</span></div>
+  }
+
+  return (
+    <>
+      <SectionTitle>Defaults</SectionTitle>
+      <SettingRow label="Default provider" description="Pre-selected when creating new sessions and agents">
+        <DialogSelect
+          value={defaultProvider?.id || ''}
+          onChange={setDefaultProvider}
+          disabled={detectedProviders.length === 0}
+          style={{ width: 180 }}
+          options={detectedProviders.map((provider) => ({
+            value: provider.id,
+            label: provider.name
+          }))}
+        />
+      </SettingRow>
+      <SettingRow label="Refresh registry" description={`Startup scan only. Last checked ${lastCheckedLabel}.`}>
+        <button
+          className="settings-action-btn"
+          type="button"
+          onClick={refreshRegistry}
+          disabled={refreshing}
+        >
+          {refreshing ? 'Refreshing…' : 'Refresh'}
+        </button>
+      </SettingRow>
+
+      <SectionTitle>Supported Providers</SectionTitle>
+      <div className="providers-list">
+        {providers.map((provider) => {
+          const disabled = !provider.detected
+          const hasSuggestedModels = provider.models.length > 0
+          const currentModel = modelDrafts[provider.id] ?? provider.defaultModel
+          const isCustomModel = !!currentModel && !provider.models.includes(currentModel)
+          const statusBadge = disabled ? (
+            <Tooltip label="Not detected on this system">
+              <span className="provider-status-badge provider-status-badge--missing">Missing</span>
+            </Tooltip>
+          ) : (
+            <span className="provider-status-badge">Detected</span>
+          )
+
+          return (
+            <div key={provider.id} className={`provider-card ${disabled ? 'provider-card--disabled' : ''}`}>
+              <div className="provider-card-header">
+                <div className="provider-card-title-row">
+                  <span className="provider-card-title">{provider.name}</span>
+                  {statusBadge}
+                  {provider.isDefault && (
+                    <span className="provider-status-badge provider-status-badge--default">Default</span>
+                  )}
+                </div>
+                <div className="provider-card-meta">
+                  {provider.binaryPath || 'CLI not found'}
+                  {provider.apiKeyEnv ? ` • ${provider.apiKeyEnv}` : ''}
+                  {provider.usesFallbackModels ? ' • bundled model suggestions' : ' • detected model suggestions'}
+                </div>
+              </div>
+
+              <div className="provider-capability-row">
+                <span className="provider-capability-badge">Model {provider.supportsModelOverride ? 'override' : 'fixed'}</span>
+                {provider.supportsRemoteControl && <span className="provider-capability-badge">Remote control</span>}
+                {provider.supportsSystemPrompt && <span className="provider-capability-badge">System prompt</span>}
+                {provider.supportsMcpConfig && <span className="provider-capability-badge">MCP config</span>}
+              </div>
+
+              <div className="provider-card-controls">
+                <div className="provider-card-control-group">
+                  <span className="provider-card-control-label">Default model</span>
+                  {provider.supportsModelOverride ? (
+                    hasSuggestedModels ? (
+                      <>
+                        <DialogSelect
+                          value={isCustomModel ? '__custom__' : currentModel}
+                          onChange={(nextValue) => {
+                            if (nextValue === '__custom__') {
+                              if (!isCustomModel) {
+                                setModelDrafts((current) => ({ ...current, [provider.id]: '' }))
+                              }
+                              return
+                            }
+                            setModelDrafts((current) => ({ ...current, [provider.id]: nextValue }))
+                            setTimeout(() => saveDefaultModel(provider.id), 0)
+                          }}
+                          disabled={disabled}
+                          style={{ width: 240 }}
+                          options={[
+                            ...provider.models.map((model) => ({ value: model, label: model })),
+                            { value: '__custom__', label: 'Custom…' }
+                          ]}
+                        />
+                        {(isCustomModel || currentModel === '') && (
+                          <input
+                            className="settings-input provider-model-input"
+                            value={currentModel}
+                            onChange={(e) => setModelDrafts((current) => ({ ...current, [provider.id]: e.target.value }))}
+                            onBlur={() => saveDefaultModel(provider.id)}
+                            disabled={disabled}
+                            placeholder="Enter custom model"
+                          />
+                        )}
+                      </>
+                    ) : (
+                      <input
+                        className="settings-input provider-model-input"
+                        value={currentModel}
+                        onChange={(e) => setModelDrafts((current) => ({ ...current, [provider.id]: e.target.value }))}
+                        onBlur={() => saveDefaultModel(provider.id)}
+                        disabled={disabled}
+                        placeholder="Enter model"
+                      />
+                    )
+                  ) : (
+                    <span className="settings-row-desc">This provider does not expose model override via CLI.</span>
+                  )}
+                </div>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </>
+  )
+}
+
 function KeybindingsTab() {
   return (
     <>
@@ -752,16 +908,12 @@ function BriefingTab() {
     <>
       <SectionTitle>AI Provider</SectionTitle>
       <SettingRow label="Preferred provider" description="Which AI to use for generating briefings">
-        <select
-          className="dialog-input"
+        <DialogSelect
           value={provider}
-          onChange={(e) => setProvider(e.target.value)}
+          onChange={setProvider}
           style={{ width: 200 }}
-        >
-          {AI_PROVIDER_OPTIONS.map((p) => (
-            <option key={p.id} value={p.id}>{p.name}</option>
-          ))}
-        </select>
+          options={AI_PROVIDER_OPTIONS.map((p) => ({ value: p.id, label: p.name }))}
+        />
       </SettingRow>
 
       <SectionTitle>API Keys</SectionTitle>
@@ -821,6 +973,7 @@ const TAB_CONTENT: Record<SettingsTab, () => React.JSX.Element> = {
   profile: ProfileTab,
   appearance: AppearanceTab,
   sessions: SessionsTab,
+  providers: ProvidersTab,
   git: GitTab,
   remote: RemoteTab,
   briefing: BriefingTab,

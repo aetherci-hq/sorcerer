@@ -1,56 +1,41 @@
 import { useState, useEffect } from 'react'
 import { Dialog, DialogField, DialogActions, DialogButton } from '../Dialog'
+import { DialogSelect } from '../DialogSelect'
 import { getApi } from '../../api/client'
 import { useUIStore } from '../../stores/useUIStore'
 import { useProjectStore } from '../../stores/useProjectStore'
 import { useSessionStore } from '../../stores/useSessionStore'
 import { useToastStore } from '../../stores/useToastStore'
-import { PROVIDERS } from '../../constants'
+import { useProviders } from '../../hooks/useProviders'
 
 export function NewSessionDialog() {
   const { activeDialog, dialogTargetId, closeDialog } = useUIStore()
   const { projects } = useProjectStore()
   const { createSession } = useSessionStore()
   const { addToast } = useToastStore()
+  const { detectedProviders, defaultProvider, getProvider, loading: providersLoading } = useProviders()
   const [name, setName] = useState('')
   const [projectId, setProjectId] = useState('')
   const [useMainRepo, setUseMainRepo] = useState(false)
   const [bypassPermissions, setBypassPermissions] = useState(true)
   const [remoteControl, setRemoteControl] = useState(false)
-  const [provider, setProvider] = useState('claude')
-  const [model, setModel] = useState(PROVIDERS[0].models[0])
+  const [provider, setProvider] = useState('')
+  const [model, setModel] = useState('')
   const [gitInfo, setGitInfo] = useState<{ hasGit: boolean; hasCommits: boolean } | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
   const open = activeDialog === 'new-session'
+  const selectedProvider = getProvider(provider) || defaultProvider
 
-  // If opened from a project context menu, pre-select that project
   const effectiveProjectId = dialogTargetId || projectId
   const project = projects.find((p) => p.id === effectiveProjectId)
 
-  // Load user defaults when dialog opens
   useEffect(() => {
-    if (!open) return
-    Promise.all([
-      getApi().settings.get('defaultProvider'),
-      getApi().settings.get('defaultModel')
-    ]).then(([p, m]) => {
-      const provId = (p as string) || 'claude'
-      setProvider(provId)
-      const prov = PROVIDERS.find((pr) => pr.id === provId)
-      if (prov) {
-        setModel((m as string) && prov.models.includes(m as string) ? (m as string) : prov.models[0])
-      }
-    })
-  }, [open])
+    if (!open || providersLoading || provider || !defaultProvider) return
+    setProvider(defaultProvider.id)
+    setModel(defaultProvider.supportsModelOverride ? defaultProvider.defaultModel || defaultProvider.models[0] || '' : '')
+  }, [open, providersLoading, provider, defaultProvider])
 
-  // Reset model when provider changes and current model isn't valid for new provider
-  useEffect(() => {
-    const p = PROVIDERS.find(p => p.id === provider)
-    if (p && !p.models.includes(model)) setModel(p.models[0])
-  }, [provider])
-
-  // Check git status when project selection changes
   useEffect(() => {
     if (!effectiveProjectId || !open) {
       setGitInfo(null)
@@ -61,6 +46,8 @@ export function NewSessionDialog() {
 
   const isGitProject = gitInfo?.hasGit && gitInfo?.hasCommits
   const isEmptyGit = gitInfo?.hasGit && !gitInfo?.hasCommits
+  const hasSuggestedModels = (selectedProvider?.models.length || 0) > 0
+  const isCustomModel = !!selectedProvider?.supportsModelOverride && !!model && !selectedProvider.models.includes(model)
   const bypassHint =
     provider === 'claude'
       ? 'Claude runs with --dangerously-skip-permissions.'
@@ -76,8 +63,8 @@ export function NewSessionDialog() {
     setUseMainRepo(false)
     setBypassPermissions(true)
     setRemoteControl(false)
-    setProvider('claude')
-    setModel(PROVIDERS[0].models[0])
+    setProvider('')
+    setModel('')
     setGitInfo(null)
     closeDialog()
   }
@@ -92,9 +79,21 @@ export function NewSessionDialog() {
       addToast('Please enter a session name', 'error')
       return
     }
+    if (!selectedProvider) {
+      addToast('No supported provider was detected on this system', 'error')
+      return
+    }
     setSubmitting(true)
     try {
-      const result = await createSession(effectiveProjectId, name.trim(), useMainRepo, bypassPermissions, remoteControl, provider, model)
+      const result = await createSession(
+        effectiveProjectId,
+        name.trim(),
+        useMainRepo,
+        bypassPermissions,
+        remoteControl,
+        selectedProvider.id,
+        selectedProvider.supportsModelOverride ? model : ''
+      )
       if (!result?.session) {
         addToast(result?.error || 'Failed to create session', 'error')
       } else {
@@ -105,12 +104,11 @@ export function NewSessionDialog() {
     }
   }
 
-  // Build the hint text based on project type
   let hintText: React.ReactNode
   if (!gitInfo) {
     hintText = null
   } else if (!gitInfo.hasGit) {
-    hintText = `${PROVIDERS.find(p => p.id === provider)?.name || 'Agent'} will run directly in this folder.`
+    hintText = `${selectedProvider?.name || 'Agent'} will run directly in this folder.`
   } else if (isEmptyGit) {
     hintText = 'Git repository has no commits yet — will work directly in the project folder.'
   } else if (useMainRepo) {
@@ -126,46 +124,89 @@ export function NewSessionDialog() {
           {dialogTargetId ? (
             <div className="dialog-readonly">{project?.name || 'Unknown'}</div>
           ) : (
-            <select
-              className="dialog-input"
+            <DialogSelect
               value={projectId}
-              onChange={(e) => setProjectId(e.target.value)}
-            >
-              <option value="">Select a project...</option>
-              {projects.map((p) => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
-            </select>
+              onChange={setProjectId}
+              options={[
+                { value: '', label: 'Select a project...' },
+                ...projects.map((p) => ({ value: p.id, label: p.name }))
+              ]}
+            />
           )}
         </DialogField>
-        
+
         <div style={{ display: 'flex', gap: 12 }}>
           <DialogField label="AI Provider" style={{ flex: 1 }}>
-            <select
-              className="dialog-input"
+            <DialogSelect
               value={provider}
-              onChange={(e) => setProvider(e.target.value)}
-            >
-              {PROVIDERS.map((p) => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
-            </select>
+              onChange={(nextValue) => {
+                const nextProvider = getProvider(nextValue)
+                setProvider(nextValue)
+                setModel(nextProvider?.supportsModelOverride ? nextProvider.defaultModel || nextProvider.models[0] || '' : '')
+                if (!nextProvider?.supportsRemoteControl) setRemoteControl(false)
+              }}
+              disabled={providersLoading || detectedProviders.length === 0}
+              options={detectedProviders.map((providerOption) => ({
+                value: providerOption.id,
+                label: providerOption.name
+              }))}
+            />
           </DialogField>
-          <DialogField label="Model" style={{ flex: 1 }}>
-            <select
-              className="dialog-input"
-              value={model}
-              onChange={(e) => setModel(e.target.value)}
-            >
-              {PROVIDERS.find(p => p.id === provider)?.models.map((m) => (
-                <option key={m} value={m}>{m}</option>
-              ))}
-            </select>
-          </DialogField>
+          {selectedProvider?.supportsModelOverride && (
+            <DialogField label="Model" style={{ flex: 1 }}>
+              {hasSuggestedModels ? (
+                <>
+                  <DialogSelect
+                    value={isCustomModel ? '__custom__' : model}
+                    onChange={(nextValue) => {
+                      if (nextValue === '__custom__') {
+                        if (!isCustomModel) setModel('')
+                        return
+                      }
+                      setModel(nextValue)
+                    }}
+                    options={[
+                      ...selectedProvider.models.map((modelName) => ({
+                        value: modelName,
+                        label: modelName
+                      })),
+                      { value: '__custom__', label: 'Custom…' }
+                    ]}
+                  />
+                  {(isCustomModel || model === '') && (
+                    <input
+                      className="dialog-input"
+                      value={model}
+                      onChange={(e) => setModel(e.target.value)}
+                      placeholder="Enter custom model"
+                      style={{ marginTop: 8 }}
+                    />
+                  )}
+                </>
+              ) : (
+                <input
+                  className="dialog-input"
+                  value={model}
+                  onChange={(e) => setModel(e.target.value)}
+                  placeholder="Enter model"
+                />
+              )}
+            </DialogField>
+          )}
         </div>
-        {PROVIDERS.find(p => p.id === provider)?.apiKeyEnv && (
+        {selectedProvider?.apiKeyEnv && (
           <div className="dialog-hint" style={{ marginTop: 4 }}>
-            Requires <code style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>{PROVIDERS.find(p => p.id === provider)?.apiKeyEnv}</code> in your environment.
+            Requires <code style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>{selectedProvider.apiKeyEnv}</code> in your environment.
+          </div>
+        )}
+        {selectedProvider?.usesFallbackModels && selectedProvider.supportsModelOverride && (
+          <div className="dialog-hint" style={{ marginTop: 4 }}>
+            Using bundled model suggestions. You can still enter any model manually.
+          </div>
+        )}
+        {detectedProviders.length === 0 && (
+          <div className="dialog-hint" style={{ marginTop: 4 }}>
+            No supported providers were detected. Install a supported CLI or refresh Providers in Settings.
           </div>
         )}
 
@@ -202,7 +243,7 @@ export function NewSessionDialog() {
             {bypassHint}
           </div>
         )}
-        {provider === 'claude' && (
+        {selectedProvider?.supportsRemoteControl && (
           <label className="dialog-checkbox">
             <input
               type="checkbox"
@@ -215,7 +256,7 @@ export function NewSessionDialog() {
         {hintText && <div className="dialog-hint">{hintText}</div>}
         <DialogActions>
           <DialogButton onClick={handleClose} disabled={submitting}>Cancel</DialogButton>
-          <DialogButton variant="primary" type="submit" loading={submitting}>Create Session</DialogButton>
+          <DialogButton variant="primary" type="submit" loading={submitting} disabled={submitting || detectedProviders.length === 0}>Create Session</DialogButton>
         </DialogActions>
       </form>
     </Dialog>

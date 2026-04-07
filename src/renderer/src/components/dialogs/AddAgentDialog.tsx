@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react'
 import { Dialog, DialogField, DialogActions, DialogButton } from '../Dialog'
+import { DialogSelect } from '../DialogSelect'
 import { getApi } from '../../api/client'
 import { useUIStore } from '../../stores/useUIStore'
 import { useAgentStore } from '../../stores/useAgentStore'
 import { useSessionStore } from '../../stores/useSessionStore'
 import { ChevronIcon, BotIcon, TerminalIcon } from '../icons'
-import { PROVIDERS } from '../../constants'
+import { useProviders } from '../../hooks/useProviders'
 
 type AgentMode = null | 'interactive' | 'autonomous'
 
@@ -13,6 +14,7 @@ export function AddAgentDialog() {
   const { activeDialog, closeDialog } = useUIStore()
   const { addAgent, startAgent } = useAgentStore()
   const { setActiveSession } = useSessionStore()
+  const { detectedProviders, defaultProvider, getProvider, loading: providersLoading } = useProviders()
   const [mode, setMode] = useState<AgentMode>(null)
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
@@ -24,11 +26,14 @@ export function AddAgentDialog() {
   const [autoStart, setAutoStart] = useState(false)
   const [scheduleMinutes, setScheduleMinutes] = useState('0')
   const [showAdvanced, setShowAdvanced] = useState(false)
-  const [provider, setProvider] = useState('claude')
-  const [model, setModel] = useState(PROVIDERS[0].models[0])
+  const [provider, setProvider] = useState('')
+  const [model, setModel] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
   const open = activeDialog === 'add-agent'
+  const selectedProvider = getProvider(provider) || defaultProvider
+  const hasSuggestedModels = (selectedProvider?.models.length || 0) > 0
+  const isCustomModel = !!selectedProvider?.supportsModelOverride && !!model && !selectedProvider.models.includes(model)
   const bypassHint =
     provider === 'claude'
       ? 'Claude runs with --dangerously-skip-permissions.'
@@ -38,27 +43,11 @@ export function AddAgentDialog() {
           ? 'Codex runs with --dangerously-bypass-approvals-and-sandbox.'
           : 'Runs with the provider’s closest unattended mode.'
 
-  // Load user defaults when dialog opens
   useEffect(() => {
-    if (!open) return
-    Promise.all([
-      getApi().settings.get('defaultProvider'),
-      getApi().settings.get('defaultModel')
-    ]).then(([p, m]) => {
-      const provId = (p as string) || 'claude'
-      setProvider(provId)
-      const prov = PROVIDERS.find((pr) => pr.id === provId)
-      if (prov) {
-        setModel((m as string) && prov.models.includes(m as string) ? (m as string) : prov.models[0])
-      }
-    })
-  }, [open])
-
-  // Reset model when provider changes and current model isn't valid for new provider
-  useEffect(() => {
-    const p = PROVIDERS.find(p => p.id === provider)
-    if (p && !p.models.includes(model)) setModel(p.models[0])
-  }, [provider])
+    if (!open || providersLoading || provider || !defaultProvider) return
+    setProvider(defaultProvider.id)
+    setModel(defaultProvider.supportsModelOverride ? defaultProvider.defaultModel || defaultProvider.models[0] || '' : '')
+  }, [open, providersLoading, provider, defaultProvider])
 
   const handleClose = () => {
     setMode(null)
@@ -72,8 +61,8 @@ export function AddAgentDialog() {
     setAutoStart(false)
     setScheduleMinutes('0')
     setShowAdvanced(false)
-    setProvider('claude')
-    setModel(PROVIDERS[0].models[0])
+    setProvider('')
+    setModel('')
     closeDialog()
   }
 
@@ -81,6 +70,7 @@ export function AddAgentDialog() {
     e.preventDefault()
     if (!name.trim()) return
     if (mode === 'autonomous' && !mission.trim()) return
+    if (!selectedProvider) return
     setSubmitting(true)
     try {
       const id = await addAgent({
@@ -94,8 +84,8 @@ export function AddAgentDialog() {
         auto_start: mode === 'autonomous' ? autoStart : false,
         auto_restart: mode === 'autonomous' && parseInt(scheduleMinutes) > 0,
         schedule_minutes: mode === 'autonomous' ? parseInt(scheduleMinutes) || 0 : 0,
-        provider,
-        model
+        provider: selectedProvider.id,
+        model: selectedProvider.supportsModelOverride ? model : ''
       })
       if (id) {
         await startAgent(id)
@@ -109,7 +99,6 @@ export function AddAgentDialog() {
 
   if (!open) return null
 
-  // Step 1: Choose mode
   if (!mode) {
     return (
       <Dialog open={open} onClose={handleClose} title="New Agent">
@@ -137,7 +126,6 @@ export function AddAgentDialog() {
     )
   }
 
-  // Step 2: Configure agent
   return (
     <Dialog open={open} onClose={handleClose} title={mode === 'autonomous' ? 'New Scheduled Mission' : 'New Interactive Agent'}>
       <form onSubmit={handleSubmit}>
@@ -156,34 +144,79 @@ export function AddAgentDialog() {
             autoFocus
           />
         </DialogField>
-        
+
         <div style={{ display: 'flex', gap: 12 }}>
           <DialogField label="AI Provider" style={{ flex: 1 }}>
-            <select
-              className="dialog-input"
+            <DialogSelect
               value={provider}
-              onChange={(e) => setProvider(e.target.value)}
-            >
-              {PROVIDERS.map((p) => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
-            </select>
+              onChange={(nextValue) => {
+                const nextProvider = getProvider(nextValue)
+                setProvider(nextValue)
+                setModel(nextProvider?.supportsModelOverride ? nextProvider.defaultModel || nextProvider.models[0] || '' : '')
+                if (!nextProvider?.supportsRemoteControl) setRemoteControl(false)
+              }}
+              disabled={providersLoading || detectedProviders.length === 0}
+              options={detectedProviders.map((providerOption) => ({
+                value: providerOption.id,
+                label: providerOption.name
+              }))}
+            />
           </DialogField>
-          <DialogField label="Model" style={{ flex: 1 }}>
-            <select
-              className="dialog-input"
-              value={model}
-              onChange={(e) => setModel(e.target.value)}
-            >
-              {PROVIDERS.find(p => p.id === provider)?.models.map((m) => (
-                <option key={m} value={m}>{m}</option>
-              ))}
-            </select>
-          </DialogField>
+          {selectedProvider?.supportsModelOverride && (
+            <DialogField label="Model" style={{ flex: 1 }}>
+              {hasSuggestedModels ? (
+                <>
+                  <DialogSelect
+                    value={isCustomModel ? '__custom__' : model}
+                    onChange={(nextValue) => {
+                      if (nextValue === '__custom__') {
+                        if (!isCustomModel) setModel('')
+                        return
+                      }
+                      setModel(nextValue)
+                    }}
+                    options={[
+                      ...selectedProvider.models.map((modelName) => ({
+                        value: modelName,
+                        label: modelName
+                      })),
+                      { value: '__custom__', label: 'Custom…' }
+                    ]}
+                  />
+                  {(isCustomModel || model === '') && (
+                    <input
+                      className="dialog-input"
+                      value={model}
+                      onChange={(e) => setModel(e.target.value)}
+                      placeholder="Enter custom model"
+                      style={{ marginTop: 8 }}
+                    />
+                  )}
+                </>
+              ) : (
+                <input
+                  className="dialog-input"
+                  value={model}
+                  onChange={(e) => setModel(e.target.value)}
+                  placeholder="Enter model"
+                />
+              )}
+            </DialogField>
+          )}
         </div>
-        {PROVIDERS.find(p => p.id === provider)?.apiKeyEnv && (
+        {selectedProvider?.apiKeyEnv && (
           <div className="dialog-hint" style={{ marginTop: 4 }}>
-            Requires <code style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>{PROVIDERS.find(p => p.id === provider)?.apiKeyEnv}</code> in your environment.
+            Requires <code style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>{selectedProvider.apiKeyEnv}</code> in your environment.
+          </div>
+        )}
+        {selectedProvider?.usesFallbackModels && selectedProvider.supportsModelOverride && (
+          <div className="dialog-hint" style={{ marginTop: 4 }}>
+            Using bundled model suggestions. You can still enter any model manually.
+          </div>
+        )}
+        {detectedProviders.length === 0 && (
+          <div className="dialog-hint" style={{ marginTop: 4 }}>
+            No supported providers were detected. Install a supported CLI or refresh Providers in Settings.
           </div>
         )}
 
@@ -202,29 +235,29 @@ export function AddAgentDialog() {
             <DialogField label="Mission">
               <textarea
                 className="dialog-input dialog-textarea"
-                placeholder={"Describe what this agent should do...\\n\\ne.g. Monitor the Sentry project for new errors. Triage severity and investigate root causes. For critical errors, draft a fix."}
+                placeholder={'Describe what this agent should do...\\n\\ne.g. Monitor the Sentry project for new errors. Triage severity and investigate root causes. For critical errors, draft a fix.'}
                 value={mission}
                 onChange={(e) => setMission(e.target.value)}
                 rows={4}
               />
             </DialogField>
             <DialogField label="Run Schedule">
-              <select
-                className="dialog-input"
+              <DialogSelect
                 value={scheduleMinutes}
-                onChange={(e) => setScheduleMinutes(e.target.value)}
+                onChange={setScheduleMinutes}
                 style={{ width: 200 }}
-              >
-                <option value="0">Run once (manual)</option>
-                <option value="5">Every 5 minutes</option>
-                <option value="15">Every 15 minutes</option>
-                <option value="30">Every 30 minutes</option>
-                <option value="60">Every hour</option>
-                <option value="120">Every 2 hours</option>
-                <option value="360">Every 6 hours</option>
-                <option value="720">Every 12 hours</option>
-                <option value="1440">Daily</option>
-              </select>
+                options={[
+                  { value: '0', label: 'Run once (manual)' },
+                  { value: '5', label: 'Every 5 minutes' },
+                  { value: '15', label: 'Every 15 minutes' },
+                  { value: '30', label: 'Every 30 minutes' },
+                  { value: '60', label: 'Every hour' },
+                  { value: '120', label: 'Every 2 hours' },
+                  { value: '360', label: 'Every 6 hours' },
+                  { value: '720', label: 'Every 12 hours' },
+                  { value: '1440', label: 'Daily' }
+                ]}
+              />
             </DialogField>
             <label className="dialog-checkbox">
               <input type="checkbox" checked={autoStart} onChange={(e) => setAutoStart(e.target.checked)} />
@@ -242,14 +275,13 @@ export function AddAgentDialog() {
             {bypassHint}
           </div>
         )}
-        {mode === 'interactive' && provider === 'claude' && (
+        {mode === 'interactive' && selectedProvider?.supportsRemoteControl && (
           <label className="dialog-checkbox">
             <input type="checkbox" checked={remoteControl} onChange={(e) => setRemoteControl(e.target.checked)} />
             Enable Session Remote Control
           </label>
         )}
 
-        {/* Collapsible advanced options */}
         <button
           type="button"
           className="dialog-advanced-toggle"
@@ -282,7 +314,7 @@ export function AddAgentDialog() {
                 rows={4}
               />
               <div className="dialog-hint" style={{ marginTop: 4, marginBottom: 0 }}>
-                Appended to agent's system prompt (if supported).
+                Appended to agent&apos;s system prompt (if supported).
               </div>
             </DialogField>
           </div>
@@ -290,7 +322,7 @@ export function AddAgentDialog() {
 
         <DialogActions>
           <DialogButton onClick={() => setMode(null)} disabled={submitting}>Back</DialogButton>
-          <DialogButton variant="primary" type="submit" loading={submitting}>
+          <DialogButton variant="primary" type="submit" loading={submitting} disabled={submitting || detectedProviders.length === 0}>
             {mode === 'autonomous' ? 'Create & Start Mission' : 'Create Agent'}
           </DialogButton>
         </DialogActions>

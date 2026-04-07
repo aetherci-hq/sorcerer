@@ -156,6 +156,16 @@ const api = {
     set: (key: string, value: string) => ipcRenderer.invoke('settings:set', key, value)
   },
 
+  providers: {
+    list: () => ipcRenderer.invoke('provider:list'),
+    refresh: () => ipcRenderer.invoke('provider:refresh'),
+    onUpdated: (callback: () => void) => {
+      const handler = () => callback()
+      ipcRenderer.on('providers:updated', handler)
+      return () => ipcRenderer.removeListener('providers:updated', handler)
+    }
+  },
+
   system: {
     checkUpdate: () => ipcRenderer.invoke('system:check-update') as Promise<{ version: string; url: string } | null>,
     claudeStats: () => ipcRenderer.invoke('system:claude-stats') as Promise<{

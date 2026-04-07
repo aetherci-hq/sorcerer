@@ -95,6 +95,24 @@ export interface AgentGroup {
   sort_order: number
 }
 
+export interface ProviderInfo {
+  id: string
+  name: string
+  apiKeyEnv: string | null
+  binaryPath: string | null
+  detected: boolean
+  detectionError?: string
+  supportsMcpConfig: boolean
+  supportsModelOverride: boolean
+  supportsRemoteControl: boolean
+  supportsSystemPrompt: boolean
+  models: string[]
+  usesFallbackModels: boolean
+  lastCheckedAt: number
+  defaultModel: string
+  isDefault: boolean
+}
+
 // ── Quick Notes ────────────────────────────────────────────────────
 
 export interface QuickNote {

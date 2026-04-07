@@ -174,8 +174,8 @@ export function createRemoteClient(baseUrl: string, token: string): SorcererAPI 
 
     session: {
       list: (projectId?: string) => rpc('session:list', projectId),
-      create: (projectId: string, name: string, useMainRepo?: boolean, bypassPermissions?: boolean, remoteControl?: boolean) =>
-        rpc('session:create', projectId, name, useMainRepo, bypassPermissions, remoteControl),
+      create: (projectId: string, name: string, useMainRepo?: boolean, bypassPermissions?: boolean, remoteControl?: boolean, provider?: string, model?: string) =>
+        rpc('session:create', projectId, name, useMainRepo, bypassPermissions, remoteControl, provider, model),
       spawnShell: (sessionId: string, cwd: string) => rpc('session:spawn-shell', sessionId, cwd),
       kill: (sessionId: string) => rpc('session:kill', sessionId),
       archive: (sessionId: string) => rpc('session:archive', sessionId),
@@ -196,6 +196,12 @@ export function createRemoteClient(baseUrl: string, token: string): SorcererAPI 
       hasConversation: (sessionId: string) => rpc('session:has-conversation', sessionId)
     },
 
+    providers: {
+      list: () => rpc('provider:list'),
+      refresh: () => rpc('provider:refresh'),
+      onUpdated: () => () => {}
+    },
+
     agentGroup: {
       list: () => rpc('agent-group:list'),
       add: (name: string) => rpc('agent-group:add', name),
@@ -206,7 +212,12 @@ export function createRemoteClient(baseUrl: string, token: string): SorcererAPI 
 
     agent: {
       list: () => rpc('agent:list'),
-      add: (data: { name: string; description?: string; system_prompt?: string; mcp_config?: string; bypass_permissions?: boolean; remote_control?: boolean }) =>
+      add: (data: {
+        id?: string; name: string; description?: string; system_prompt?: string; mcp_config?: string;
+        bypass_permissions?: boolean; remote_control?: boolean;
+        mission?: string; auto_start?: boolean; auto_restart?: boolean; restart_delay?: number; max_restarts?: number; schedule_minutes?: number;
+        provider?: string; model?: string
+      }) =>
         rpc('agent:add', data),
       update: (id: string, updates: any) => rpc('agent:update', id, updates),
       remove: (id: string) => rpc('agent:remove', id),

@@ -8,6 +8,7 @@ import { DatabaseService } from '../services/database-service'
 import { WorktreeService } from '../services/worktree-service'
 import { FileWatcherService } from '../services/file-watcher-service'
 import { getProviderRunner } from '../services/provider-runners'
+import { listProviders as listProviderRegistry, refreshProviders as refreshProviderRegistry } from '../services/provider-registry'
 
 // ── Services interface ──────────────────────────────────────
 
@@ -1310,6 +1311,18 @@ export function setSetting(
   if (key === 'shell') {
     pty.setCustomShell(value || undefined)
   }
+}
+
+export function listProviders(
+  { db }: HandlerServices
+): any[] {
+  return listProviderRegistry(db)
+}
+
+export function refreshProviders(
+  { db }: HandlerServices
+): any[] {
+  return refreshProviderRegistry(db)
 }
 
 // ── Quick Notes handlers ─────────────────────────────────────

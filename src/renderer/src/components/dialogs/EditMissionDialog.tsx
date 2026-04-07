@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Dialog, DialogField, DialogActions, DialogButton } from '../Dialog'
+import { DialogSelect } from '../DialogSelect'
 import { getApi } from '../../api/client'
 import { useUIStore } from '../../stores/useUIStore'
 import { useAgentStore } from '../../stores/useAgentStore'
@@ -90,22 +91,22 @@ export function EditMissionDialog() {
       {hasMission && (
         <>
           <DialogField label="Run Schedule">
-            <select
-              className="dialog-input"
+            <DialogSelect
               value={scheduleMinutes}
-              onChange={(e) => setScheduleMinutes(e.target.value)}
+              onChange={setScheduleMinutes}
               style={{ width: 200 }}
-            >
-              <option value="0">Run once (manual)</option>
-              <option value="5">Every 5 minutes</option>
-              <option value="15">Every 15 minutes</option>
-              <option value="30">Every 30 minutes</option>
-              <option value="60">Every hour</option>
-              <option value="120">Every 2 hours</option>
-              <option value="360">Every 6 hours</option>
-              <option value="720">Every 12 hours</option>
-              <option value="1440">Daily</option>
-            </select>
+              options={[
+                { value: '0', label: 'Run once (manual)' },
+                { value: '5', label: 'Every 5 minutes' },
+                { value: '15', label: 'Every 15 minutes' },
+                { value: '30', label: 'Every 30 minutes' },
+                { value: '60', label: 'Every hour' },
+                { value: '120', label: 'Every 2 hours' },
+                { value: '360', label: 'Every 6 hours' },
+                { value: '720', label: 'Every 12 hours' },
+                { value: '1440', label: 'Daily' }
+              ]}
+            />
           </DialogField>
           <DialogField label="Max runs per day">
             <input

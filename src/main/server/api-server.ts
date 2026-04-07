@@ -40,6 +40,8 @@ import {
   getTeamInbox,
   getSetting,
   setSetting,
+  listProviders,
+  refreshProviders,
   getUserInfo,
   loadQuickNote,
   saveQuickNote,
@@ -277,8 +279,8 @@ export class ApiServer {
 
       // Session
       'session:list': (projectId?: string) => listSessions(s, projectId),
-      'session:create': (projectId: string, name: string, useMainRepo?: boolean, bypassPermissions?: boolean, remoteControl?: boolean) =>
-        createSession(s, projectId, name, useMainRepo, bypassPermissions, remoteControl),
+      'session:create': (projectId: string, name: string, useMainRepo?: boolean, bypassPermissions?: boolean, remoteControl?: boolean, provider?: string, model?: string) =>
+        createSession(s, projectId, name, useMainRepo, bypassPermissions, remoteControl, provider, model),
       'session:spawn-shell': (sessionId: string, cwd: string) => spawnShell(s, sessionId, cwd),
       'session:create-quick-terminal': (sourceId: string) => createQuickTerminal(s, sourceId),
       'session:rename': (sessionId: string, name: string) => renameSession(s, sessionId, name),
@@ -355,6 +357,8 @@ export class ApiServer {
       // Settings
       'settings:get': (key: string) => getSetting(s, key),
       'settings:set': (key: string, value: string) => setSetting(s, key, value),
+      'provider:list': () => listProviders(s),
+      'provider:refresh': () => refreshProviders(s),
 
       // System
       'system:userInfo': () => getUserInfo(),
