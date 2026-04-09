@@ -9,7 +9,7 @@ import { WorktreeService } from './services/worktree-service'
 import { FileWatcherService } from './services/file-watcher-service'
 import { PopoutService } from './services/popout-service'
 import { registerIPC } from './ipc/handlers'
-import { syncWorktrees, checkResumeFailed } from './ipc/shared-handlers'
+import { syncWorktrees, checkResumeFailed, extractCodexThreadIdFromOutput, findCodexThreadIdForCwd } from './ipc/shared-handlers'
 import { AgentOrchestrator } from './services/agent-orchestrator'
 import { refreshProviders as refreshProviderRegistry } from './services/provider-registry'
 
@@ -162,11 +162,31 @@ async function createWindow(): Promise<void> {
   // Detect failed resumes (e.g. "No conversation found to continue")
   ptyService.onExit((sessionId, exitCode) => {
     const scrollbackText = ptyService.scrollback.getScrollback(sessionId)
+    const session = dbService.getSession(sessionId)
+    if (session && session.provider === 'codex' && session.type !== 'quick-terminal') {
+      const cwd = fs.existsSync(session.worktree_path as string)
+        ? (session.worktree_path as string)
+        : (dbService.getProject(session.project_id as string)?.path as string || process.cwd())
+      void (async () => {
+        const providerSessionId =
+          extractCodexThreadIdFromOutput(scrollbackText) ||
+          await findCodexThreadIdForCwd(cwd, session.started_at as number | null)
+        if (providerSessionId && providerSessionId !== session.provider_session_id) {
+          dbService.updateSession(sessionId, { provider_session_id: providerSessionId })
+          console.log(`[codex-thread] ${sessionId}: stored ${providerSessionId}`)
+        }
+      })()
+    }
+
     const reason = checkResumeFailed(sessionId, scrollbackText)
     if (reason) {
       console.log(`[resume-failed] ${sessionId}: ${reason} (exit code ${exitCode})`)
+      if (session) {
+        console.log(
+          `[resume-failed] details provider=${session.provider} claude_session_id=${session.claude_session_id || ''} provider_session_id=${session.provider_session_id || ''} cwd=${session.worktree_path || ''}`
+        )
+      }
       // Update DB status back to idle
-      const session = dbService.getSession(sessionId)
       if (session) {
         dbService.updateSession(sessionId, { status: 'idle', pid: null })
       } else {

@@ -213,6 +213,12 @@ export class DatabaseService {
       this.db.run(`ALTER TABLE sessions ADD COLUMN claude_session_id TEXT`)
     } catch { /* column already exists */ }
 
+    // Add provider_session_id column to sessions (idempotent migration)
+    // Stores provider-native resume IDs such as Codex thread UUIDs.
+    try {
+      this.db.run(`ALTER TABLE sessions ADD COLUMN provider_session_id TEXT`)
+    } catch { /* column already exists */ }
+
     // Track when the current/last session run started
     try {
       this.db.run(`ALTER TABLE sessions ADD COLUMN started_at INTEGER`)
@@ -428,18 +434,19 @@ export class DatabaseService {
     remote_control?: number
     status?: string
     claude_session_id?: string
+    provider_session_id?: string
     started_at?: number
     provider?: string
     model?: string
   }): any {
     if (!this.db) throw new Error('Database not initialized')
     this.db.run(
-      `INSERT INTO sessions (id, project_id, name, branch, worktree_path, status, type, team_name, parent_session_id, bypass_permissions, remote_control, claude_session_id, started_at, provider, model)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO sessions (id, project_id, name, branch, worktree_path, status, type, team_name, parent_session_id, bypass_permissions, remote_control, claude_session_id, provider_session_id, started_at, provider, model)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [data.id, data.project_id, data.name, data.branch, data.worktree_path,
        data.status || 'active',
        data.type || 'session', data.team_name || null, data.parent_session_id || null,
-       data.bypass_permissions ?? 1, data.remote_control ?? 0, data.claude_session_id || null, data.started_at ?? null,
+       data.bypass_permissions ?? 1, data.remote_control ?? 0, data.claude_session_id || null, data.provider_session_id || null, data.started_at ?? null,
        data.provider || this.getDefaultProviderFallback(), data.model || '']
     )
     this.save()
@@ -454,6 +461,7 @@ export class DatabaseService {
     archived_at: number | null
     remote_control: number
     claude_session_id: string
+    provider_session_id: string | null
     started_at: number | null
     provider: string
     model: string
