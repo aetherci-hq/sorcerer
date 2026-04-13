@@ -700,7 +700,7 @@ body {
 }
 
 .tree-item--active .tree-label {
-  color: #f5efe4;
+  color: var(--text-primary);
 }
 
 .tree-label-group {

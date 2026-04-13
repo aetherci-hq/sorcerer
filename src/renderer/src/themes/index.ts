@@ -143,6 +143,52 @@ const AETHERCI_THEME: SorcererTheme = {
   }
 }
 
+const AETHERCI_LIGHT_THEME: SorcererTheme = {
+  id: 'aetherci-light',
+  name: 'AetherCI Light',
+  colors: {
+    'bg-root': '#f4fbf7',
+    'bg-sidebar': '#edf6f1',
+    'bg-titlebar': '#e6f1eb',
+    'bg-hover': '#dceae2',
+    'bg-active': '#d1e2d9',
+    'bg-elevated': '#ffffff',
+    'terminal-bg': '#fbfffd',
+    'border-subtle': '#d4e2da',
+    'border-medium': '#b7cbc0',
+    'text-primary': '#12241d',
+    'text-secondary': '#375648',
+    'text-tertiary': '#648173',
+    'text-muted': '#8aa094',
+    'accent': '#00a86b',
+    'accent-dim': '#008557',
+    'accent-glow': 'rgba(0, 168, 107, 0.10)',
+    'accent-glow-strong': 'rgba(0, 168, 107, 0.18)',
+    'danger': '#c94b49'
+  },
+  terminal: {
+    foreground: '#173128',
+    cursor: '#00a86b',
+    selectionBackground: 'rgba(0, 168, 107, 0.18)',
+    black: '#1d352c',
+    red: '#c94b49',
+    green: '#0f9d67',
+    yellow: '#b7791f',
+    blue: '#2f6fed',
+    magenta: '#8b5cf6',
+    cyan: '#0f9fb5',
+    white: '#f4fbf7',
+    brightBlack: '#6d8579',
+    brightRed: '#e06b67',
+    brightGreen: '#34c78a',
+    brightYellow: '#d6a13f',
+    brightBlue: '#5b8cff',
+    brightMagenta: '#ab7cff',
+    brightCyan: '#42bfd1',
+    brightWhite: '#ffffff'
+  }
+}
+
 const KIMBIE_DARK_THEME: SorcererTheme = {
   id: 'kimbie-dark',
   name: 'Kimbie Dark',
@@ -468,6 +514,7 @@ const GRUVBOX_DARK_THEME: SorcererTheme = {
 export const THEMES: Record<string, SorcererTheme> = {
   default: DEFAULT_THEME,
   aetherci: AETHERCI_THEME,
+  'aetherci-light': AETHERCI_LIGHT_THEME,
   'kimbie-dark': KIMBIE_DARK_THEME,
   'night-owl': NIGHT_OWL_THEME,
   'tokyo-night': TOKYO_NIGHT_THEME,
@@ -485,6 +532,15 @@ export function applyTheme(theme: SorcererTheme): void {
   const root = document.documentElement
   for (const [key, value] of Object.entries(theme.colors)) {
     root.style.setProperty(`--${key}`, value)
+  }
+  const bgRoot = theme.colors['bg-root']
+  if (/^#([0-9a-f]{6})$/i.test(bgRoot)) {
+    const hex = bgRoot.slice(1)
+    const r = parseInt(hex.slice(0, 2), 16)
+    const g = parseInt(hex.slice(2, 4), 16)
+    const b = parseInt(hex.slice(4, 6), 16)
+    const luminance = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255
+    root.style.colorScheme = luminance > 0.62 ? 'light' : 'dark'
   }
   // Update native title bar buttons to match the theme (Windows/Linux)
   window.sorcerer?.window.setTitleBarOverlay({
