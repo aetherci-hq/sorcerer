@@ -24,6 +24,7 @@ export function AddProjectDialog() {
   // Derive name: user override wins, otherwise extract from path
   const derivedName = folderName(path)
   const effectiveName = nameOverride || derivedName
+  const canSubmit = !!path.trim() && !submitting
 
   const handleClose = () => {
     setNameOverride('')
@@ -49,10 +50,7 @@ export function AddProjectDialog() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!path.trim()) {
-      addToast('Please enter a project path', 'error')
-      return
-    }
+    if (!path.trim()) return
     setSubmitting(true)
     try {
       const project = await addProjectByPath(path.trim(), effectiveName || undefined)
@@ -78,6 +76,7 @@ export function AddProjectDialog() {
               value={path}
               onChange={(e) => setPath(e.target.value)}
               autoFocus
+              required
             />
             <button type="button" className="dialog-browse-btn" onClick={handleBrowse}>
               Browse
@@ -101,7 +100,7 @@ export function AddProjectDialog() {
         </div>
         <DialogActions>
           <DialogButton onClick={handleClose} disabled={submitting}>Cancel</DialogButton>
-          <DialogButton variant="primary" type="submit" loading={submitting}>Add Project</DialogButton>
+          <DialogButton variant="primary" type="submit" loading={submitting} disabled={!canSubmit}>Add Project</DialogButton>
         </DialogActions>
       </form>
     </Dialog>

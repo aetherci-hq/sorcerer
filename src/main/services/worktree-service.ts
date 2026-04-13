@@ -277,7 +277,7 @@ export class WorktreeService {
 
   async getSessionGitStatus(worktreePath: string): Promise<{
     dirty: boolean; modified: number; staged: number; untracked: number
-    ahead: number; behind: number; hasRemote: boolean
+    ahead: number; behind: number; hasRemote: boolean; added: number; deleted: number
   } | null> {
     try {
       const git: SimpleGit = simpleGit(worktreePath)
@@ -292,6 +292,25 @@ export class WorktreeService {
         behind = status.behind
       }
 
+      let added = 0
+      let deleted = 0
+      const numstat = await git.diff(['--numstat', 'HEAD']).catch(() => '')
+      for (const line of numstat.split('\n')) {
+        const [rawAdded, rawDeleted] = line.trim().split('\t')
+        if (!rawAdded || !rawDeleted) continue
+        added += rawAdded === '-' ? 0 : parseInt(rawAdded, 10) || 0
+        deleted += rawDeleted === '-' ? 0 : parseInt(rawDeleted, 10) || 0
+      }
+
+      for (const filePath of status.not_added) {
+        try {
+          const fileContent = fs.readFileSync(path.join(worktreePath, filePath), 'utf8')
+          added += fileContent.length === 0 ? 0 : fileContent.split(/\r?\n/).length
+        } catch {
+          added += 1
+        }
+      }
+
       return {
         dirty: !status.isClean(),
         modified: status.modified.length + status.renamed.length,
@@ -299,7 +318,9 @@ export class WorktreeService {
         untracked: status.not_added.length,
         ahead,
         behind,
-        hasRemote
+        hasRemote,
+        added,
+        deleted
       }
     } catch {
       return null

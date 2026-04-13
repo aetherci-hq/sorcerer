@@ -289,14 +289,14 @@ function FocusModeOverlay({
   return (
     <div className="focus-mode-overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}>
       <div className={`focus-mode-shell${isWide ? ' focus-mode-shell--wide' : ''}`} onMouseDown={(e) => e.stopPropagation()}>
-        <div className="focus-mode-shell__titlebar">
+        <div className="split-panel-titlebar focus-mode-shell__titlebar">
           {quickNotes ? (
             <span className="split-panel-name">{quickNotesName}</span>
           ) : (
             <PanelHeaderInfo session={session} agent={agent} />
           )}
-          <div className="focus-mode-shell__actions">
-            <button className="focus-mode-shell__close" onClick={onClose}>Exit Focus Mode</button>
+          <div className="split-panel-actions focus-mode-shell__actions">
+            <button className="split-panel-action split-panel-action--text focus-mode-shell__close" onClick={onClose}>Exit</button>
           </div>
         </div>
         <div className="focus-mode-shell__content">
@@ -665,18 +665,6 @@ export function MainContent() {
   const hasActiveSessions = sessions.some((s) => s.status === 'active')
   // Empty state = no split layout and no active item selected
   const showingEmptyState = !splitRoot && !activeSession && !activeAgent && !activeQuickNotes
-
-  useEffect(() => {
-    if (!focusModeSessionId) return
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.preventDefault()
-        exitFocusMode()
-      }
-    }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [focusModeSessionId, exitFocusMode])
 
   useEffect(() => {
     if (!focusModeSessionId) return

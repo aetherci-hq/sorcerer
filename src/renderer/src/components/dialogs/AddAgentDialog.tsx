@@ -34,6 +34,7 @@ export function AddAgentDialog() {
   const selectedProvider = getProvider(provider) || defaultProvider
   const hasSuggestedModels = (selectedProvider?.models.length || 0) > 0
   const isCustomModel = !!selectedProvider?.supportsModelOverride && !!model && !selectedProvider.models.includes(model)
+  const canSubmit = !!name.trim() && !!selectedProvider && detectedProviders.length > 0 && (mode !== 'autonomous' || !!mission.trim()) && !submitting
   const bypassHint =
     provider === 'claude'
       ? 'Claude runs with --dangerously-skip-permissions.'
@@ -68,9 +69,7 @@ export function AddAgentDialog() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!name.trim()) return
-    if (mode === 'autonomous' && !mission.trim()) return
-    if (!selectedProvider) return
+    if (!canSubmit) return
     setSubmitting(true)
     try {
       const id = await addAgent({
@@ -142,6 +141,7 @@ export function AddAgentDialog() {
             value={name}
             onChange={(e) => setName(e.target.value)}
             autoFocus
+            required
           />
         </DialogField>
 
@@ -239,6 +239,7 @@ export function AddAgentDialog() {
                 value={mission}
                 onChange={(e) => setMission(e.target.value)}
                 rows={4}
+                required
               />
             </DialogField>
             <DialogField label="Run Schedule">
@@ -322,7 +323,7 @@ export function AddAgentDialog() {
 
         <DialogActions>
           <DialogButton onClick={() => setMode(null)} disabled={submitting}>Back</DialogButton>
-          <DialogButton variant="primary" type="submit" loading={submitting} disabled={submitting || detectedProviders.length === 0}>
+          <DialogButton variant="primary" type="submit" loading={submitting} disabled={!canSubmit}>
             {mode === 'autonomous' ? 'Create & Start Mission' : 'Create Agent'}
           </DialogButton>
         </DialogActions>

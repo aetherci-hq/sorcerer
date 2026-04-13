@@ -11,6 +11,13 @@ import { Tooltip } from './Tooltip'
 import { EmptyState } from './EmptyState'
 import type { Project, ProjectGroup, Session, TeamMember, TaskData } from '../types'
 
+function formatSessionChangeSummary(status: { added: number; deleted: number } | null): string | null {
+  if (!status || (status.added === 0 && status.deleted === 0)) return null
+  const added = status.added > 0 ? `+${status.added}` : ''
+  const deleted = status.deleted > 0 ? `-${status.deleted}` : ''
+  return [added, deleted].filter(Boolean).join(' ')
+}
+
 function TaskItem({ task }: { task: TaskData }) {
   const statusIcon = task.status === 'completed' ? 'completed'
     : task.status === 'in_progress' ? 'active'
@@ -55,7 +62,7 @@ function ChildQTItem({
   isActive: boolean
 }) {
   const { setActiveSession } = useSessionStore()
-  const { openContextMenu, splitRoot, poppedOutSessionIds } = useUIStore()
+  const { openContextMenu, splitRoot, poppedOutSessionIds, setSidebarSelection } = useUIStore()
   const itemRef = useRef<HTMLDivElement>(null)
 
   const splitIds = splitRoot ? getAllSessionIds(splitRoot) : []
@@ -64,11 +71,13 @@ function ChildQTItem({
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
+    setSidebarSelection({ type: 'session', id: session.id })
     openContextMenu({ x: e.clientX, y: e.clientY, type: 'session', targetId: session.id })
   }
 
   const handleMoreClick = (e: React.MouseEvent) => {
     e.stopPropagation()
+    setSidebarSelection({ type: 'session', id: session.id })
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
     openContextMenu({ x: rect.right, y: rect.bottom, type: 'session', targetId: session.id })
   }
@@ -91,7 +100,10 @@ function ChildQTItem({
     <div
       ref={itemRef}
       className={`tree-item tree-item--child-qt ${isActive ? 'tree-item--active' : ''} ${isInSplit ? 'tree-item--split' : ''}`}
-      onClick={() => setActiveSession(session.id)}
+      onClick={() => {
+        setSidebarSelection({ type: 'session', id: session.id })
+        setActiveSession(session.id)
+      }}
       onContextMenu={handleContextMenu}
       draggable
       onDragStart={handleDragStart}
@@ -194,7 +206,7 @@ function SessionItem({
   projectId: string
 }) {
   const { setActiveSession, activeSessionId } = useSessionStore()
-  const { expandedSessions, toggleSession, openContextMenu, renamingId, setRenamingId, splitRoot, remoteSessionIds, poppedOutSessionIds, showProviderBadges } = useUIStore()
+  const { expandedSessions, toggleSession, openContextMenu, renamingId, setRenamingId, splitRoot, remoteSessionIds, poppedOutSessionIds, showProviderBadges, setSidebarSelection } = useUIStore()
   const { projects } = useProjectStore()
   const { teams, tasksByTeam } = useTeamStore()
   const isExpanded = expandedSessions.has(session.id)
@@ -205,10 +217,22 @@ function SessionItem({
 
   // Worktree divergence check
   const [divergence, setDivergence] = useState<{ behind: number; ahead: number } | null>(null)
+  const [changeSummary, setChangeSummary] = useState<{ added: number; deleted: number } | null>(null)
   useEffect(() => {
     if (!isWorktree) return
     getApi().session.divergence(session.id).then((d) => setDivergence(d)).catch(() => {})
   }, [session.id, isWorktree])
+  useEffect(() => {
+    if (!project || session.type === 'quick-terminal' || !session.branch) {
+      setChangeSummary(null)
+      return
+    }
+    getApi().session.gitStatus(session.id).then((status) => {
+      setChangeSummary(status && typeof status.added === 'number' && typeof status.deleted === 'number'
+        ? { added: status.added, deleted: status.deleted }
+        : null)
+    }).catch(() => setChangeSummary(null))
+  }, [project, session.branch, session.id, session.type])
 
   // Quick notes panel open?
   const hasNotesPanel = useQuickNotesStore((s) => s.openNotePanels.has(session.id))
@@ -283,11 +307,13 @@ function SessionItem({
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
+    setSidebarSelection({ type: 'session', id: session.id })
     openContextMenu({ x: e.clientX, y: e.clientY, type: 'session', targetId: session.id })
   }
 
   const handleMoreClick = (e: React.MouseEvent) => {
     e.stopPropagation()
+    setSidebarSelection({ type: 'session', id: session.id })
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
     openContextMenu({ x: rect.right, y: rect.bottom, type: 'session', targetId: session.id })
   }
@@ -313,7 +339,11 @@ function SessionItem({
       <div
         ref={itemRef}
         className={`tree-item ${isActive ? 'tree-item--active' : ''} ${isInSplit ? 'tree-item--split' : ''} ${session.status === 'archived' ? 'tree-item--archived' : ''}`}
-        onClick={() => !isRenaming && setActiveSession(session.id)}
+        onClick={() => {
+          if (isRenaming) return
+          setSidebarSelection({ type: 'session', id: session.id })
+          setActiveSession(session.id)
+        }}
         onContextMenu={handleContextMenu}
         draggable={!isRenaming}
         onDragStart={handleDragStart}
@@ -351,6 +381,9 @@ function SessionItem({
             )}
             {isMainRepo && session.branch && !isRenaming && (
               <span className="teammate-badge" style={{ fontSize: '9px' }}>direct</span>
+            )}
+            {!isRenaming && formatSessionChangeSummary(changeSummary) && (
+              <span className="tree-change-summary">{formatSessionChangeSummary(changeSummary)}</span>
             )}
             {!isRenaming && divergence && divergence.behind > 0 && (
               <Tooltip label={`${divergence.behind} commit${divergence.behind !== 1 ? 's' : ''} behind main${divergence.ahead > 0 ? `, ${divergence.ahead} ahead` : ''}`}>
@@ -415,7 +448,7 @@ function SessionItem({
 
 function ProjectItem({ project, staggerClass, projectIndex, onDragStart: onProjectDragStart, onDragOver: onProjectDragOver, onDragEnd: onProjectDragEnd, onDrop: onProjectDrop, dropPosition }: { project: Project; staggerClass: string; projectIndex: number; onDragStart: (e: React.DragEvent, index: number) => void; onDragOver: (e: React.DragEvent, index: number) => void; onDragEnd: () => void; onDrop: (e: React.DragEvent, index: number) => void; dropPosition: 'above' | 'below' | null }) {
   const { sessions, activeSessionId } = useSessionStore()
-  const { expandedProjects, toggleProject, openContextMenu, renamingId, setRenamingId } = useUIStore()
+  const { expandedProjects, toggleProject, openContextMenu, renamingId, setRenamingId, setSidebarSelection } = useUIStore()
   const isExpanded = expandedProjects.has(project.id)
   const headerRef = useRef<HTMLDivElement>(null)
 
@@ -481,11 +514,13 @@ function ProjectItem({ project, staggerClass, projectIndex, onDragStart: onProje
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
+    setSidebarSelection({ type: 'project', id: project.id })
     openContextMenu({ x: e.clientX, y: e.clientY, type: 'project', targetId: project.id })
   }
 
   const handleMoreClick = (e: React.MouseEvent) => {
     e.stopPropagation()
+    setSidebarSelection({ type: 'project', id: project.id })
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
     openContextMenu({ x: rect.right, y: rect.bottom, type: 'project', targetId: project.id })
   }
@@ -495,7 +530,11 @@ function ProjectItem({ project, staggerClass, projectIndex, onDragStart: onProje
       <div
         ref={headerRef}
         className={`tree-item ${dropPosition === 'above' ? 'tree-item--drop-above' : ''} ${dropPosition === 'below' ? 'tree-item--drop-below' : ''}`}
-        onClick={() => !isRenaming && toggleProject(project.id)}
+        onClick={() => {
+          if (isRenaming) return
+          setSidebarSelection({ type: 'project', id: project.id })
+          toggleProject(project.id)
+        }}
         onContextMenu={handleContextMenu}
         draggable={!isRenaming}
         onDragStart={(e) => onProjectDragStart(e, projectIndex)}
@@ -584,7 +623,7 @@ function GroupItem({
   }
   dragState: { dragIndex: number | null; dropTarget: { index: number; position: 'above' | 'below' } | null }
 }) {
-  const { expandedGroups, toggleGroup, openContextMenu, renamingId, setRenamingId } = useUIStore()
+  const { expandedGroups, toggleGroup, openContextMenu, renamingId, setRenamingId, setSidebarSelection } = useUIStore()
   const { moveProjectToGroup } = useProjectStore()
   const { sessions } = useSessionStore()
   const isExpanded = expandedGroups.has(group.id)
@@ -625,11 +664,13 @@ function GroupItem({
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
+    setSidebarSelection({ type: 'project-group', id: group.id })
     openContextMenu({ x: e.clientX, y: e.clientY, type: 'project-group', targetId: group.id })
   }
 
   const handleMoreClick = (e: React.MouseEvent) => {
     e.stopPropagation()
+    setSidebarSelection({ type: 'project-group', id: group.id })
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
     openContextMenu({ x: rect.right, y: rect.bottom, type: 'project-group', targetId: group.id })
   }
@@ -668,7 +709,11 @@ function GroupItem({
     <div className={`tree-group ${staggerClass}`}>
       <div
         className={`tree-item tree-item--group ${dropHighlight ? 'tree-item--drop-inside' : ''}`}
-        onClick={() => !isRenaming && toggleGroup(group.id)}
+        onClick={() => {
+          if (isRenaming) return
+          setSidebarSelection({ type: 'project-group', id: group.id })
+          toggleGroup(group.id)
+        }}
         onContextMenu={handleContextMenu}
         onDragOver={handleGroupDragOver}
         onDragLeave={handleGroupDragLeave}

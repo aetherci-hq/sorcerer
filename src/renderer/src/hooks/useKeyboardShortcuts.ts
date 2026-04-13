@@ -3,6 +3,7 @@ import { useUIStore } from '../stores/useUIStore'
 import { useSessionStore } from '../stores/useSessionStore'
 import { useAgentStore } from '../stores/useAgentStore'
 import { useProjectStore } from '../stores/useProjectStore'
+import { findLeaf } from '../stores/useUIStore'
 import { useQuickNotesStore } from '../stores/useQuickNotesStore'
 import { focusTerminal } from '../components/TerminalView'
 
@@ -10,6 +11,49 @@ import { focusTerminal } from '../components/TerminalView'
 function focusActiveTerminal(): void {
   const id = useSessionStore.getState().activeSessionId
   if (id) requestAnimationFrame(() => focusTerminal(id))
+}
+
+function closeActivePanel(): boolean {
+  const ui = useUIStore.getState()
+  const { sessions, activeSessionId, deleteSession } = useSessionStore.getState()
+
+  if (ui.splitRoot && ui.focusedPanelId) {
+    const focusedLeaf = findLeaf(ui.splitRoot, ui.focusedPanelId)
+    if (!focusedLeaf) return false
+
+    if (focusedLeaf.sessionId?.startsWith('quicknotes:')) {
+      const [, , parentId] = focusedLeaf.sessionId.split(':')
+      if (parentId) useQuickNotesStore.getState().removeNotePanel(parentId)
+    }
+
+    const focusedSession = focusedLeaf.sessionId
+      ? sessions.find((session) => session.id === focusedLeaf.sessionId)
+      : undefined
+
+    if (focusedSession?.type === 'quick-terminal') {
+      deleteSession(focusedSession.id)
+      return true
+    }
+
+    ui.closePanel(ui.focusedPanelId)
+    return true
+  }
+
+  if (!activeSessionId) return false
+
+  if (activeSessionId.startsWith('quicknotes:')) {
+    const [, , parentId] = activeSessionId.split(':')
+    if (parentId) useQuickNotesStore.getState().removeNotePanel(parentId)
+  }
+
+  const activeSession = sessions.find((session) => session.id === activeSessionId)
+  if (activeSession?.type === 'quick-terminal') {
+    deleteSession(activeSession.id)
+    return true
+  }
+
+  useSessionStore.setState({ activeSessionId: null })
+  return true
 }
 
 /**
@@ -151,7 +195,7 @@ export function useKeyboardShortcuts() {
         }
       }
 
-      // Escape — unmaximize, clear search, or refocus terminal
+      // Escape — clear search, exit focus mode, unmaximize, close panel, or refocus terminal
       if (e.key === 'Escape') {
         const searchInput = document.querySelector('.search-input') as HTMLInputElement | null
         if (document.activeElement === searchInput) {
@@ -163,9 +207,13 @@ export function useKeyboardShortcuts() {
             focusActiveTerminal()
           }
         } else {
-          const { maximizedPanelId, unmaximizePanel } = useUIStore.getState()
-          if (maximizedPanelId) {
+          const { focusModeSessionId, exitFocusMode, maximizedPanelId, unmaximizePanel } = useUIStore.getState()
+          if (focusModeSessionId) {
+            exitFocusMode()
+          } else if (maximizedPanelId) {
             unmaximizePanel()
+          } else if (closeActivePanel()) {
+            return
           } else {
             focusActiveTerminal()
           }

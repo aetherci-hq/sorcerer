@@ -7,6 +7,7 @@ import { useProjectStore } from '../../stores/useProjectStore'
 import { useSessionStore } from '../../stores/useSessionStore'
 import { useToastStore } from '../../stores/useToastStore'
 import { useProviders } from '../../hooks/useProviders'
+import { resolveNewSessionProjectId } from '../../utils/newSessionDefaults'
 
 export function NewSessionDialog() {
   const { activeDialog, dialogTargetId, closeDialog } = useUIStore()
@@ -37,6 +38,14 @@ export function NewSessionDialog() {
   }, [open, providersLoading, provider, defaultProvider])
 
   useEffect(() => {
+    if (!open || !!dialogTargetId) return
+    const defaultProjectId = resolveNewSessionProjectId()
+    if (defaultProjectId) {
+      setProjectId(defaultProjectId)
+    }
+  }, [open, dialogTargetId])
+
+  useEffect(() => {
     if (!effectiveProjectId || !open) {
       setGitInfo(null)
       return
@@ -48,6 +57,7 @@ export function NewSessionDialog() {
   const isEmptyGit = gitInfo?.hasGit && !gitInfo?.hasCommits
   const hasSuggestedModels = (selectedProvider?.models.length || 0) > 0
   const isCustomModel = !!selectedProvider?.supportsModelOverride && !!model && !selectedProvider.models.includes(model)
+  const canSubmit = !!effectiveProjectId && !!name.trim() && !!selectedProvider && detectedProviders.length > 0 && !submitting
   const bypassHint =
     provider === 'claude'
       ? 'Claude runs with --dangerously-skip-permissions.'
@@ -71,18 +81,7 @@ export function NewSessionDialog() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!effectiveProjectId) {
-      addToast('Please select a project', 'error')
-      return
-    }
-    if (!name.trim()) {
-      addToast('Please enter a session name', 'error')
-      return
-    }
-    if (!selectedProvider) {
-      addToast('No supported provider was detected on this system', 'error')
-      return
-    }
+    if (!canSubmit) return
     setSubmitting(true)
     try {
       const result = await createSession(
@@ -218,6 +217,7 @@ export function NewSessionDialog() {
             value={name}
             onChange={(e) => setName(e.target.value)}
             autoFocus
+            required
           />
         </DialogField>
         {isGitProject && (
@@ -256,7 +256,7 @@ export function NewSessionDialog() {
         {hintText && <div className="dialog-hint">{hintText}</div>}
         <DialogActions>
           <DialogButton onClick={handleClose} disabled={submitting}>Cancel</DialogButton>
-          <DialogButton variant="primary" type="submit" loading={submitting} disabled={submitting || detectedProviders.length === 0}>Create Session</DialogButton>
+          <DialogButton variant="primary" type="submit" loading={submitting} disabled={!canSubmit}>Create Session</DialogButton>
         </DialogActions>
       </form>
     </Dialog>

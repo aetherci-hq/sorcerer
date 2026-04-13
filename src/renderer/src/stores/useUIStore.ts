@@ -12,6 +12,11 @@ interface ContextMenu {
   targetId: string
 }
 
+interface SidebarSelection {
+  type: 'project' | 'project-group' | 'session'
+  id: string
+}
+
 export const SIDEBAR_MIN = 200
 export const SIDEBAR_MAX = 420
 export const SIDEBAR_DEFAULT = 260
@@ -28,6 +33,9 @@ interface UIState {
   contextMenu: ContextMenu | null
   openContextMenu: (menu: ContextMenu) => void
   closeContextMenu: () => void
+
+  sidebarSelection: SidebarSelection | null
+  setSidebarSelection: (selection: SidebarSelection | null) => void
 
   // Inline rename
   renamingId: string | null
@@ -244,6 +252,9 @@ export const useUIStore = create<UIState>()(
       contextMenu: null,
       openContextMenu: (menu) => set({ contextMenu: menu }),
       closeContextMenu: () => set({ contextMenu: null }),
+
+      sidebarSelection: null,
+      setSidebarSelection: (selection) => set({ sidebarSelection: selection }),
 
       // Inline rename
       renamingId: null,
@@ -493,7 +504,8 @@ export const useUIStore = create<UIState>()(
         sidebarCollapsed: state.sidebarCollapsed,
         sidebarWidth: state.sidebarWidth,
         agentPaneHeight: state.agentPaneHeight,
-        showProviderBadges: state.showProviderBadges
+        showProviderBadges: state.showProviderBadges,
+        sidebarSelection: state.sidebarSelection
       })
     }
   )

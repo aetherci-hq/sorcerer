@@ -205,7 +205,7 @@ function getTopProviders(sessions: any[], limit = 4): Array<{ provider: string; 
     .map(([provider, count]) => ({ provider, count }))
 }
 
-function StatsPopover({ sessions, onClose, pinned, onTogglePin }: { sessions: any[]; onClose: () => void; pinned: boolean; onTogglePin: () => void }) {
+function StatsPopover({ sessions, containerRef, onClose, pinned, onTogglePin }: { sessions: any[]; containerRef: React.RefObject<HTMLDivElement | null>; onClose: () => void; pinned: boolean; onTogglePin: () => void }) {
   const popoverRef = useRef<HTMLDivElement>(null)
   const memoryMB = useMemoryUsage()
 
@@ -231,7 +231,10 @@ function StatsPopover({ sessions, onClose, pinned, onTogglePin }: { sessions: an
   // Close on click outside
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) {
+      const target = e.target as Node
+      const insidePopover = !!popoverRef.current?.contains(target)
+      const insideTrigger = !!containerRef.current?.contains(target)
+      if (!insidePopover && !insideTrigger) {
         onClose()
       }
     }
@@ -240,7 +243,7 @@ function StatsPopover({ sessions, onClose, pinned, onTogglePin }: { sessions: an
       clearTimeout(timer)
       document.removeEventListener('mousedown', handler)
     }
-  }, [onClose])
+  }, [containerRef, onClose])
 
   // Close on Escape
   useEffect(() => {
@@ -385,6 +388,7 @@ export function SidebarFooter({ collapsed, width = 260, pinned, togglePin }: { c
   const compact = width < 220
 
   const handleCloseStats = useCallback(() => setShowStats(false), [])
+  const statsTriggerRef = useRef<HTMLDivElement>(null)
 
   if (collapsed) {
     return (
@@ -398,20 +402,22 @@ export function SidebarFooter({ collapsed, width = 260, pinned, togglePin }: { c
 
   return (
     <div className={`sidebar-footer stagger-10${compact ? ' sidebar-footer--compact' : ''}`}>
-      {showStats && <StatsPopover sessions={sessions} onClose={handleCloseStats} pinned={pinned} onTogglePin={togglePin} />}
-      <button
-        className="avatar-ring-btn"
-        data-activity={activityLevel}
-        onClick={() => setShowStats(!showStats)}
-        aria-label="Toggle session stats"
-      >
-        <span className="avatar-ring" />
-        {avatarSrc ? (
-          <img className="user-avatar user-avatar--img" src={avatarSrc} alt={displayName} />
-        ) : (
-          <div className="user-avatar">{initial}</div>
-        )}
-      </button>
+      {showStats && <StatsPopover sessions={sessions} containerRef={statsTriggerRef} onClose={handleCloseStats} pinned={pinned} onTogglePin={togglePin} />}
+      <div ref={statsTriggerRef}>
+        <button
+          className="avatar-ring-btn"
+          data-activity={activityLevel}
+          onClick={() => setShowStats((current) => !current)}
+          aria-label="Toggle session stats"
+        >
+          <span className="avatar-ring" />
+          {avatarSrc ? (
+            <img className="user-avatar user-avatar--img" src={avatarSrc} alt={displayName} />
+          ) : (
+            <div className="user-avatar">{initial}</div>
+          )}
+        </button>
+      </div>
       <div className="user-info">
         <div className="user-name">{displayName}</div>
       </div>
