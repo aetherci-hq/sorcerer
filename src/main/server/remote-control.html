@@ -6,9 +6,11 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>Sorcerer — Remote Control</title>
+<link rel="stylesheet" href="/rc-assets/xterm.css">
 <style>
   :root {
     --bg: #0f0e0c;
+    --bg-active: #2a261e;
     --bg-card: #1a1714;
     --bg-card-hover: #231f19;
     --bg-elevated: #282420;
@@ -21,10 +23,12 @@
     --text-muted: #4a4540;
     --accent: #e2a445;
     --accent-dim: #c48a2a;
+    --accent-glow: rgba(226, 164, 69, 0.12);
+    --accent-glow-strong: rgba(226, 164, 69, 0.22);
     --green: #5ec269;
     --red: #e25555;
-    --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-    --font-mono: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
+    --font: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+    --font-mono: 'JetBrains Mono', 'Cascadia Code', monospace;
   }
 
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -58,16 +62,33 @@
   }
 
   .header-logo {
-    width: 20px;
-    height: 20px;
-    border-radius: 4px;
+    width: 18px;
+    height: 18px;
+    position: relative;
+    flex-shrink: 0;
+  }
+
+  .header-logo::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 11px;
+    height: 11px;
     background: var(--accent);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 11px;
-    font-weight: 700;
-    color: #000;
+    transform: translate(-50%, -50%) rotate(45deg);
+    border-radius: 2px;
+  }
+
+  .header-logo::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 5px;
+    height: 5px;
+    background: var(--bg);
+    transform: translate(-50%, -50%) rotate(45deg);
   }
 
   .header-title {
@@ -115,10 +136,6 @@
     border: 1px solid var(--border);
     border-radius: 10px;
     overflow: hidden;
-    transition: border-color 0.15s;
-  }
-  .card.expanded {
-    border-color: var(--border-medium);
   }
 
   .card-header {
@@ -135,19 +152,106 @@
     background: var(--bg-card-hover);
   }
 
-  .status-dot {
+  .signal {
+    position: relative;
+    width: 10px;
+    height: 10px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .signal--active .signal-core {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--text);
+    box-shadow: 0 0 8px rgba(232, 230, 227, 0.3);
+  }
+
+  .signal--active .signal-ring,
+  .signal--popped-out .signal-ring {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .signal--active .signal-ring::after,
+  .signal--popped-out .signal-ring::after {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    animation: signal-radiate 2.4s cubic-bezier(0.25, 0.46, 0.45, 0.94) infinite;
+  }
+
+  .signal--active .signal-ring::after {
+    border: 1px solid var(--text);
+  }
+
+  .signal--idle .signal-core {
+    width: 8px;
+    height: 2px;
+    border-radius: 1px;
+    background: var(--text-tertiary);
+  }
+
+  .signal--waiting .signal-core {
     width: 8px;
     height: 8px;
     border-radius: 50%;
-    flex-shrink: 0;
-    background: var(--text-muted);
+    border: 1.5px solid transparent;
+    border-top-color: var(--text);
+    border-right-color: rgba(232, 230, 227, 0.15);
+    animation: signal-spin 1.2s linear infinite;
+    box-sizing: border-box;
   }
-  .status-dot.active {
-    background: var(--green);
-    box-shadow: 0 0 6px rgba(94, 194, 105, 0.4);
+
+  .signal--starting .signal-core {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--text);
+    animation: signal-breathe 1.4s ease-in-out infinite;
   }
-  .status-dot.idle {
-    background: var(--text-tertiary);
+
+  .signal--archived .signal-core {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    border: 1px solid var(--text-muted);
+    box-sizing: border-box;
+    opacity: 0.6;
+  }
+
+  .signal--popped-out .signal-core {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    border: 1.5px solid var(--text-tertiary);
+    box-sizing: border-box;
+  }
+
+  .signal--popped-out .signal-ring::after {
+    border: 1px solid var(--text-tertiary);
+  }
+
+  @keyframes signal-radiate {
+    0%  { transform: scale(1); opacity: 0.5; }
+    80% { transform: scale(2.8); opacity: 0; }
+    100% { transform: scale(2.8); opacity: 0; }
+  }
+
+  @keyframes signal-spin {
+    to { transform: rotate(360deg); }
+  }
+
+  @keyframes signal-breathe {
+    0%, 100% { opacity: 0.35; transform: scale(0.8); }
+    50% { opacity: 1; transform: scale(1.1); }
   }
 
   .card-info {
@@ -188,6 +292,18 @@
     font-size: 12px;
   }
 
+  .teammate-badge {
+    font-size: 11px;
+    font-family: var(--font-mono);
+    font-weight: 500;
+    padding: 1px 5px;
+    border-radius: 3px;
+    background: var(--bg-elevated);
+    color: var(--text-tertiary);
+    border: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+
   .card-type-badge {
     font-size: 10px;
     font-weight: 600;
@@ -198,46 +314,6 @@
     background: var(--bg-elevated);
     color: var(--text-tertiary);
     flex-shrink: 0;
-  }
-
-  .card-chevron {
-    width: 16px;
-    height: 16px;
-    color: var(--text-muted);
-    transition: transform 0.2s;
-    flex-shrink: 0;
-  }
-  .card.expanded .card-chevron {
-    transform: rotate(90deg);
-  }
-
-  /* ── Expanded body ──────────────────────────── */
-  .card-body {
-    display: none;
-    border-top: 1px solid var(--border);
-  }
-  .card.expanded .card-body {
-    display: block;
-  }
-
-  .terminal-preview {
-    background: var(--bg-terminal);
-    padding: 10px 12px;
-    max-height: 200px;
-    overflow-y: auto;
-    font-family: var(--font-mono);
-    font-size: 11px;
-    line-height: 1.5;
-    color: var(--text-secondary);
-    white-space: pre-wrap;
-    word-break: break-all;
-    -webkit-overflow-scrolling: touch;
-  }
-
-  .terminal-preview:empty::after {
-    content: 'No terminal output yet';
-    color: var(--text-muted);
-    font-style: italic;
   }
 
   .nudge-bar {
@@ -290,14 +366,19 @@
   }
 
   /* ── Session detail (fullscreen replacement) ── */
-  .idle-fullscreen {
-    min-height: 100dvh;
+  .detail-fullscreen {
+    position: fixed;
+    inset: 0;
+    height: 100dvh;
     background: var(--bg);
     display: flex;
     flex-direction: column;
+    width: 100vw;
+    overflow: hidden;
+    z-index: 20;
   }
 
-  .idle-fullscreen-back {
+  .detail-fullscreen-back {
     display: flex;
     align-items: center;
     gap: 4px;
@@ -311,40 +392,139 @@
     -webkit-user-select: none;
     user-select: none;
   }
-  .idle-fullscreen-back:active {
+  .detail-fullscreen-back:active {
     background: var(--bg-card-hover);
   }
 
-  .idle-fullscreen-body {
+  .detail-fullscreen-body {
     flex: 1;
     display: flex;
     flex-direction: column;
+    min-height: 0;
+  }
+
+  .detail-fullscreen-body--idle {
     align-items: center;
     justify-content: center;
     gap: 16px;
     padding: 40px 24px;
   }
 
-  .idle-fullscreen-name {
+  .detail-fullscreen-body--active {
+    justify-content: flex-start;
+    gap: 12px;
+    padding: 14px 0 0;
+    overflow: hidden;
+  }
+
+  .detail-fullscreen-header {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 0 16px;
+  }
+
+  .detail-fullscreen-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .detail-badges {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  .detail-fullscreen-name {
     font-size: 18px;
     font-weight: 600;
     color: var(--text);
-    text-align: center;
     max-width: 100%;
     word-break: break-word;
   }
 
-  .idle-fullscreen-status {
+  .detail-fullscreen-body--idle .detail-fullscreen-name,
+  .detail-fullscreen-body--idle .detail-fullscreen-status {
+    text-align: center;
+  }
+
+  .detail-fullscreen-status {
     font-size: 14px;
     color: var(--text-tertiary);
   }
 
-  .idle-fullscreen-actions {
+  .detail-terminal {
+    flex: 1;
+    min-height: 0;
+    width: 100%;
+    background: var(--bg-terminal);
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    overflow-y: auto;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    line-height: 1.55;
+    color: var(--text-secondary);
+    white-space: pre-wrap;
+    word-break: normal;
+    overflow-wrap: anywhere;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .detail-terminal:empty::after {
+    content: 'No terminal output yet';
+    color: var(--text-muted);
+    font-style: italic;
+  }
+
+  .detail-terminal--xterm {
+    overflow: hidden;
+    font-family: inherit;
+    touch-action: pan-y;
+  }
+
+  .detail-terminal__mount {
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+  }
+
+  .detail-terminal .xterm {
+    height: 100%;
+    padding: 14px 16px;
+    touch-action: pan-y;
+  }
+
+  .detail-terminal .xterm-screen,
+  .detail-terminal .xterm-helpers {
+    pointer-events: none;
+  }
+
+  .detail-terminal .xterm-helper-textarea {
+    pointer-events: auto;
+  }
+
+  .detail-terminal .xterm-viewport {
+    background: var(--bg-terminal);
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    touch-action: pan-y;
+  }
+
+  .detail-fullscreen-actions {
     display: flex;
     gap: 12px;
     margin-top: 8px;
     width: 100%;
     max-width: 320px;
+  }
+
+  .detail-fullscreen-body--active .nudge-bar {
+    padding: 12px 16px 16px;
+    border-top: none;
   }
 
   .idle-btn {
@@ -398,7 +578,7 @@
 
 <div class="header">
   <div class="header-brand">
-    <div class="header-logo">S</div>
+    <div class="header-logo" aria-hidden="true"></div>
     <span class="header-title">Sorcerer<span class="header-subtitle">Remote Control</span></span>
   </div>
   <div class="conn-dot" id="connDot"></div>
@@ -409,6 +589,8 @@
 </div>
 
 <div id="idleOverlay" style="display:none"></div>
+<script src="/rc-assets/xterm.js"></script>
+<script src="/rc-assets/addon-fit.js"></script>
 <script>
 (function() {
   'use strict';
@@ -429,12 +611,17 @@
   let sessions = [];
   let agents = [];
   let projects = [];
-  let expandedId = null;
-  let idleOverlayItem = null;  // item being shown in fullscreen idle view
-  let idleOverlayError = '';
+  let detailOverlayId = null;  // item being shown in fullscreen detail view
+  let detailOverlayError = '';
   let scrollbackCache = {};
   let ws = null;
   let connected = false;
+  let currentThemeId = null;
+  let detailTerminal = null;
+  let detailFitAddon = null;
+  let detailTerminalSessionId = null;
+  let detailTerminalTouchCleanup = null;
+  let pendingReplaySessionId = null;
 
   // ── RPC helper ──────────────────────────────
   async function rpc(method, ...args) {
@@ -454,69 +641,148 @@
   // ── Theme ───────────────────────────────────
   const THEMES = {
     default: {
-      'bg-root':'#0f0e0c','bg-titlebar':'#1a1714','bg-hover':'#231f19','bg-elevated':'#282420',
-      'terminal-bg':'#0f0e0c','border-subtle':'#2a261e','border-medium':'#3a342a',
-      'text-primary':'#ede6d8','text-secondary':'#a69e8e','text-tertiary':'#6b6355','text-muted':'#4a4540',
-      'accent':'#e2a445','accent-dim':'#c48a2a','green':'#5ec269','danger':'#e25555'
+      colors: {
+        'bg-root':'#0f0e0c','bg-sidebar':'#0b0a08','bg-titlebar':'#1a1714','bg-hover':'#231f19','bg-active':'#2a261e','bg-elevated':'#282420',
+        'terminal-bg':'#0f0e0c','border-subtle':'#2a261e','border-medium':'#3a342a','text-primary':'#ede6d8','text-secondary':'#a69e8e',
+        'text-tertiary':'#6b6355','text-muted':'#4a4540','accent':'#e2a445','accent-dim':'#c48a2a','accent-glow':'rgba(226, 164, 69, 0.12)',
+        'accent-glow-strong':'rgba(226, 164, 69, 0.22)','danger':'#e25555'
+      },
+      terminal: {
+        foreground:'#ede6d8',cursor:'#e2a445',selectionBackground:'#e2a44533',black:'#0f0e0c',red:'#e25555',green:'#5ec269',yellow:'#e2a445',
+        blue:'#5ba4e6',magenta:'#c084fc',cyan:'#22d3ee',white:'#ede6d8',brightBlack:'#6b6355',brightRed:'#f87171',brightGreen:'#86efac',
+        brightYellow:'#fde68a',brightBlue:'#93c5fd',brightMagenta:'#d8b4fe',brightCyan:'#67e8f9',brightWhite:'#ffffff'
+      }
     },
     aetherci: {
-      'bg-root':'#060606','bg-titlebar':'#0a0a0a','bg-hover':'#1a1a1a','bg-elevated':'#121212',
-      'terminal-bg':'#060606','border-subtle':'rgba(255,255,255,0.10)','border-medium':'rgba(255,255,255,0.15)',
-      'text-primary':'#ffffff','text-secondary':'#9ca3af','text-tertiary':'#6b7280','text-muted':'#4b5563',
-      'accent':'#00ff88','accent-dim':'#00cc6a','green':'#00ff88','danger':'#db504a'
+      colors: {
+        'bg-root':'#060606','bg-sidebar':'#0a0a0a','bg-titlebar':'#0a0a0a','bg-hover':'#1a1a1a','bg-active':'#222222','bg-elevated':'#121212',
+        'terminal-bg':'#060606','border-subtle':'rgba(255, 255, 255, 0.10)','border-medium':'rgba(255, 255, 255, 0.15)','text-primary':'#ffffff',
+        'text-secondary':'#9ca3af','text-tertiary':'#6b7280','text-muted':'#4b5563','accent':'#00ff88','accent-dim':'#00cc6a',
+        'accent-glow':'rgba(0, 255, 136, 0.10)','accent-glow-strong':'rgba(0, 255, 136, 0.20)','danger':'#db504a'
+      },
+      terminal: {
+        foreground:'#d1d5db',cursor:'#00ff88',selectionBackground:'rgba(0, 255, 136, 0.15)',black:'#060606',red:'#db504a',green:'#00ff88',
+        yellow:'#eca400',blue:'#3b82f6',magenta:'#c084fc',cyan:'#22d3ee',white:'#d1d5db',brightBlack:'#6b7280',brightRed:'#fca5a5',
+        brightGreen:'#86efac',brightYellow:'#fde68a',brightBlue:'#93c5fd',brightMagenta:'#d8b4fe',brightCyan:'#67e8f9',brightWhite:'#ffffff'
+      }
+    },
+    'aetherci-light': {
+      colors: {
+        'bg-root':'#f4fbf7','bg-sidebar':'#edf6f1','bg-titlebar':'#e6f1eb','bg-hover':'#dceae2','bg-active':'#d1e2d9','bg-elevated':'#ffffff',
+        'terminal-bg':'#fbfffd','border-subtle':'#d4e2da','border-medium':'#b7cbc0','text-primary':'#12241d','text-secondary':'#375648',
+        'text-tertiary':'#648173','text-muted':'#8aa094','accent':'#00a86b','accent-dim':'#008557','accent-glow':'rgba(0, 168, 107, 0.10)',
+        'accent-glow-strong':'rgba(0, 168, 107, 0.18)','danger':'#c94b49'
+      },
+      terminal: {
+        foreground:'#173128',cursor:'#00a86b',selectionBackground:'rgba(0, 168, 107, 0.18)',black:'#1d352c',red:'#c94b49',green:'#0f9d67',
+        yellow:'#b7791f',blue:'#2f6fed',magenta:'#8b5cf6',cyan:'#0f9fb5',white:'#f4fbf7',brightBlack:'#6d8579',brightRed:'#e06b67',
+        brightGreen:'#34c78a',brightYellow:'#d6a13f',brightBlue:'#5b8cff',brightMagenta:'#ab7cff',brightCyan:'#42bfd1',brightWhite:'#ffffff'
+      }
     },
     'kimbie-dark': {
-      'bg-root':'#221a0f','bg-titlebar':'#362712','bg-hover':'#3a2a16','bg-elevated':'#362712',
-      'terminal-bg':'#221a0f','border-subtle':'#3a2a16','border-medium':'#5a4020',
-      'text-primary':'#d3af86','text-secondary':'#a8875c','text-tertiary':'#7e6545','text-muted':'#5a4a35',
-      'accent':'#a57a4c','accent-dim':'#8a6540','green':'#0dbc79','danger':'#f48771'
+      colors: {
+        'bg-root':'#221a0f','bg-sidebar':'#1a1308','bg-titlebar':'#362712','bg-hover':'#3a2a16','bg-active':'#7c5021','bg-elevated':'#362712',
+        'terminal-bg':'#221a0f','border-subtle':'#3a2a16','border-medium':'#5a4020','text-primary':'#d3af86','text-secondary':'#a8875c',
+        'text-tertiary':'#7e6545','text-muted':'#5a4a35','accent':'#a57a4c','accent-dim':'#8a6540','accent-glow':'rgba(165, 122, 76, 0.12)',
+        'accent-glow-strong':'rgba(165, 122, 76, 0.22)','danger':'#f48771'
+      },
+      terminal: {
+        foreground:'#d3af86',cursor:'#d3af86',selectionBackground:'#a57a4c33',black:'#221a0f',red:'#cd3131',green:'#0dbc79',yellow:'#e5e510',
+        blue:'#2472c8',magenta:'#bc3fbc',cyan:'#11a8cd',white:'#e5e5e5',brightBlack:'#666666',brightRed:'#f14c4c',brightGreen:'#23d18b',
+        brightYellow:'#f5f543',brightBlue:'#3b8eea',brightMagenta:'#d670d6',brightCyan:'#29b8db',brightWhite:'#e5e5e5'
+      }
     },
     'night-owl': {
-      'bg-root':'#011627','bg-titlebar':'#011627','bg-hover':'#0b2942','bg-elevated':'#021320',
-      'terminal-bg':'#011627','border-subtle':'#122d42','border-medium':'#5f7e97',
-      'text-primary':'#d6deeb','text-secondary':'#7fdbca','text-tertiary':'#5f7e97','text-muted':'#44596b',
-      'accent':'#7e57c2','accent-dim':'#6943a5','green':'#22da6e','danger':'#ef5350'
+      colors: {
+        'bg-root':'#011627','bg-sidebar':'#011627','bg-titlebar':'#011627','bg-hover':'#0b2942','bg-active':'#234d708c','bg-elevated':'#021320',
+        'terminal-bg':'#011627','border-subtle':'#122d42','border-medium':'#5f7e97','text-primary':'#d6deeb','text-secondary':'#7fdbca',
+        'text-tertiary':'#5f7e97','text-muted':'#44596b','accent':'#7e57c2','accent-dim':'#6943a5','accent-glow':'rgba(126, 87, 194, 0.12)',
+        'accent-glow-strong':'rgba(126, 87, 194, 0.22)','danger':'#ef5350'
+      },
+      terminal: {
+        foreground:'#d6deeb',cursor:'#80a4c2',selectionBackground:'#1b90dd4d',black:'#011627',red:'#ef5350',green:'#22da6e',yellow:'#c5e478',
+        blue:'#82aaff',magenta:'#c792ea',cyan:'#21c7a8',white:'#ffffff',brightBlack:'#575656',brightRed:'#ef5350',brightGreen:'#22da6e',
+        brightYellow:'#ffeb95',brightBlue:'#82aaff',brightMagenta:'#c792ea',brightCyan:'#7fdbca',brightWhite:'#ffffff'
+      }
     },
     'tokyo-night': {
-      'bg-root':'#1a1b26','bg-titlebar':'#16161e','bg-hover':'#1f2030','bg-elevated':'#1e1f2b',
-      'terminal-bg':'#1a1b26','border-subtle':'#101014','border-medium':'#292e42',
-      'text-primary':'#c0caf5','text-secondary':'#a9b1d6','text-tertiary':'#565f89','text-muted':'#3b3f52',
-      'accent':'#7aa2f7','accent-dim':'#3d59a1','green':'#73daca','danger':'#f7768e'
+      colors: {
+        'bg-root':'#1a1b26','bg-sidebar':'#16161e','bg-titlebar':'#16161e','bg-hover':'#1f2030','bg-active':'#202330','bg-elevated':'#1e1f2b',
+        'terminal-bg':'#1a1b26','border-subtle':'#101014','border-medium':'#292e42','text-primary':'#c0caf5','text-secondary':'#a9b1d6',
+        'text-tertiary':'#565f89','text-muted':'#3b3f52','accent':'#7aa2f7','accent-dim':'#3d59a1','accent-glow':'rgba(122, 162, 247, 0.10)',
+        'accent-glow-strong':'rgba(122, 162, 247, 0.20)','danger':'#f7768e'
+      },
+      terminal: {
+        foreground:'#a9b1d6',cursor:'#c0caf5',selectionBackground:'#515c7e4d',black:'#363b54',red:'#f7768e',green:'#73daca',yellow:'#e0af68',
+        blue:'#7aa2f7',magenta:'#bb9af7',cyan:'#7dcfff',white:'#787c99',brightBlack:'#363b54',brightRed:'#f7768e',brightGreen:'#73daca',
+        brightYellow:'#e0af68',brightBlue:'#7aa2f7',brightMagenta:'#bb9af7',brightCyan:'#7dcfff',brightWhite:'#acb0d0'
+      }
     },
     nord: {
-      'bg-root':'#2e3440','bg-titlebar':'#272c36','bg-hover':'#3b4252','bg-elevated':'#3b4252',
-      'terminal-bg':'#2e3440','border-subtle':'#3b4252','border-medium':'#434c5e',
-      'text-primary':'#eceff4','text-secondary':'#d8dee9','text-tertiary':'#7b88a1','text-muted':'#4c566a',
-      'accent':'#88c0d0','accent-dim':'#6ba8b8','green':'#a3be8c','danger':'#bf616a'
+      colors: {
+        'bg-root':'#2e3440','bg-sidebar':'#272c36','bg-titlebar':'#272c36','bg-hover':'#3b4252','bg-active':'#434c5e','bg-elevated':'#3b4252',
+        'terminal-bg':'#2e3440','border-subtle':'#3b4252','border-medium':'#434c5e','text-primary':'#eceff4','text-secondary':'#d8dee9',
+        'text-tertiary':'#7b88a1','text-muted':'#4c566a','accent':'#88c0d0','accent-dim':'#6ba8b8','accent-glow':'rgba(136, 192, 208, 0.12)',
+        'accent-glow-strong':'rgba(136, 192, 208, 0.22)','danger':'#bf616a'
+      },
+      terminal: {
+        foreground:'#d8dee9',cursor:'#d8dee9',selectionBackground:'#434c5e99',black:'#3b4252',red:'#bf616a',green:'#a3be8c',yellow:'#ebcb8b',
+        blue:'#81a1c1',magenta:'#b48ead',cyan:'#88c0d0',white:'#e5e9f0',brightBlack:'#4c566a',brightRed:'#bf616a',brightGreen:'#a3be8c',
+        brightYellow:'#ebcb8b',brightBlue:'#81a1c1',brightMagenta:'#b48ead',brightCyan:'#8fbcbb',brightWhite:'#eceff4'
+      }
     },
     dracula: {
-      'bg-root':'#282a36','bg-titlebar':'#21222c','bg-hover':'#343746','bg-elevated':'#343746',
-      'terminal-bg':'#282a36','border-subtle':'#343746','border-medium':'#44475a',
-      'text-primary':'#f8f8f2','text-secondary':'#ccc5e0','text-tertiary':'#6272a4','text-muted':'#44475a',
-      'accent':'#bd93f9','accent-dim':'#9a6ff0','green':'#50fa7b','danger':'#ff5555'
+      colors: {
+        'bg-root':'#282a36','bg-sidebar':'#21222c','bg-titlebar':'#21222c','bg-hover':'#343746','bg-active':'#44475a','bg-elevated':'#343746',
+        'terminal-bg':'#282a36','border-subtle':'#343746','border-medium':'#44475a','text-primary':'#f8f8f2','text-secondary':'#ccc5e0',
+        'text-tertiary':'#6272a4','text-muted':'#44475a','accent':'#bd93f9','accent-dim':'#9a6ff0','accent-glow':'rgba(189, 147, 249, 0.12)',
+        'accent-glow-strong':'rgba(189, 147, 249, 0.22)','danger':'#ff5555'
+      },
+      terminal: {
+        foreground:'#f8f8f2',cursor:'#f8f8f2',selectionBackground:'#44475a99',black:'#21222c',red:'#ff5555',green:'#50fa7b',yellow:'#f1fa8c',
+        blue:'#6272a4',magenta:'#ff79c6',cyan:'#8be9fd',white:'#f8f8f2',brightBlack:'#6272a4',brightRed:'#ff6e6e',brightGreen:'#69ff94',
+        brightYellow:'#ffffa5',brightBlue:'#d6acff',brightMagenta:'#ff92df',brightCyan:'#a4ffff',brightWhite:'#ffffff'
+      }
     },
     'catppuccin-mocha': {
-      'bg-root':'#1e1e2e','bg-titlebar':'#181825','bg-hover':'#2a2b3d','bg-elevated':'#252637',
-      'terminal-bg':'#1e1e2e','border-subtle':'#2a2b3d','border-medium':'#313244',
-      'text-primary':'#cdd6f4','text-secondary':'#bac2de','text-tertiary':'#6c7086','text-muted':'#45475a',
-      'accent':'#cba6f7','accent-dim':'#b08bdb','green':'#a6e3a1','danger':'#f38ba8'
+      colors: {
+        'bg-root':'#1e1e2e','bg-sidebar':'#181825','bg-titlebar':'#181825','bg-hover':'#2a2b3d','bg-active':'#313244','bg-elevated':'#252637',
+        'terminal-bg':'#1e1e2e','border-subtle':'#2a2b3d','border-medium':'#313244','text-primary':'#cdd6f4','text-secondary':'#bac2de',
+        'text-tertiary':'#6c7086','text-muted':'#45475a','accent':'#cba6f7','accent-dim':'#b08bdb','accent-glow':'rgba(203, 166, 247, 0.12)',
+        'accent-glow-strong':'rgba(203, 166, 247, 0.22)','danger':'#f38ba8'
+      },
+      terminal: {
+        foreground:'#cdd6f4',cursor:'#f5e0dc',selectionBackground:'#31324499',black:'#45475a',red:'#f38ba8',green:'#a6e3a1',yellow:'#f9e2af',
+        blue:'#89b4fa',magenta:'#f5c2e7',cyan:'#94e2d5',white:'#bac2de',brightBlack:'#585b70',brightRed:'#f38ba8',brightGreen:'#a6e3a1',
+        brightYellow:'#f9e2af',brightBlue:'#89b4fa',brightMagenta:'#f5c2e7',brightCyan:'#94e2d5',brightWhite:'#a6adc8'
+      }
     },
     'gruvbox-dark': {
-      'bg-root':'#282828','bg-titlebar':'#1d2021','bg-hover':'#3c3836','bg-elevated':'#3c3836',
-      'terminal-bg':'#282828','border-subtle':'#3c3836','border-medium':'#504945',
-      'text-primary':'#ebdbb2','text-secondary':'#d5c4a1','text-tertiary':'#7c6f64','text-muted':'#504945',
-      'accent':'#fabd2f','accent-dim':'#d79921','green':'#98971a','danger':'#fb4934'
+      colors: {
+        'bg-root':'#282828','bg-sidebar':'#1d2021','bg-titlebar':'#1d2021','bg-hover':'#3c3836','bg-active':'#504945','bg-elevated':'#3c3836',
+        'terminal-bg':'#282828','border-subtle':'#3c3836','border-medium':'#504945','text-primary':'#ebdbb2','text-secondary':'#d5c4a1',
+        'text-tertiary':'#7c6f64','text-muted':'#504945','accent':'#fabd2f','accent-dim':'#d79921','accent-glow':'rgba(250, 189, 47, 0.12)',
+        'accent-glow-strong':'rgba(250, 189, 47, 0.22)','danger':'#fb4934'
+      },
+      terminal: {
+        foreground:'#ebdbb2',cursor:'#ebdbb2',selectionBackground:'#50494599',black:'#282828',red:'#cc241d',green:'#98971a',yellow:'#d79921',
+        blue:'#458588',magenta:'#b16286',cyan:'#689d6a',white:'#a89984',brightBlack:'#928374',brightRed:'#fb4934',brightGreen:'#b8bb26',
+        brightYellow:'#fabd2f',brightBlue:'#83a598',brightMagenta:'#d3869b',brightCyan:'#8ec07c',brightWhite:'#ebdbb2'
+      }
     }
   };
 
   async function loadTheme() {
     try {
       const themeId = await rpc('settings:get', 'theme');
-      const colors = THEMES[themeId] || THEMES.default;
+      if (!themeId || themeId === currentThemeId) return;
+      const theme = THEMES[themeId] || THEMES.default;
+      const colors = theme.colors;
       const root = document.documentElement;
       root.style.setProperty('--bg', colors['bg-root']);
       root.style.setProperty('--bg-card', colors['bg-titlebar']);
       root.style.setProperty('--bg-card-hover', colors['bg-hover']);
+      root.style.setProperty('--bg-active', colors['bg-active']);
       root.style.setProperty('--bg-elevated', colors['bg-elevated']);
       root.style.setProperty('--bg-terminal', colors['terminal-bg']);
       root.style.setProperty('--border', colors['border-subtle']);
@@ -527,9 +793,227 @@
       root.style.setProperty('--text-muted', colors['text-muted']);
       root.style.setProperty('--accent', colors['accent']);
       root.style.setProperty('--accent-dim', colors['accent-dim']);
-      root.style.setProperty('--green', colors['green']);
+      root.style.setProperty('--accent-glow', colors['accent-glow']);
+      root.style.setProperty('--accent-glow-strong', colors['accent-glow-strong']);
+      root.style.setProperty('--green', theme.terminal.green);
       root.style.setProperty('--red', colors['danger']);
+      const bgRoot = colors['bg-root'];
+      if (/^#([0-9a-f]{6})$/i.test(bgRoot)) {
+        const hex = bgRoot.slice(1);
+        const r = parseInt(hex.slice(0, 2), 16);
+        const g = parseInt(hex.slice(2, 4), 16);
+        const b = parseInt(hex.slice(4, 6), 16);
+        const luminance = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+        root.style.colorScheme = luminance > 0.62 ? 'light' : 'dark';
+      }
+      currentThemeId = themeId;
+      syncDetailTerminalTheme();
     } catch { /* use defaults */ }
+  }
+
+  function cssVar(name, fallback) {
+    const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    return value || fallback;
+  }
+
+  function getXtermTheme() {
+    const theme = THEMES[currentThemeId] || THEMES.default;
+    const terminalBg = theme.colors['terminal-bg'] || cssVar('--bg-terminal', '#0f0e0c');
+    return {
+      background: terminalBg,
+      foreground: theme.terminal.foreground,
+      cursor: theme.terminal.cursor,
+      cursorAccent: terminalBg,
+      selectionBackground: theme.terminal.selectionBackground,
+      black: theme.terminal.black,
+      red: theme.terminal.red,
+      green: theme.terminal.green,
+      yellow: theme.terminal.yellow,
+      blue: theme.terminal.blue,
+      magenta: theme.terminal.magenta,
+      cyan: theme.terminal.cyan,
+      white: theme.terminal.white,
+      brightBlack: theme.terminal.brightBlack,
+      brightRed: theme.terminal.brightRed,
+      brightGreen: theme.terminal.brightGreen,
+      brightYellow: theme.terminal.brightYellow,
+      brightBlue: theme.terminal.brightBlue,
+      brightMagenta: theme.terminal.brightMagenta,
+      brightCyan: theme.terminal.brightCyan,
+      brightWhite: theme.terminal.brightWhite
+    };
+  }
+
+  function getTerminalCtor() {
+    return window.Terminal || null;
+  }
+
+  function getFitAddonCtor() {
+    return window.FitAddon && window.FitAddon.FitAddon ? window.FitAddon.FitAddon : null;
+  }
+
+  function destroyDetailTerminal() {
+    if (detailTerminalTouchCleanup) {
+      detailTerminalTouchCleanup();
+      detailTerminalTouchCleanup = null;
+    }
+    if (detailTerminal) {
+      detailTerminal.dispose();
+      detailTerminal = null;
+    }
+    detailFitAddon = null;
+    detailTerminalSessionId = null;
+  }
+
+  function attachDetailTerminalTouchScroll(mountEl) {
+    const containerEl = mountEl.parentElement;
+    const viewportEl = mountEl.querySelector('.xterm-viewport');
+    if (!containerEl || !viewportEl) return null;
+
+    let touchStartY = 0;
+    let touchStartScrollTop = 0;
+    let touchActive = false;
+
+    const onTouchStart = (event) => {
+      if (event.touches.length !== 1) return;
+      touchActive = true;
+      touchStartY = event.touches[0].clientY;
+      touchStartScrollTop = viewportEl.scrollTop;
+    };
+
+    const onTouchMove = (event) => {
+      if (!touchActive || event.touches.length !== 1) return;
+      const maxScrollTop = viewportEl.scrollHeight - viewportEl.clientHeight;
+      if (maxScrollTop <= 0) return;
+      const deltaY = touchStartY - event.touches[0].clientY;
+      viewportEl.scrollTop = Math.max(0, Math.min(maxScrollTop, touchStartScrollTop + deltaY));
+      event.preventDefault();
+    };
+
+    const onTouchEnd = () => {
+      touchActive = false;
+    };
+
+    containerEl.addEventListener('touchstart', onTouchStart, { passive: true });
+    containerEl.addEventListener('touchmove', onTouchMove, { passive: false });
+    containerEl.addEventListener('touchend', onTouchEnd);
+    containerEl.addEventListener('touchcancel', onTouchEnd);
+
+    return () => {
+      containerEl.removeEventListener('touchstart', onTouchStart);
+      containerEl.removeEventListener('touchmove', onTouchMove);
+      containerEl.removeEventListener('touchend', onTouchEnd);
+      containerEl.removeEventListener('touchcancel', onTouchEnd);
+    };
+  }
+
+  function syncDetailTerminalTheme() {
+    if (!detailTerminal) return;
+    detailTerminal.options.theme = getXtermTheme();
+    fitDetailTerminal();
+  }
+
+  function fitDetailTerminal() {
+    if (!detailTerminal || !detailFitAddon || !detailTerminalSessionId) return;
+    try {
+      detailFitAddon.fit();
+      wsSend({
+        action: 'terminal:resize',
+        sessionId: detailTerminalSessionId,
+        cols: detailTerminal.cols,
+        rows: detailTerminal.rows
+      });
+    } catch {}
+  }
+
+  function sendTerminalData(sessionId, data) {
+    if (!sessionId || typeof data !== 'string' || !data) return;
+    wsSend({ action: 'terminal:write', sessionId, data });
+  }
+
+  function blurDetailTerminal() {
+    if (detailTerminal && typeof detailTerminal.blur === 'function') {
+      detailTerminal.blur();
+    }
+  }
+
+  function bindDetailFallbackInput(sessionId) {
+    const inputEl = document.getElementById('input-' + sessionId);
+    const sendEl = inputEl ? inputEl.nextElementSibling : null;
+    if (!inputEl) return;
+
+    const releaseTerminalFocus = (event) => {
+      event.stopPropagation();
+      blurDetailTerminal();
+    };
+
+    inputEl.addEventListener('focus', releaseTerminalFocus);
+    inputEl.addEventListener('mousedown', releaseTerminalFocus);
+    inputEl.addEventListener('touchstart', releaseTerminalFocus, { passive: true });
+
+    if (sendEl) {
+      sendEl.addEventListener('mousedown', releaseTerminalFocus);
+      sendEl.addEventListener('touchstart', releaseTerminalFocus, { passive: true });
+    }
+  }
+
+  function focusFallbackInput(sessionId) {
+    const inputEl = document.getElementById('input-' + sessionId);
+    if (!inputEl) return;
+    blurDetailTerminal();
+    requestAnimationFrame(() => {
+      inputEl.focus();
+      if (typeof inputEl.setSelectionRange === 'function') {
+        const length = inputEl.value.length;
+        inputEl.setSelectionRange(length, length);
+      }
+    });
+  }
+
+  function mountDetailTerminal(sessionId) {
+    const mountEl = document.getElementById('detail-term-' + sessionId);
+    const TerminalCtor = getTerminalCtor();
+    const FitAddonCtor = getFitAddonCtor();
+    if (!mountEl || !TerminalCtor || !FitAddonCtor) return;
+
+    destroyDetailTerminal();
+
+    detailTerminal = new TerminalCtor({
+      cursorBlink: true,
+      cursorStyle: 'bar',
+      cursorInactiveStyle: 'none',
+      fontSize: 13,
+      fontFamily: "'JetBrains Mono', 'Cascadia Code', 'Consolas', monospace",
+      theme: getXtermTheme(),
+      allowTransparency: false,
+      scrollback: 5000,
+      lineHeight: 1.2
+    });
+
+    detailFitAddon = new FitAddonCtor();
+    detailTerminal.loadAddon(detailFitAddon);
+    detailTerminal.open(mountEl);
+    detailTerminalSessionId = sessionId;
+    detailTerminalTouchCleanup = attachDetailTerminalTouchScroll(mountEl);
+    detailTerminal.onData((data) => sendTerminalData(sessionId, data));
+
+    mountEl.addEventListener('click', () => {
+      detailTerminal && detailTerminal.focus();
+    });
+
+    mountEl.addEventListener('touchend', () => {
+      detailTerminal && detailTerminal.focus();
+    }, { passive: true });
+
+    const existing = scrollbackCache[sessionId];
+    if (existing) {
+      detailTerminal.write(existing);
+    }
+
+    requestAnimationFrame(() => {
+      fitDetailTerminal();
+      detailTerminal.scrollToBottom();
+    });
   }
 
   // ── WebSocket ───────────────────────────────
@@ -538,10 +1022,11 @@
 
     ws.onopen = () => {
       connected = true;
+      subscribedId = null;
       updateConnDot();
       subscribeExitAll();
-      // Re-subscribe to expanded session if any
-      if (expandedId) subscribeToSession(expandedId);
+      const activeDetailSessionId = getActiveDetailSessionId();
+      if (activeDetailSessionId) subscribeToSession(activeDetailSessionId);
     };
 
     ws.onmessage = (e) => {
@@ -549,9 +1034,17 @@
         const msg = JSON.parse(e.data);
         if (msg.channel && msg.channel.startsWith('terminal:data:')) {
           const sid = msg.channel.slice('terminal:data:'.length);
+          if (pendingReplaySessionId === sid) {
+            scrollbackCache[sid] = '';
+            if (detailTerminalSessionId === sid && detailTerminal) {
+              detailTerminal.reset();
+            }
+            pendingReplaySessionId = null;
+          }
           appendScrollback(sid, msg.data);
-          if (expandedId === sid) {
-            updateTerminalPreview(sid);
+          if (detailTerminalSessionId === sid && detailTerminal) {
+            detailTerminal.write(msg.data);
+            detailTerminal.scrollToBottom();
           }
         }
         if (msg.channel && msg.channel.startsWith('terminal:exit:')) {
@@ -586,6 +1079,7 @@
     }
     // Subscribe to new
     if (id) {
+      pendingReplaySessionId = id;
       wsSend({ action: 'subscribe', channel: `terminal:data:${id}` });
       wsSend({ action: 'subscribe', channel: `terminal:exit:${id}` });
     }
@@ -601,7 +1095,7 @@
   }
 
   // ── Scrollback ──────────────────────────────
-  const MAX_SCROLLBACK = 4000;
+  const MAX_SCROLLBACK = 256 * 1024;
 
   function appendScrollback(sid, data) {
     const prev = scrollbackCache[sid] || '';
@@ -609,13 +1103,6 @@
     scrollbackCache[sid] = combined.length > MAX_SCROLLBACK
       ? combined.slice(-MAX_SCROLLBACK)
       : combined;
-  }
-
-  function getPreviewLines(sid, lineCount) {
-    const raw = scrollbackCache[sid] || '';
-    const clean = raw.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '').replace(/\x1b\][^\x07]*\x07/g, '');
-    const lines = clean.split('\n').filter(l => l.trim());
-    return lines.slice(-lineCount).join('\n');
   }
 
   // ── Connection indicator ────────────────────
@@ -636,6 +1123,7 @@
       agents = a || [];
       projects = p || [];
       render();
+      renderDetailOverlay();
       if (connected) subscribeExitAll();
     } catch (err) {
       document.getElementById('sessionList').innerHTML =
@@ -649,6 +1137,15 @@
       ...sessions.map(s => ({ ...s, _type: 'session', _project: projects.find(p => p.id === s.project_id) })),
       ...agents.map(a => ({ ...a, _type: 'agent', _project: null }))
     ];
+  }
+
+  function getDetailOverlayItem() {
+    return detailOverlayId ? getAllItems().find(x => x.id === detailOverlayId) || null : null;
+  }
+
+  function getActiveDetailSessionId() {
+    const item = getDetailOverlayItem();
+    return item && item.status === 'active' ? item.id : null;
   }
 
   // ── Render helpers ─────────────────────────
@@ -682,6 +1179,43 @@
     return parts.join(' / ');
   }
 
+  function signalClass(status) {
+    switch (status) {
+      case 'active':
+      case 'idle':
+      case 'waiting':
+      case 'starting':
+      case 'archived':
+      case 'popped-out':
+        return status;
+      case 'deleted':
+        return 'archived';
+      default:
+        return 'idle';
+    }
+  }
+
+  function renderSignal(status) {
+    const variant = signalClass(status);
+    const needsRing = variant === 'active' || variant === 'popped-out';
+    return `<span class="signal signal--${variant}"><span class="signal-core"></span>${needsRing ? '<span class="signal-ring"></span>' : ''}</span>`;
+  }
+
+  function isDirectSession(item) {
+    return item && item._type === 'session' && item._project && item.worktree_path === item._project.path;
+  }
+
+  function buildDetailBadges(item) {
+    const badges = [];
+    if (item.provider && item.provider !== 'claude') {
+      badges.push(`<span class="teammate-badge">${esc(item.provider)}</span>`);
+    }
+    if (isDirectSession(item)) {
+      badges.push('<span class="teammate-badge">direct</span>');
+    }
+    return badges.join('');
+  }
+
   // ── Render ──────────────────────────────────
   function render() {
     const list = document.getElementById('sessionList');
@@ -701,68 +1235,36 @@
     }
 
     list.innerHTML = all.map(item => {
-      const isExpanded = expandedId === item.id;
-      const isActive = item.status === 'active';
-
       return `
-        <div class="card ${isExpanded ? 'expanded' : ''}" data-id="${item.id}">
-          <div class="card-header" onclick="window._rc.toggle('${item.id}')">
-            <div class="status-dot ${item.status}"></div>
+        <div class="card" data-id="${item.id}">
+          <div class="card-header" onclick="window._rc.showDetail('${item.id}')">
+            ${renderSignal(item.status)}
             <div class="card-info">
               <div class="card-name">${buildCardTitle(item)}</div>
             </div>
             <div class="card-type-badge">${item._type === 'agent' ? 'Agent' : 'Session'}</div>
-            <svg class="card-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <polyline points="9 18 15 12 9 6"/>
-            </svg>
-          </div>
-          <div class="card-body">
-            <div class="terminal-preview" id="term-${item.id}">${esc(getPreviewLines(item.id, 10))}</div>
-            ${isActive ? `
-              <div class="nudge-bar">
-                <input class="nudge-input" id="input-${item.id}" type="text"
-                  placeholder="Send a message..." autocomplete="off" autocorrect="off" spellcheck="false"
-                  onkeydown="if(event.key==='Enter'){event.preventDefault();window._rc.nudge('${item.id}')}" />
-                <button class="nudge-send" onclick="window._rc.nudge('${item.id}')" title="Send">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
-                  </svg>
-                </button>
-              </div>
-            ` : `
-              <div class="nudge-bar" style="justify-content: center;">
-                <button class="idle-btn idle-btn--primary" style="max-width: 200px;" onclick="window._rc.showIdle('${item.id}')">
-                  Manage Session
-                </button>
-              </div>
-            `}
           </div>
         </div>
       `;
     }).join('');
   }
 
-  function updateTerminalPreview(sid) {
-    const el = document.getElementById('term-' + sid);
-    if (el) {
-      el.textContent = getPreviewLines(sid, 10);
-      el.scrollTop = el.scrollHeight;
-    }
-  }
-
   // ── Session detail view (replaces main list) ─
-  function renderIdleOverlay() {
+  function renderDetailOverlay() {
     const header = document.querySelector('.header');
     const list = document.getElementById('sessionList');
     const overlay = document.getElementById('idleOverlay');
+    const item = getDetailOverlayItem();
 
-    if (!idleOverlayItem) {
+    if (!item) {
       // Show main view
+      destroyDetailTerminal();
       header.style.display = '';
       list.style.display = '';
       overlay.style.display = 'none';
       overlay.innerHTML = '';
-      idleOverlayError = '';
+      detailOverlayId = null;
+      detailOverlayError = '';
       return;
     }
 
@@ -771,83 +1273,96 @@
     list.style.display = 'none';
     overlay.style.display = '';
 
-    const item = idleOverlayItem;
     const name = buildDisplayName(item);
+    const isActive = item.status === 'active';
+    destroyDetailTerminal();
     overlay.innerHTML = `
-      <div class="idle-fullscreen">
-        <div class="idle-fullscreen-back" onclick="window._rc.closeIdle()">
+      <div class="detail-fullscreen">
+        <div class="detail-fullscreen-back" onclick="window._rc.closeDetail()">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <polyline points="15 18 9 12 15 6"/>
           </svg>
           Back
         </div>
-        <div class="idle-fullscreen-body">
-          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="color: var(--text-muted); opacity: 0.5;">
-            <polyline points="4 17 10 11 4 5"/>
-            <line x1="12" y1="19" x2="20" y2="19"/>
-          </svg>
-          <div class="idle-fullscreen-name">${esc(name)}</div>
-          <div class="idle-fullscreen-status">Session has ended</div>
-          <div class="idle-fullscreen-actions">
-            <button class="idle-btn idle-btn--primary" onclick="window._rc.resume('${item.id}', '${item._type}')">
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
-                <path d="M6 3.5a.5.5 0 0 1 .795-.404l6 4.5a.5.5 0 0 1 0 .808l-6 4.5A.5.5 0 0 1 6 12.5v-9z"/>
-              </svg>
-              Resume
-            </button>
-            <button class="idle-btn" onclick="window._rc.restart('${item.id}', '${item._type}')">
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
-                <path d="M11.534 7h3.932a.25.25 0 0 1 .192.41l-1.966 2.36a.25.25 0 0 1-.384 0l-1.966-2.36a.25.25 0 0 1 .192-.41zm-11 2h3.932a.25.25 0 0 0 .192-.41L2.692 6.23a.25.25 0 0 0-.384 0L.342 8.59A.25.25 0 0 0 .534 9z"/>
-                <path fill-rule="evenodd" d="M8 3c-1.552 0-2.94.707-3.857 1.818a.5.5 0 1 1-.771-.636A6.002 6.002 0 0 1 13.917 7H12.9A5.002 5.002 0 0 0 8 3zM3.1 9a5.002 5.002 0 0 0 8.757 2.182.5.5 0 1 1 .771.636A6.002 6.002 0 0 1 2.083 9H3.1z"/>
-              </svg>
-              New Session
-            </button>
-          </div>
-          ${idleOverlayError ? `<div class="idle-inline-error">${esc(idleOverlayError)}</div>` : ''}
+        <div class="detail-fullscreen-body ${isActive ? 'detail-fullscreen-body--active' : 'detail-fullscreen-body--idle'}">
+          ${isActive ? `
+            <div class="detail-fullscreen-header">
+              <div class="detail-fullscreen-name">${esc(name)}</div>
+              <div class="detail-fullscreen-meta">
+                ${renderSignal(item.status)}
+                <div class="detail-fullscreen-status">Active session</div>
+                ${buildDetailBadges(item) ? `<div class="detail-badges">${buildDetailBadges(item)}</div>` : ''}
+              </div>
+            </div>
+            <div class="detail-terminal detail-terminal--xterm">
+              <div class="detail-terminal__mount" id="detail-term-${item.id}"></div>
+            </div>
+            <div class="nudge-bar">
+              <input class="nudge-input" id="input-${item.id}" type="text"
+                placeholder="Send a message..." autocomplete="off" autocorrect="off" spellcheck="false"
+                inputmode="text" enterkeyhint="send"
+                onclick="window._rc.focusFallbackInput('${item.id}')"
+                onfocus="window._rc.focusFallbackInput('${item.id}')"
+                ontouchend="window._rc.focusFallbackInput('${item.id}')"
+                onkeydown="if(event.key==='Enter'){event.preventDefault();window._rc.nudge('${item.id}')}" />
+              <button class="nudge-send" type="button"
+                onclick="window._rc.nudge('${item.id}')" ontouchend="window._rc.nudge('${item.id}')" title="Send">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+                </svg>
+              </button>
+            </div>
+          ` : `
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="color: var(--text-muted); opacity: 0.5;">
+              <polyline points="4 17 10 11 4 5"/>
+              <line x1="12" y1="19" x2="20" y2="19"/>
+            </svg>
+            <div class="detail-fullscreen-name">${esc(name)}</div>
+            <div class="detail-fullscreen-status">Session has ended</div>
+            <div class="detail-fullscreen-actions">
+              <button class="idle-btn idle-btn--primary" onclick="window._rc.resume('${item.id}', '${item._type}')">
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                  <path d="M6 3.5a.5.5 0 0 1 .795-.404l6 4.5a.5.5 0 0 1 0 .808l-6 4.5A.5.5 0 0 1 6 12.5v-9z"/>
+                </svg>
+                Resume
+              </button>
+              <button class="idle-btn" onclick="window._rc.restart('${item.id}', '${item._type}')">
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                  <path d="M11.534 7h3.932a.25.25 0 0 1 .192.41l-1.966 2.36a.25.25 0 0 1-.384 0l-1.966-2.36a.25.25 0 0 1 .192-.41zm-11 2h3.932a.25.25 0 0 0 .192-.41L2.692 6.23a.25.25 0 0 0-.384 0L.342 8.59A.25.25 0 0 0 .534 9z"/>
+                  <path fill-rule="evenodd" d="M8 3c-1.552 0-2.94.707-3.857 1.818a.5.5 0 1 1-.771-.636A6.002 6.002 0 0 1 13.917 7H12.9A5.002 5.002 0 0 0 8 3zM3.1 9a5.002 5.002 0 0 0 8.757 2.182.5.5 0 1 1 .771.636A6.002 6.002 0 0 1 2.083 9H3.1z"/>
+                </svg>
+                New Session
+              </button>
+            </div>
+          `}
+          ${detailOverlayError ? `<div class="idle-inline-error">${esc(detailOverlayError)}</div>` : ''}
         </div>
       </div>
     `;
+    if (isActive) {
+      mountDetailTerminal(item.id);
+      bindDetailFallbackInput(item.id);
+    }
   }
 
   // ── Actions ─────────────────────────────────
   window._rc = {
-    toggle(id) {
-      // Find the item
-      const item = getAllItems().find(x => x.id === id);
-
-      // If idle, go directly to fullscreen overlay
-      if (item && item.status !== 'active') {
-        idleOverlayItem = item;
-        renderIdleOverlay();
-        return;
-      }
-
-      // Toggle expand for active sessions
-      if (expandedId === id) {
-        expandedId = null;
-        subscribeToSession(null);
-      } else {
-        expandedId = id;
-        subscribeToSession(id);
-      }
-      render();
-      if (expandedId) {
-        setTimeout(() => {
-          const card = document.querySelector(`.card[data-id="${id}"]`);
-          if (card) card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-        }, 50);
-      }
+    showDetail(id) {
+      const item = getAllItems().find(x => x.id === id) || null;
+      detailOverlayId = item ? item.id : null;
+      subscribeToSession(item && item.status === 'active' ? id : null);
+      renderDetailOverlay();
     },
 
-    showIdle(id) {
-      idleOverlayItem = getAllItems().find(x => x.id === id) || null;
-      renderIdleOverlay();
+    closeDetail() {
+      detailOverlayId = null;
+      detailOverlayError = '';
+      subscribeToSession(null);
+      renderDetailOverlay();
     },
 
-    closeIdle() {
-      idleOverlayItem = null;
-      idleOverlayError = '';
-      renderIdleOverlay();
+    focusFallbackInput(id) {
+      focusFallbackInput(id);
     },
 
     nudge(id) {
@@ -855,7 +1370,7 @@
       if (!input) return;
       const text = input.value.trim();
       if (!text) return;
-      wsSend({ action: 'terminal:write', sessionId: id, data: text + '\n' });
+      sendTerminalData(id, text + '\n');
       input.value = '';
     },
 
@@ -866,13 +1381,14 @@
         } else {
           await rpc('session:resume', id);
         }
-        idleOverlayError = '';
-        idleOverlayItem = null;
-        renderIdleOverlay();
+        detailOverlayError = '';
+        detailOverlayId = null;
+        subscribeToSession(null);
+        renderDetailOverlay();
         setTimeout(loadState, 1000);
       } catch (err) {
-        idleOverlayError = err.message;
-        renderIdleOverlay();
+        detailOverlayError = err.message;
+        renderDetailOverlay();
       }
     },
 
@@ -883,24 +1399,35 @@
         } else {
           await rpc('session:restart', id);
         }
-        idleOverlayError = '';
-        idleOverlayItem = null;
-        renderIdleOverlay();
+        detailOverlayError = '';
+        detailOverlayId = null;
+        subscribeToSession(null);
+        renderDetailOverlay();
         setTimeout(loadState, 1000);
       } catch (err) {
-        idleOverlayError = err.message;
-        renderIdleOverlay();
+        detailOverlayError = err.message;
+        renderDetailOverlay();
       }
     }
   };
 
   // ── Refresh on visibility ───────────────────
   document.addEventListener('visibilitychange', () => {
-    if (!document.hidden) loadState();
+    if (!document.hidden) {
+      loadTheme();
+      loadState();
+    }
+  });
+
+  window.addEventListener('resize', () => {
+    requestAnimationFrame(fitDetailTerminal);
   });
 
   // ── Periodic refresh ────────────────────────
-  setInterval(loadState, 15000);
+  setInterval(() => {
+    loadTheme();
+    loadState();
+  }, 15000);
 
   // ── Boot ────────────────────────────────────
   loadTheme();

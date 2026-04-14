@@ -2,6 +2,7 @@ import http from 'http'
 import fs from 'fs'
 import path from 'path'
 import { URL } from 'url'
+import { app } from 'electron'
 import {
   HandlerServices,
   listProjects,
@@ -81,6 +82,12 @@ const MIME_TYPES: Record<string, string> = {
   '.woff2': 'font/woff2',
   '.ttf': 'font/ttf',
   '.map': 'application/json'
+}
+
+const REMOTE_CONTROL_ASSETS: Record<string, string> = {
+  '/rc-assets/xterm.js': path.join('@xterm', 'xterm', 'lib', 'xterm.js'),
+  '/rc-assets/xterm.css': path.join('@xterm', 'xterm', 'css', 'xterm.css'),
+  '/rc-assets/addon-fit.js': path.join('@xterm', 'addon-fit', 'lib', 'addon-fit.js')
 }
 
 // ── ApiServer ───────────────────────────────────────────────
@@ -231,6 +238,11 @@ export class ApiServer {
       } else {
         res.end(remoteControlHtmlInlined)
       }
+      return
+    }
+
+    if (url.pathname in REMOTE_CONTROL_ASSETS) {
+      this.serveRemoteControlAsset(url.pathname, res)
       return
     }
 
@@ -427,6 +439,29 @@ export class ApiServer {
   }
 
   // ── Static file serving ───────────────────────────────────
+
+  private serveRemoteControlAsset(pathname: string, res: http.ServerResponse): void {
+    const relativeAssetPath = REMOTE_CONTROL_ASSETS[pathname]
+    if (!relativeAssetPath) {
+      res.writeHead(404)
+      res.end('Not Found')
+      return
+    }
+
+    const filePath = path.join(app.getAppPath(), 'node_modules', relativeAssetPath)
+    if (!fs.existsSync(filePath)) {
+      res.writeHead(404)
+      res.end('Not Found')
+      return
+    }
+
+    const ext = path.extname(filePath).toLowerCase()
+    res.writeHead(200, {
+      'Content-Type': MIME_TYPES[ext] || 'application/octet-stream',
+      'Cache-Control': 'public, max-age=3600'
+    })
+    fs.createReadStream(filePath).pipe(res)
+  }
 
   private serveStatic(pathname: string, res: http.ServerResponse): void {
     // Resolve to renderer output directory
