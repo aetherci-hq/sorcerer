@@ -9,6 +9,7 @@
 <link rel="stylesheet" href="/rc-assets/xterm.css">
 <style>
   :root {
+    --app-height: 100dvh;
     --bg: #0f0e0c;
     --bg-active: #2a261e;
     --bg-card: #1a1714;
@@ -37,7 +38,7 @@
     font-family: var(--font);
     background: var(--bg);
     color: var(--text);
-    min-height: 100dvh;
+    min-height: var(--app-height);
     -webkit-tap-highlight-color: transparent;
     overscroll-behavior: none;
   }
@@ -369,7 +370,7 @@
   .detail-fullscreen {
     position: fixed;
     inset: 0;
-    height: 100dvh;
+    height: var(--app-height);
     background: var(--bg);
     display: flex;
     flex-direction: column;
@@ -622,6 +623,7 @@
   let detailTerminalSessionId = null;
   let detailTerminalTouchCleanup = null;
   let pendingReplaySessionId = null;
+  let detailOverlayRenderSignature = null;
 
   // ── RPC helper ──────────────────────────────
   async function rpc(method, ...args) {
@@ -913,6 +915,12 @@
     fitDetailTerminal();
   }
 
+  function syncViewportHeight() {
+    const viewportHeight = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+    if (!viewportHeight) return;
+    document.documentElement.style.setProperty('--app-height', `${Math.round(viewportHeight)}px`);
+  }
+
   function fitDetailTerminal() {
     if (!detailTerminal || !detailFitAddon || !detailTerminalSessionId) return;
     try {
@@ -929,6 +937,13 @@
   function sendTerminalData(sessionId, data) {
     if (!sessionId || typeof data !== 'string' || !data) return;
     wsSend({ action: 'terminal:write', sessionId, data });
+  }
+
+  function submitFallbackText(sessionId, text) {
+    const trimmed = text.trim();
+    if (!trimmed) return false;
+    sendTerminalData(sessionId, trimmed + '\r');
+    return true;
   }
 
   function blurDetailTerminal() {
@@ -1123,7 +1138,10 @@
       agents = a || [];
       projects = p || [];
       render();
-      renderDetailOverlay();
+      const activeDetailSessionId = getActiveDetailSessionId();
+      if (!activeDetailSessionId || !detailTerminal) {
+        renderDetailOverlay();
+      }
       if (connected) subscribeExitAll();
     } catch (err) {
       document.getElementById('sessionList').innerHTML =
@@ -1216,6 +1234,22 @@
     return badges.join('');
   }
 
+  function getDetailOverlaySignature(item) {
+    if (!item) return '';
+    const projectName = item._project ? item._project.name : '';
+    return JSON.stringify({
+      id: item.id,
+      type: item._type,
+      status: item.status,
+      name: item.name || '',
+      branch: item.branch || '',
+      provider: item.provider || '',
+      worktree_path: item.worktree_path || '',
+      projectName,
+      detailOverlayError
+    });
+  }
+
   // ── Render ──────────────────────────────────
   function render() {
     const list = document.getElementById('sessionList');
@@ -1255,6 +1289,7 @@
     const list = document.getElementById('sessionList');
     const overlay = document.getElementById('idleOverlay');
     const item = getDetailOverlayItem();
+    const nextSignature = getDetailOverlaySignature(item);
 
     if (!item) {
       // Show main view
@@ -1265,6 +1300,16 @@
       overlay.innerHTML = '';
       detailOverlayId = null;
       detailOverlayError = '';
+      detailOverlayRenderSignature = null;
+      return;
+    }
+
+    if (
+      detailTerminal &&
+      detailTerminalSessionId === item.id &&
+      detailOverlayRenderSignature === nextSignature &&
+      overlay.style.display !== 'none'
+    ) {
       return;
     }
 
@@ -1276,6 +1321,7 @@
     const name = buildDisplayName(item);
     const isActive = item.status === 'active';
     destroyDetailTerminal();
+    detailOverlayRenderSignature = nextSignature;
     overlay.innerHTML = `
       <div class="detail-fullscreen">
         <div class="detail-fullscreen-back" onclick="window._rc.closeDetail()">
@@ -1368,10 +1414,10 @@
     nudge(id) {
       const input = document.getElementById('input-' + id);
       if (!input) return;
-      const text = input.value.trim();
-      if (!text) return;
-      sendTerminalData(id, text + '\n');
+      const sent = submitFallbackText(id, input.value);
+      if (!sent) return;
       input.value = '';
+      input.focus();
     },
 
     async resume(id, type) {
@@ -1416,12 +1462,21 @@
     if (!document.hidden) {
       loadTheme();
       loadState();
+      syncViewportHeight();
     }
   });
 
   window.addEventListener('resize', () => {
+    syncViewportHeight();
     requestAnimationFrame(fitDetailTerminal);
   });
+
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', () => {
+      syncViewportHeight();
+      requestAnimationFrame(fitDetailTerminal);
+    });
+  }
 
   // ── Periodic refresh ────────────────────────
   setInterval(() => {
@@ -1430,6 +1485,7 @@
   }, 15000);
 
   // ── Boot ────────────────────────────────────
+  syncViewportHeight();
   loadTheme();
   loadState();
   connectWS();
