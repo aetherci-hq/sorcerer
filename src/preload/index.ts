@@ -30,6 +30,12 @@ const api = {
     delete: (sessionId: string) => ipcRenderer.invoke('session:delete', sessionId),
     restart: (sessionId: string) => ipcRenderer.invoke('session:restart', sessionId),
     resume: (sessionId: string) => ipcRenderer.invoke('session:resume', sessionId),
+    resumeHealth: (sessionId: string) => ipcRenderer.invoke('session:resume-health', sessionId) as Promise<{
+      canResume: boolean
+      level: 'ok' | 'warning'
+      reason: string | null
+      guidance: string[]
+    }>,
     setTeam: (sessionId: string, teamName: string | null) => ipcRenderer.invoke('session:set-team', sessionId, teamName),
     gitStatus: (sessionId: string) => ipcRenderer.invoke('session:git-status', sessionId),
     divergence: (sessionId: string) => ipcRenderer.invoke('session:divergence', sessionId) as Promise<{ behind: number; ahead: number } | null>,

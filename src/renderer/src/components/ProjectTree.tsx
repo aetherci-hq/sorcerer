@@ -4,18 +4,31 @@ import { useProjectStore } from '../stores/useProjectStore'
 import { useSessionStore } from '../stores/useSessionStore'
 import { useUIStore, getAllSessionIds, findLeafBySession } from '../stores/useUIStore'
 import { useTeamStore } from '../stores/useTeamStore'
-import { ChevronIcon, FolderIcon, TerminalIcon, ShellPromptIcon, UserIcon, MoreHorizontalIcon, NotesIcon, WifiIcon, ChevronsCollapseIcon, PlusIcon } from './icons'
+import { ChevronIcon, FolderIcon, TerminalIcon, ShellPromptIcon, UserIcon, MoreHorizontalIcon, NotesIcon, WifiIcon, ChevronsCollapseIcon, PlusIcon, AlertTriangleIcon } from './icons'
 import { useQuickNotesStore } from '../stores/useQuickNotesStore'
 import { StatusDot } from './StatusDot'
 import { Tooltip } from './Tooltip'
 import { EmptyState } from './EmptyState'
-import type { Project, ProjectGroup, Session, TeamMember, TaskData } from '../types'
+import type { Project, ProjectGroup, Session, SessionResumeHealth, TeamMember, TaskData } from '../types'
 
 function formatSessionChangeSummary(status: { added: number; deleted: number } | null): string | null {
   if (!status || (status.added === 0 && status.deleted === 0)) return null
   const added = status.added > 0 ? `+${status.added}` : ''
   const deleted = status.deleted > 0 ? `-${status.deleted}` : ''
   return [added, deleted].filter(Boolean).join(' ')
+}
+
+function formatResumeWarning(health: SessionResumeHealth | null | undefined): string | null {
+  if (!health || health.canResume || !health.reason) return null
+  return [health.reason, ...health.guidance].join(' ')
+}
+
+function getResumeStateLabel(session: Session): string | null {
+  if (session.resume_status !== 'launching') return null
+  if (session.provider === 'codex') {
+    return session.resume_reason || 'Capturing Codex thread identity.'
+  }
+  return session.resume_reason || 'Resume state is still being prepared.'
 }
 
 function TaskItem({ task }: { task: TaskData }) {
@@ -198,12 +211,14 @@ function SessionItem({
   isActive,
   staggerClass,
   projectId,
+  resumeHealth,
 }: {
   session: Session
   childQTs: Session[]
   isActive: boolean
   staggerClass?: string
   projectId: string
+  resumeHealth: SessionResumeHealth | null
 }) {
   const { setActiveSession, activeSessionId } = useSessionStore()
   const { expandedSessions, toggleSession, openContextMenu, renamingId, setRenamingId, splitRoot, remoteSessionIds, poppedOutSessionIds, showProviderBadges, setSidebarSelection } = useUIStore()
@@ -382,6 +397,18 @@ function SessionItem({
             {isMainRepo && session.branch && !isRenaming && (
               <span className="teammate-badge" style={{ fontSize: '9px' }}>direct</span>
             )}
+            {!isRenaming && getResumeStateLabel(session) && (
+              <Tooltip label={getResumeStateLabel(session)!}>
+                <span className="tree-resume-state">capturing</span>
+              </Tooltip>
+            )}
+            {!isRenaming && !resumeHealth?.canResume && formatResumeWarning(resumeHealth) && (
+              <Tooltip label={formatResumeWarning(resumeHealth)!}>
+                <span className="tree-resume-warning" aria-label="Resume warning">
+                  <AlertTriangleIcon />
+                </span>
+              </Tooltip>
+            )}
             {!isRenaming && formatSessionChangeSummary(changeSummary) && (
               <span className="tree-change-summary">{formatSessionChangeSummary(changeSummary)}</span>
             )}
@@ -465,6 +492,43 @@ function ProjectItem({ project, staggerClass, projectIndex, onDragStart: onProje
     }
   }
   const archivedSessions = projectSessions.filter((s) => s.status === 'archived')
+  const [resumeHealthBySession, setResumeHealthBySession] = useState<Record<string, SessionResumeHealth>>({})
+  const resumeHealthKey = projectSessions
+    .map((session) => `${session.id}:${session.status}:${session.provider || ''}:${session.started_at || 0}:${session.worktree_path}`)
+    .join('|')
+
+  useEffect(() => {
+    let cancelled = false
+    const relevantSessions = projectSessions.filter((session) => session.type !== 'quick-terminal')
+
+    if (relevantSessions.length === 0) {
+      setResumeHealthBySession({})
+      return
+    }
+
+    void Promise.all(
+      relevantSessions.map(async (session) => {
+        try {
+          const health = await getApi().session.resumeHealth(session.id)
+          return [session.id, health] as const
+        } catch {
+          return [session.id, { canResume: true, level: 'ok', reason: null, guidance: [] as string[] }] as const
+        }
+      })
+    ).then((entries) => {
+      if (cancelled) return
+      setResumeHealthBySession(Object.fromEntries(entries))
+    })
+
+    return () => {
+      cancelled = true
+    }
+  }, [resumeHealthKey])
+
+  const hasResumeWarning = projectSessions.some((session) => resumeHealthBySession[session.id] && !resumeHealthBySession[session.id].canResume)
+  const projectWarningLabel = hasResumeWarning
+    ? 'One or more sessions in this project cannot be resumed safely. Expand the project to review the affected sessions.'
+    : null
 
   // Inline rename state
   const [isRenaming, setIsRenaming] = useState(false)
@@ -559,6 +623,13 @@ function ProjectItem({ project, staggerClass, projectIndex, onDragStart: onProje
         ) : (
           <span className="tree-label" onDoubleClick={handleDoubleClick}>{project.name}</span>
         )}
+        {!isRenaming && hasResumeWarning && projectWarningLabel && (
+          <Tooltip label={projectWarningLabel}>
+            <span className="tree-resume-warning tree-resume-warning--project" aria-label="Project resume warning">
+              <AlertTriangleIcon />
+            </span>
+          </Tooltip>
+        )}
         {!isRenaming && (
           <button className="tree-item-actions" onClick={handleMoreClick}>
             <MoreHorizontalIcon />
@@ -576,6 +647,7 @@ function ProjectItem({ project, staggerClass, projectIndex, onDragStart: onProje
               isActive={session.id === activeSessionId}
               staggerClass={`stagger-${Math.min(i + 6, 10)}`}
               projectId={project.id}
+              resumeHealth={resumeHealthBySession[session.id] || null}
             />
           ))}
           {archivedSessions.length > 0 && (
@@ -591,6 +663,7 @@ function ProjectItem({ project, staggerClass, projectIndex, onDragStart: onProje
                   isActive={session.id === activeSessionId}
                   staggerClass={`stagger-${Math.min(i + 8, 10)}`}
                   projectId={project.id}
+                  resumeHealth={resumeHealthBySession[session.id] || null}
                 />
               ))}
             </>

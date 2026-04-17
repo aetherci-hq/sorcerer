@@ -3927,6 +3927,18 @@ button:focus-visible,
   color: var(--text-primary);
 }
 
+.terminal-restart-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  border-color: var(--border-subtle);
+  color: var(--text-muted);
+}
+
+.terminal-restart-btn:disabled:hover {
+  border-color: var(--border-subtle);
+  color: var(--text-muted);
+}
+
 .terminal-restart-btn--primary {
   background: var(--accent);
   border-color: var(--accent);
@@ -4014,6 +4026,43 @@ button:focus-visible,
   border-radius: var(--radius-sm);
   line-height: 16px;
   flex-shrink: 0;
+}
+
+.tree-resume-state {
+  display: inline-flex;
+  align-items: center;
+  font-size: 10px;
+  font-weight: 600;
+  font-family: var(--font-mono);
+  color: var(--text-secondary);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  padding: 0 5px;
+  border-radius: var(--radius-sm);
+  line-height: 16px;
+  flex-shrink: 0;
+}
+
+.tree-resume-warning {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  color: #f5a524;
+  background: rgba(245, 165, 36, 0.12);
+  border: 1px solid rgba(245, 165, 36, 0.28);
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+
+.tree-resume-warning svg {
+  width: 10px;
+  height: 10px;
+}
+
+.tree-resume-warning--project {
+  margin-left: 6px;
 }
 
 .tree-divergence svg {

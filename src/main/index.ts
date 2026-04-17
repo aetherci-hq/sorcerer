@@ -9,7 +9,7 @@ import { WorktreeService } from './services/worktree-service'
 import { FileWatcherService } from './services/file-watcher-service'
 import { PopoutService } from './services/popout-service'
 import { registerIPC } from './ipc/handlers'
-import { syncWorktrees, checkResumeFailed, extractCodexThreadIdFromOutput, findCodexThreadIdForCwd } from './ipc/shared-handlers'
+import { syncWorktrees, checkResumeFailed, extractCodexThreadIdFromOutput, findCodexThreadIdForCwd, canRecoverSessionByCwd, persistCodexSessionIdentity, markSessionResumeState } from './ipc/shared-handlers'
 import { AgentOrchestrator } from './services/agent-orchestrator'
 import { refreshProviders as refreshProviderRegistry } from './services/provider-registry'
 
@@ -159,6 +159,22 @@ async function createWindow(): Promise<void> {
   const orchestrator = new AgentOrchestrator(dbService, ptyService, mainWindow)
   orchestrator.start()
 
+  // Capture Codex thread IDs from live PTY output as soon as Codex prints them.
+  ptyService.onOutput((sessionId, data) => {
+    const session = dbService.getSession(sessionId)
+    if (!session || session.provider !== 'codex' || session.type === 'quick-terminal') return
+
+    const providerSessionId =
+      extractCodexThreadIdFromOutput(data) ||
+      extractCodexThreadIdFromOutput(ptyService.scrollback.getScrollback(sessionId))
+
+    if (!providerSessionId) return
+    if (providerSessionId === session.provider_session_id && session.resume_status === 'ready') return
+
+    persistCodexSessionIdentity(dbService, sessionId, providerSessionId, 'live-output')
+    console.log(`[codex-thread] ${sessionId}: captured ${providerSessionId} from live output`)
+  })
+
   // Detect failed resumes (e.g. "No conversation found to continue")
   ptyService.onExit((sessionId, exitCode) => {
     const scrollbackText = ptyService.scrollback.getScrollback(sessionId)
@@ -167,13 +183,22 @@ async function createWindow(): Promise<void> {
       const cwd = fs.existsSync(session.worktree_path as string)
         ? (session.worktree_path as string)
         : (dbService.getProject(session.project_id as string)?.path as string || process.cwd())
+      const allowCwdRecovery = canRecoverSessionByCwd(dbService, session)
       void (async () => {
         const providerSessionId =
           extractCodexThreadIdFromOutput(scrollbackText) ||
-          await findCodexThreadIdForCwd(cwd, session.started_at as number | null)
-        if (providerSessionId && providerSessionId !== session.provider_session_id) {
-          dbService.updateSession(sessionId, { provider_session_id: providerSessionId })
-          console.log(`[codex-thread] ${sessionId}: stored ${providerSessionId}`)
+          (allowCwdRecovery ? await findCodexThreadIdForCwd(cwd, session.started_at as number | null) : null)
+        if (providerSessionId) {
+          const source = extractCodexThreadIdFromOutput(scrollbackText) ? 'exit-output' : 'cwd-recovery'
+          persistCodexSessionIdentity(dbService, sessionId, providerSessionId, source)
+          console.log(`[codex-thread] ${sessionId}: stored ${providerSessionId} from ${source}`)
+        } else if (!session.provider_session_id) {
+          markSessionResumeState(
+            dbService,
+            sessionId,
+            'degraded',
+            'Codex thread identity was never captured for this session.'
+          )
         }
       })()
     }

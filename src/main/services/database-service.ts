@@ -224,6 +224,23 @@ export class DatabaseService {
       this.db.run(`ALTER TABLE sessions ADD COLUMN started_at INTEGER`)
     } catch { /* column already exists */ }
 
+    // Structured provider resume metadata
+    try {
+      this.db.run(`ALTER TABLE sessions ADD COLUMN provider_session_captured_at INTEGER`)
+    } catch { /* column already exists */ }
+    try {
+      this.db.run(`ALTER TABLE sessions ADD COLUMN provider_session_validated_at INTEGER`)
+    } catch { /* column already exists */ }
+    try {
+      this.db.run(`ALTER TABLE sessions ADD COLUMN provider_session_source TEXT`)
+    } catch { /* column already exists */ }
+    try {
+      this.db.run(`ALTER TABLE sessions ADD COLUMN resume_status TEXT`)
+    } catch { /* column already exists */ }
+    try {
+      this.db.run(`ALTER TABLE sessions ADD COLUMN resume_reason TEXT`)
+    } catch { /* column already exists */ }
+
     // Briefing archive table
     this.db.run(`
       CREATE TABLE IF NOT EXISTS briefings (
@@ -436,17 +453,23 @@ export class DatabaseService {
     claude_session_id?: string
     provider_session_id?: string
     started_at?: number
+    provider_session_captured_at?: number | null
+    provider_session_validated_at?: number | null
+    provider_session_source?: string | null
+    resume_status?: string | null
+    resume_reason?: string | null
     provider?: string
     model?: string
   }): any {
     if (!this.db) throw new Error('Database not initialized')
     this.db.run(
-      `INSERT INTO sessions (id, project_id, name, branch, worktree_path, status, type, team_name, parent_session_id, bypass_permissions, remote_control, claude_session_id, provider_session_id, started_at, provider, model)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO sessions (id, project_id, name, branch, worktree_path, status, type, team_name, parent_session_id, bypass_permissions, remote_control, claude_session_id, provider_session_id, started_at, provider_session_captured_at, provider_session_validated_at, provider_session_source, resume_status, resume_reason, provider, model)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [data.id, data.project_id, data.name, data.branch, data.worktree_path,
        data.status || 'active',
        data.type || 'session', data.team_name || null, data.parent_session_id || null,
        data.bypass_permissions ?? 1, data.remote_control ?? 0, data.claude_session_id || null, data.provider_session_id || null, data.started_at ?? null,
+       data.provider_session_captured_at ?? null, data.provider_session_validated_at ?? null, data.provider_session_source ?? null, data.resume_status ?? null, data.resume_reason ?? null,
        data.provider || this.getDefaultProviderFallback(), data.model || '']
     )
     this.save()
@@ -463,6 +486,11 @@ export class DatabaseService {
     claude_session_id: string
     provider_session_id: string | null
     started_at: number | null
+    provider_session_captured_at: number | null
+    provider_session_validated_at: number | null
+    provider_session_source: string | null
+    resume_status: string | null
+    resume_reason: string | null
     provider: string
     model: string
   }>): any {

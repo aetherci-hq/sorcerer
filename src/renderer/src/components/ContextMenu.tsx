@@ -11,9 +11,10 @@ import {
   RefreshIcon, UploadIcon, ExternalLinkIcon, ArchiveIcon, RotateCcwIcon, EditIcon, PlayIcon, StopIcon, TerminalIcon, MergeIcon, NotesIcon, SmartphoneIcon, FolderIcon, SettingsIcon, MaximizeIcon
 } from './icons'
 import { useQuickNotesStore } from '../stores/useQuickNotesStore'
+import type { SessionResumeHealth } from '../types'
 
 type MenuItem =
-  | { label: string; icon?: ReactNode; shortcut?: string; action: () => void; danger?: boolean; eager?: boolean }
+  | { label: string; icon?: ReactNode; shortcut?: string; action: () => void; danger?: boolean; eager?: boolean; disabled?: boolean }
   | { type: 'separator' }
 
 export function ContextMenu() {
@@ -25,6 +26,21 @@ export function ContextMenu() {
   const menuRef = useRef<HTMLDivElement>(null)
   const [pos, setPos] = useState<{ top: number; left: number; maxHeight: number } | null>(null)
   const [loadingItem, setLoadingItem] = useState<number | null>(null)
+  const [resumeHealth, setResumeHealth] = useState<SessionResumeHealth | null>(null)
+
+  useEffect(() => {
+    if (!contextMenu || contextMenu.type !== 'session') {
+      setResumeHealth(null)
+      return
+    }
+    let cancelled = false
+    getApi().session.resumeHealth(contextMenu.targetId)
+      .then((health) => { if (!cancelled) setResumeHealth(health) })
+      .catch(() => { if (!cancelled) setResumeHealth(null) })
+    return () => {
+      cancelled = true
+    }
+  }, [contextMenu])
 
   // Clamp menu position to viewport before paint
   useLayoutEffect(() => {
@@ -498,7 +514,7 @@ export function ContextMenu() {
       }},
       { type: 'separator' },
       { label: 'Rename', icon: <EditIcon className={iconClass} />, shortcut: 'F2', action: () => setRenamingId(contextMenu.targetId) },
-      { label: 'Resume Session', icon: <PlayIcon className={iconClass} />, eager: true, action: async () => {
+      { label: 'Resume Session', icon: <PlayIcon className={iconClass} />, eager: true, disabled: resumeHealth?.canResume === false, action: async () => {
         await resumeSession(contextMenu.targetId)
       }},
       { label: 'New Session', icon: <RefreshIcon className={iconClass} />, eager: true, action: async () => {
@@ -564,8 +580,9 @@ export function ContextMenu() {
           <button
             key={i}
             className={`context-menu-item ${item.danger ? 'context-menu-item--danger' : ''} ${loadingItem === i ? 'context-menu-item--active' : ''}`}
-            disabled={loadingItem !== null && loadingItem !== i}
+            disabled={item.disabled || (loadingItem !== null && loadingItem !== i)}
             onClick={async () => {
+              if (item.disabled) return
               let spinnerTimer: ReturnType<typeof setTimeout> | null = null
               if (item.eager) {
                 setLoadingItem(i)

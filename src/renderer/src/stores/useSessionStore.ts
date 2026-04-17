@@ -4,6 +4,7 @@ import { useUIStore, findLeaf, findLeafBySession, clearSessionFromTree } from '.
 import { useQuickNotesStore } from './useQuickNotesStore'
 import { disposeTerminal } from '../components/TerminalView'
 import { getApi } from '../api/client'
+import { useToastStore } from './useToastStore'
 
 interface SessionState {
   sessions: Session[]
@@ -160,8 +161,14 @@ export const useSessionStore = create<SessionState>((set, get) => ({
           sessions: state.sessions.map((s) => s.id === sessionId ? session : s)
         }))
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('[session-store] resumeSession failed:', err)
+      const session = get().sessions.find((s) => s.id === sessionId)
+      const message = err?.message || 'Unable to resume session'
+      useToastStore.getState().addToast(
+        session ? `Could not resume "${session.name}": ${message}` : message,
+        'error'
+      )
     }
   },
 

@@ -53,6 +53,7 @@ import {
   getUserInfo,
   getNetworkIp,
   hasClaudeConversation,
+  getSessionResumeHealth,
   loadQuickNote,
   saveQuickNote,
   deleteQuickNote,
@@ -415,6 +416,10 @@ export function registerIPC(
 
   ipcMain.handle('session:resume', async (_event, sessionId: string) => {
     return resumeSession(services, sessionId)
+  })
+
+  ipcMain.handle('session:resume-health', (_event, sessionId: string) => {
+    return getSessionResumeHealth(services, sessionId)
   })
 
   ipcMain.handle('session:has-conversation', (_event, sessionId: string) => {

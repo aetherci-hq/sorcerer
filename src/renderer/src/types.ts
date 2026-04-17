@@ -33,8 +33,21 @@ export interface Session {
   created_at?: number
   started_at?: number | null
   archived_at?: number | null
+  provider_session_id?: string | null
+  provider_session_captured_at?: number | null
+  provider_session_validated_at?: number | null
+  provider_session_source?: string | null
+  resume_status?: 'launching' | 'ready' | 'degraded' | null
+  resume_reason?: string | null
   provider?: string
   model?: string
+}
+
+export interface SessionResumeHealth {
+  canResume: boolean
+  level: 'ok' | 'warning'
+  reason: string | null
+  guidance: string[]
 }
 
 // ── Team / task types (from file watcher) ─────────────────────────

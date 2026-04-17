@@ -160,6 +160,163 @@ function normalizeComparablePath(targetPath: string): string {
   return targetPath.replace(/^\\\\\?\\/, '').replace(/\//g, '\\').toLowerCase()
 }
 
+export function canRecoverSessionByCwd(db: DatabaseService, session: any): boolean {
+  const cwd = session?.worktree_path as string | undefined
+  if (!cwd) return false
+
+  const normalizedCwd = normalizeComparablePath(cwd)
+  const otherSessionsUsingCwd = db.listSessions().filter((candidate: any) => {
+    if (!candidate || candidate.id === session.id) return false
+    if (candidate.status === 'deleted' || candidate.status === 'archived') return false
+    const candidateCwd = candidate.worktree_path as string | undefined
+    if (!candidateCwd) return false
+    return normalizeComparablePath(candidateCwd) === normalizedCwd
+  })
+
+  return otherSessionsUsingCwd.length === 0
+}
+
+export function getSessionResumeHealth(
+  { db, pty }: Pick<HandlerServices, 'db' | 'pty'>,
+  sessionId: string
+): {
+  canResume: boolean
+  level: 'ok' | 'warning'
+  reason: string | null
+  guidance: string[]
+} {
+  const session = db.getSession(sessionId)
+  if (!session) {
+    return {
+      canResume: false,
+      level: 'warning',
+      reason: 'Session not found.',
+      guidance: ['Reload the session list and verify the session still exists.']
+    }
+  }
+
+  const cwd = fs.existsSync(session.worktree_path as string)
+    ? (session.worktree_path as string)
+    : (db.getProject(session.project_id as string)?.path as string || '')
+  if (!cwd) {
+    return {
+      canResume: false,
+      level: 'warning',
+      reason: 'The session working directory is no longer available.',
+      guidance: ['Restore the project path or create a new session from the project root.']
+    }
+  }
+
+  const allowCwdRecovery = canRecoverSessionByCwd(db, session)
+  const provider = (session.provider as string) || 'claude'
+
+  if (session.type === 'quick-terminal') {
+    return { canResume: true, level: 'ok', reason: null, guidance: [] }
+  }
+
+  if (provider === 'claude') {
+    const claudeSessionId = session.claude_session_id as string | undefined
+    if (claudeSessionId && claudeSessionExists(cwd, claudeSessionId)) {
+      return { canResume: true, level: 'ok', reason: null, guidance: [] }
+    }
+    if (!allowCwdRecovery) {
+      return {
+        canResume: false,
+        level: 'warning',
+        reason: 'This direct session shares a project directory with other sessions, and its pinned Claude conversation is missing.',
+        guidance: [
+          'Resume the still-intact sibling session if that is the conversation you need.',
+          'Create a worktree-backed session when you need parallel independent histories.',
+          'Archive or delete stale duplicate direct sessions after confirming which one is canonical.'
+        ]
+      }
+    }
+    return { canResume: true, level: 'ok', reason: null, guidance: [] }
+  }
+
+  if (provider === 'codex') {
+    const providerSessionId = session.provider_session_id as string | undefined
+    const scrollbackThreadId = extractCodexThreadIdFromOutput(pty.scrollback.getScrollback(sessionId))
+    if (providerSessionId || scrollbackThreadId) {
+      return { canResume: true, level: 'ok', reason: null, guidance: [] }
+    }
+    if ((session.resume_status as string | undefined) === 'launching') {
+      return {
+        canResume: false,
+        level: 'warning',
+        reason: (session.resume_reason as string | undefined) || 'Codex thread identity is still being captured for this session.',
+        guidance: [
+          'Keep the session running until Sorcerer captures the Codex thread.',
+          'If the session already ended, start a new session instead of attempting an ambiguous resume.'
+        ]
+      }
+    }
+    if ((session.resume_status as string | undefined) === 'degraded') {
+      return {
+        canResume: false,
+        level: 'warning',
+        reason: (session.resume_reason as string | undefined) || 'Codex thread identity is missing for this session.',
+        guidance: [
+          'Start a fresh session if you no longer need to preserve the old Codex thread.',
+          'Use worktree-backed sessions for parallel independent Codex work.',
+          'Keep the session running until Sorcerer captures its thread identity.'
+        ]
+      }
+    }
+    return {
+      canResume: false,
+      level: 'warning',
+      reason: !allowCwdRecovery
+        ? 'This direct session shares a project directory with other sessions, and Sorcerer cannot safely infer its Codex thread.'
+        : 'Codex thread identity is missing for this session.',
+      guidance: [
+        'Open the session that still has the correct Codex thread if one sibling is already intact.',
+        'Use separate worktree-backed sessions for parallel Codex work in the same project.',
+        'Start a new session if you no longer need the original Codex thread.'
+      ]
+    }
+  }
+
+  return { canResume: true, level: 'ok', reason: null, guidance: [] }
+}
+
+export function markSessionResumeState(
+  db: DatabaseService,
+  sessionId: string,
+  status: 'launching' | 'ready' | 'degraded',
+  reason: string | null
+): void {
+  db.updateSession(sessionId, {
+    resume_status: status,
+    resume_reason: reason
+  })
+}
+
+export function persistCodexSessionIdentity(
+  db: DatabaseService,
+  sessionId: string,
+  providerSessionId: string,
+  source: 'live-output' | 'scrollback' | 'exit-output' | 'cwd-recovery' | 'resume-discovery'
+): void {
+  const session = db.getSession(sessionId)
+  if (!session) return
+
+  const now = Math.floor(Date.now() / 1000)
+  const updates: Record<string, unknown> = {
+    provider_session_validated_at: now,
+    resume_status: 'ready',
+    resume_reason: null
+  }
+
+  if (session.provider_session_id !== providerSessionId) {
+    updates.provider_session_id = providerSessionId
+    updates.provider_session_captured_at = now
+    updates.provider_session_source = source
+  }
+
+  db.updateSession(sessionId, updates)
+}
+
 function getLatestCodexStateDbPath(): string | null {
   const codexDir = path.join(os.homedir(), '.codex')
   if (!fs.existsSync(codexDir)) return null
@@ -604,6 +761,11 @@ export async function createSession(
     claude_session_id: claudeSessionId,
     provider_session_id: null,
     started_at: startedAt,
+    provider_session_captured_at: null,
+    provider_session_validated_at: null,
+    provider_session_source: null,
+    resume_status: resolvedProvider === 'codex' ? 'launching' : 'ready',
+    resume_reason: resolvedProvider === 'codex' ? 'Waiting for Codex thread capture.' : null,
     provider: resolvedProvider,
     model: resolvedModel
   })
@@ -855,7 +1017,14 @@ export async function restartSession(
       db.updateSession(sessionId, { claude_session_id: newClaudeSessionId })
       args.push('--session-id', newClaudeSessionId)
     } else if (provider === 'codex') {
-      db.updateSession(sessionId, { provider_session_id: null })
+      db.updateSession(sessionId, {
+        provider_session_id: null,
+        provider_session_captured_at: null,
+        provider_session_validated_at: null,
+        provider_session_source: null,
+        resume_status: 'launching',
+        resume_reason: 'Waiting for Codex thread capture.'
+      })
     }
 
     const updates: Record<string, unknown> = {}
@@ -888,6 +1057,11 @@ export async function resumeSession(
 ): Promise<any> {
   const session = db.getSession(sessionId)
   if (!session) throw new Error('Session not found')
+  const resumeHealth = getSessionResumeHealth({ db, pty }, sessionId)
+  if (!resumeHealth.canResume) {
+    throw new Error(`${resumeHealth.reason} ${resumeHealth.guidance.join(' ')}`.trim())
+  }
+  const allowCwdRecovery = canRecoverSessionByCwd(db, session)
 
   // Kill existing process if running
   if (pty.isRunning(sessionId)) {
@@ -915,27 +1089,37 @@ export async function resumeSession(
       let claudeSessionId = session.claude_session_id as string | undefined
       let selectionSource = claudeSessionId ? 'stored' : 'none'
       if (claudeSessionId && !claudeSessionExists(cwd, claudeSessionId)) {
-        console.log(`[session:resume] Stored claude_session_id ${claudeSessionId} not found in Claude state, searching for recoverable session...`)
-        const actual =
-          findMostRecentConversation(cwd) ||
-          findMostRecentClaudeRuntimeSession(cwd)
-        if (actual) {
-          console.log(`[session:resume] Recovered Claude session: ${actual}`)
-          claudeSessionId = actual
-          selectionSource = 'recovered'
-          db.updateSession(sessionId, { claude_session_id: claudeSessionId })
+        if (allowCwdRecovery) {
+          console.log(`[session:resume] Stored claude_session_id ${claudeSessionId} not found in Claude state, searching for recoverable session...`)
+          const actual =
+            findMostRecentConversation(cwd) ||
+            findMostRecentClaudeRuntimeSession(cwd)
+          if (actual) {
+            console.log(`[session:resume] Recovered Claude session: ${actual}`)
+            claudeSessionId = actual
+            selectionSource = 'recovered'
+            db.updateSession(sessionId, { claude_session_id: claudeSessionId })
+          } else {
+            console.log(`[session:resume] No Claude resume target found for cwd: ${cwd}`)
+            claudeSessionId = undefined
+            selectionSource = 'fresh'
+          }
         } else {
-          console.log(`[session:resume] No Claude resume target found for cwd: ${cwd}`)
+          console.log(`[session:resume] Stored claude_session_id ${claudeSessionId} missing; cwd recovery disabled because multiple sessions share ${cwd}`)
           claudeSessionId = undefined
           selectionSource = 'fresh'
         }
       } else if (claudeSessionId && !conversationFileExists(cwd, claudeSessionId)) {
-        const transcriptSessionId = findMostRecentConversation(cwd)
-        if (transcriptSessionId && transcriptSessionId !== claudeSessionId) {
-          console.log(`[session:resume] Replacing runtime-only Claude session ${claudeSessionId} with transcript session ${transcriptSessionId}`)
-          claudeSessionId = transcriptSessionId
-          selectionSource = 'transcript-upgrade'
-          db.updateSession(sessionId, { claude_session_id: claudeSessionId })
+        if (allowCwdRecovery) {
+          const transcriptSessionId = findMostRecentConversation(cwd)
+          if (transcriptSessionId && transcriptSessionId !== claudeSessionId) {
+            console.log(`[session:resume] Replacing runtime-only Claude session ${claudeSessionId} with transcript session ${transcriptSessionId}`)
+            claudeSessionId = transcriptSessionId
+            selectionSource = 'transcript-upgrade'
+            db.updateSession(sessionId, { claude_session_id: claudeSessionId })
+          }
+        } else {
+          console.log(`[session:resume] Keeping runtime-only Claude session ${claudeSessionId}; transcript upgrade disabled because multiple sessions share ${cwd}`)
         }
       }
 
@@ -946,10 +1130,15 @@ export async function resumeSession(
 
       if (claudeSessionId) {
         args.push('--resume', claudeSessionId)
+        markSessionResumeState(db, sessionId, 'ready', null)
         console.log(`[session:resume] ${sessionId}: provider=claude mode=resume source=${selectionSource} target=${claudeSessionId} cwd=${cwd}`)
       } else {
         claudeSessionId = uuidv4()
-        db.updateSession(sessionId, { claude_session_id: claudeSessionId })
+        db.updateSession(sessionId, {
+          claude_session_id: claudeSessionId,
+          resume_status: 'ready',
+          resume_reason: null
+        })
         args.push('--session-id', claudeSessionId)
         console.log(`[session:resume] ${sessionId}: provider=claude mode=fresh-session-id target=${claudeSessionId} cwd=${cwd}`)
       }
@@ -958,16 +1147,20 @@ export async function resumeSession(
       let providerSessionId = session.provider_session_id as string | undefined
       let selectionSource = providerSessionId ? 'stored' : 'none'
       if (!providerSessionId) {
-        providerSessionId =
-          extractCodexThreadIdFromOutput(pty.scrollback.getScrollback(sessionId)) ||
-          await findCodexThreadIdForCwd(cwd, session.started_at as number | null)
+        providerSessionId = extractCodexThreadIdFromOutput(pty.scrollback.getScrollback(sessionId))
         if (providerSessionId) {
           console.log(`[session:resume] Found Codex thread: ${providerSessionId}`)
-          selectionSource = 'discovered'
-          db.updateSession(sessionId, { provider_session_id: providerSessionId })
+          selectionSource = 'scrollback'
+          persistCodexSessionIdentity(
+            db,
+            sessionId,
+            providerSessionId,
+            'scrollback'
+          )
         } else {
-          console.log(`[session:resume] No Codex thread id stored for ${sessionId}; falling back to fresh launch`)
-          selectionSource = 'fresh'
+          console.log(`[session:resume] No Codex thread id stored for ${sessionId}; blocking resume because provider identity is missing`)
+          markSessionResumeState(db, sessionId, 'degraded', 'Codex thread identity missing; resume would require inference.')
+          throw new Error('Codex thread identity is missing for this session. Start a new session instead of attempting an ambiguous resume.')
         }
       }
 
@@ -978,9 +1171,12 @@ export async function resumeSession(
 
       args = providerSessionId ? ['resume', providerSessionId, ...baseArgs] : baseArgs
       if (providerSessionId) {
+        db.updateSession(sessionId, {
+          provider_session_validated_at: Math.floor(Date.now() / 1000),
+          resume_status: 'ready',
+          resume_reason: null
+        })
         console.log(`[session:resume] ${sessionId}: provider=codex mode=resume source=${selectionSource} target=${providerSessionId} cwd=${cwd}`)
-      } else {
-        console.log(`[session:resume] ${sessionId}: provider=codex mode=fresh cwd=${cwd}`)
       }
       if (providerSessionId) trackResume(sessionId)
     } else {

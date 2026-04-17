@@ -11,16 +11,19 @@ import { QuickNotesPanel, parseQuickNotesPanelId } from './QuickNotesPanel'
 import { useQuickNotesStore } from '../stores/useQuickNotesStore'
 import { MissionPanel } from './MissionPanel'
 import { ParticleCanvas } from './ParticleCanvas'
-import type { Session, Agent, SplitNode } from '../types'
+import type { Session, Agent, SessionResumeHealth, SplitNode } from '../types'
 
 function IdleSessionPanel({ session }: { session: Session }) {
   const resumeSession = useSessionStore((s) => s.resumeSession)
   const restartSession = useSessionStore((s) => s.restartSession)
-  const [hasConversation, setHasConversation] = useState<boolean | null>(null)
+  const [resumeHealth, setResumeHealth] = useState<SessionResumeHealth | null>(null)
 
   useEffect(() => {
-    getApi().session.hasConversation(session.id).then(setHasConversation)
+    getApi().session.resumeHealth(session.id).then(setResumeHealth).catch(() => setResumeHealth(null))
   }, [session.id])
+
+  const canResume = resumeHealth?.canResume ?? true
+  const resumeHint = resumeHealth?.reason || null
 
   return (
     <div className="terminal-placeholder">
@@ -28,13 +31,13 @@ function IdleSessionPanel({ session }: { session: Session }) {
       <div className="terminal-placeholder-text">
         Session <strong>{session.name}</strong> has ended.
       </div>
-      {hasConversation === false && (
+      {resumeHint && (
         <div className="terminal-placeholder-hint">
-          No conversation history found — conversation data may have expired.
+          {resumeHint}
         </div>
       )}
       <div className="terminal-action-row">
-        {hasConversation !== false && (
+        {canResume && (
           <button className="terminal-restart-btn terminal-restart-btn--primary" onClick={() => resumeSession(session.id)}>
             <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
               <path d="M6 3.5a.5.5 0 0 1 .795-.404l6 4.5a.5.5 0 0 1 0 .808l-6 4.5A.5.5 0 0 1 6 12.5v-9z" />
@@ -42,7 +45,7 @@ function IdleSessionPanel({ session }: { session: Session }) {
             Resume
           </button>
         )}
-        <button className={`terminal-restart-btn${hasConversation === false ? ' terminal-restart-btn--primary' : ''}`} onClick={() => restartSession(session.id)}>
+        <button className={`terminal-restart-btn${!canResume ? ' terminal-restart-btn--primary' : ''}`} onClick={() => restartSession(session.id)}>
           <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
             <path d="M11.534 7h3.932a.25.25 0 0 1 .192.41l-1.966 2.36a.25.25 0 0 1-.384 0l-1.966-2.36a.25.25 0 0 1 .192-.41zm-11 2h3.932a.25.25 0 0 0 .192-.41L2.692 6.23a.25.25 0 0 0-.384 0L.342 8.59A.25.25 0 0 0 .534 9z" />
             <path fillRule="evenodd" d="M8 3c-1.552 0-2.94.707-3.857 1.818a.5.5 0 1 1-.771-.636A6.002 6.002 0 0 1 13.917 7H12.9A5.002 5.002 0 0 0 8 3zM3.1 9a5.002 5.002 0 0 0 8.757 2.182.5.5 0 1 1 .771.636A6.002 6.002 0 0 1 2.083 9H3.1z" />

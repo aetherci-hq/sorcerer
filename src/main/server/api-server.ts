@@ -21,6 +21,7 @@ import {
   deleteSession,
   restartSession,
   resumeSession,
+  getSessionResumeHealth,
   setSessionTeam,
   pushSessionBranch,
   checkDeleteSafety,
@@ -301,6 +302,7 @@ export class ApiServer {
       'session:delete': (sessionId: string) => deleteSession(s, sessionId),
       'session:restart': (sessionId: string) => restartSession(s, sessionId),
       'session:resume': (sessionId: string) => resumeSession(s, sessionId),
+      'session:resume-health': (sessionId: string) => getSessionResumeHealth(s, sessionId),
       'session:set-team': (sessionId: string, teamName: string | null) =>
         setSessionTeam(s, sessionId, teamName),
       'session:push-branch': (sessionId: string) => pushSessionBranch(s, sessionId),
