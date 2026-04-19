@@ -13,6 +13,10 @@ function formatWhen(timestamp: number | null): string {
   return new Date(ms).toLocaleString()
 }
 
+function formatProvider(provider: 'claude' | 'codex'): string {
+  return provider === 'claude' ? 'Claude Code' : 'Codex'
+}
+
 export function ImportSessionsDialog() {
   const { activeDialog, dialogTargetId, closeDialog } = useUIStore()
   const { projects, loadProjects } = useProjectStore()
@@ -185,13 +189,14 @@ export function ImportSessionsDialog() {
                 <div className="import-session-card__topline">
                   <span className="import-session-card__title">{candidate.title || candidate.providerSessionId}</span>
                   <span className={`import-session-card__provider import-session-card__provider--${candidate.provider}`}>
-                    {candidate.provider}
+                    {formatProvider(candidate.provider)}
                   </span>
                 </div>
                 <div className="import-session-card__meta">
+                  <span>{candidate.projectName}</span>
                   <span>{candidate.branch || 'No branch detected'}</span>
                   <span>{formatWhen(candidate.updatedAt || candidate.createdAt)}</span>
-                  <span>{candidate.model || 'Default model'}</span>
+                  {candidate.model ? <span>{candidate.model}</span> : null}
                 </div>
                 <div className="import-session-card__path">{candidate.cwd}</div>
                 <div className="import-session-card__footer">

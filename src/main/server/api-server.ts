@@ -45,6 +45,8 @@ import {
   setSetting,
   listProviders,
   refreshProviders,
+  scanImportableSessions,
+  importExternalSessions,
   getUserInfo,
   loadQuickNote,
   saveQuickNote,
@@ -305,6 +307,8 @@ export class ApiServer {
       'session:resume': (sessionId: string) => resumeSession(s, sessionId),
       'session:resume-health': (sessionId: string) => getSessionResumeHealth(s, sessionId),
       'session:diagnostics': (sessionId: string) => getSessionDiagnostics(s, sessionId),
+      'session:scan-imports': (projectId?: string) => scanImportableSessions(s, projectId),
+      'session:import': (candidateIds: string[]) => importExternalSessions(s, candidateIds),
       'session:set-team': (sessionId: string, teamName: string | null) =>
         setSessionTeam(s, sessionId, teamName),
       'session:push-branch': (sessionId: string) => pushSessionBranch(s, sessionId),

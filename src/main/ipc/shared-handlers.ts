@@ -84,6 +84,87 @@ function hasClaudeRuntimeSession(cwd: string): boolean {
   return readClaudeRuntimeSessions(cwd).length > 0
 }
 
+function extractClaudeTranscriptTitle(lines: string[]): string {
+  let lastPrompt = ''
+  let lastUserMessage = ''
+
+  for (const line of lines) {
+    try {
+      const record = JSON.parse(line) as {
+        type?: string
+        lastPrompt?: string
+        message?: { role?: string; content?: string | Array<{ type?: string; text?: string }> }
+      }
+
+      if (record.type === 'last-prompt' && typeof record.lastPrompt === 'string') {
+        lastPrompt = record.lastPrompt.trim()
+      }
+
+      if (record.message?.role === 'user') {
+        const content = record.message.content
+        if (typeof content === 'string') {
+          lastUserMessage = content.trim()
+        } else if (Array.isArray(content)) {
+          const text = content
+            .map((part) => typeof part?.text === 'string' ? part.text : '')
+            .join(' ')
+            .trim()
+          if (text) lastUserMessage = text
+        }
+      }
+    } catch {
+      // Ignore malformed transcript lines.
+    }
+  }
+
+  const title = lastPrompt || lastUserMessage
+  return title.replace(/\s+/g, ' ').trim()
+}
+
+function readClaudeTranscriptSessions(cwd: string): Array<{ sessionId: string; cwd: string; updatedAt: number; title: string }> {
+  const convDir = getConvDir(cwd)
+  if (!fs.existsSync(convDir)) return []
+
+  try {
+    return fs.readdirSync(convDir)
+      .filter((entry) => entry.endsWith('.jsonl'))
+      .map((entry) => {
+        try {
+          const fullPath = path.join(convDir, entry)
+          const sessionId = entry.replace(/\.jsonl$/i, '')
+          const stat = fs.statSync(fullPath)
+          const lines = fs.readFileSync(fullPath, 'utf8').split(/\r?\n/).filter(Boolean)
+          let assistantMessages = 0
+          for (const line of lines) {
+            try {
+              const record = JSON.parse(line) as { type?: string; message?: { role?: string } }
+              if (record.type === 'assistant' || record.message?.role === 'assistant') {
+                assistantMessages += 1
+                break
+              }
+            } catch {
+              // Ignore malformed transcript lines.
+            }
+          }
+          if (assistantMessages === 0) return null
+          const title = extractClaudeTranscriptTitle(lines)
+          return {
+            sessionId,
+            cwd,
+            updatedAt: Math.floor(stat.mtimeMs),
+            title
+          }
+        } catch {
+          return null
+        }
+      })
+      .filter((entry): entry is { sessionId: string; cwd: string; updatedAt: number; title: string } => entry !== null)
+      .sort((left, right) => right.updatedAt - left.updatedAt)
+  } catch {
+    return []
+  }
+}
+
 function hasClaudeTranscript(cwd: string): boolean {
   const convDir = getConvDir(cwd)
   if (!fs.existsSync(convDir)) return false
@@ -124,7 +205,7 @@ function slugifySessionLabel(value: string): string {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
-  return normalized.slice(0, 48) || 'imported-session'
+  return normalized.slice(0, 28).replace(/-+$/g, '') || 'imported-session'
 }
 
 async function detectBranchForPath(cwd: string): Promise<string> {
@@ -150,7 +231,7 @@ function deriveImportedSessionName(candidate: {
 
   const title = candidate.title.trim()
   if (title) {
-    return slugifySessionLabel(title.split(/\s+/).slice(0, 6).join(' '))
+    return slugifySessionLabel(title.split(/\s+/).slice(0, 4).join(' '))
   }
 
   return slugifySessionLabel(path.basename(candidate.cwd))
@@ -675,6 +756,17 @@ export async function scanImportableSessions(
   )
 
   const candidates: ExternalSessionImportCandidate[] = []
+  const seenCandidateIds = new Set<string>()
+
+  const claudeTranscriptSessionsByCwd = new Map<string, ReturnType<typeof readClaudeTranscriptSessions>>()
+  const getClaudeTranscriptSessions = (cwd: string) => {
+    const normalizedCwd = normalizeComparablePath(cwd)
+    const existing = claudeTranscriptSessionsByCwd.get(normalizedCwd)
+    if (existing) return existing
+    const sessions = readClaudeTranscriptSessions(cwd)
+    claudeTranscriptSessionsByCwd.set(normalizedCwd, sessions)
+    return sessions
+  }
 
   for (const runtimeSession of readClaudeRuntimeSessions()) {
     const cwd = String(runtimeSession.cwd)
@@ -684,11 +776,15 @@ export async function scanImportableSessions(
 
     const project = projects.find((entry: any) => normalizeComparablePath(entry.path as string) === normalizeComparablePath(cwd))
     const branch = await detectBranchForPath(cwd)
+    const transcriptTitle =
+      getClaudeTranscriptSessions(cwd).find((entry) => entry.sessionId === runtimeSession.sessionId)?.title || ''
+    const candidateId = `claude:${runtimeSession.sessionId}`
+    if (seenCandidateIds.has(candidateId)) continue
     candidates.push({
-      id: `claude:${runtimeSession.sessionId}`,
+      id: candidateId,
       provider: 'claude',
       providerSessionId: runtimeSession.sessionId,
-      title: branch || path.basename(cwd),
+      title: transcriptTitle || branch || path.basename(cwd),
       cwd,
       createdAt: runtimeSession.startedAt || 0,
       updatedAt: runtimeSession.startedAt || null,
@@ -699,6 +795,38 @@ export async function scanImportableSessions(
       projectPath: project?.path as string || cwd,
       willCreateProject: !project
     })
+    seenCandidateIds.add(candidateId)
+  }
+
+  const transcriptProjects = targetProject ? [targetProject] : projects
+  for (const project of transcriptProjects) {
+    const cwd = project.path as string
+    if (!cwd || !fs.existsSync(cwd)) continue
+
+    const branch = await detectBranchForPath(cwd)
+    for (const transcriptSession of getClaudeTranscriptSessions(cwd)) {
+      if (existingClaudeIds.has(transcriptSession.sessionId)) continue
+
+      const candidateId = `claude:${transcriptSession.sessionId}`
+      if (seenCandidateIds.has(candidateId)) continue
+
+      candidates.push({
+        id: candidateId,
+        provider: 'claude',
+        providerSessionId: transcriptSession.sessionId,
+        title: transcriptSession.title || branch || path.basename(cwd),
+        cwd,
+        createdAt: transcriptSession.updatedAt || 0,
+        updatedAt: transcriptSession.updatedAt || null,
+        branch,
+        model: '',
+        projectId: project.id as string,
+        projectName: (project.name as string | undefined) || path.basename(cwd),
+        projectPath: project.path as string || cwd,
+        willCreateProject: false
+      })
+      seenCandidateIds.add(candidateId)
+    }
   }
 
   const stateDbPath = getLatestCodexStateDbPath()
