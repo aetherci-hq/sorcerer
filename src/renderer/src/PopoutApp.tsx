@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { getApi } from './api/client'
-import { getThemeById, applyTheme } from './themes'
+import { getAppliedTheme, getThemeById, applyTheme, toXtermTheme } from './themes'
 import { GitBranchIcon } from './components/icons'
 import type { SorcererTheme } from './themes'
 import '@xterm/xterm/css/xterm.css'
@@ -39,10 +39,7 @@ function PopoutTerminal({ sessionId, onExited }: { sessionId: string; onExited: 
   useEffect(() => {
     if (!containerRef.current) return
 
-    const cs = getComputedStyle(document.documentElement)
-    const cssVar = (name: string, fallback: string) =>
-      cs.getPropertyValue(name).trim() || fallback
-    const terminalBg = cssVar('--terminal-bg', '#0f0e0c')
+    const theme = getAppliedTheme()
 
     const terminal = new Terminal({
       cursorBlink: true,
@@ -50,30 +47,8 @@ function PopoutTerminal({ sessionId, onExited }: { sessionId: string; onExited: 
       cursorInactiveStyle: 'none',
       fontSize: 13,
       fontFamily: "'JetBrains Mono', 'Cascadia Code', 'Consolas', monospace",
-      theme: {
-        background: terminalBg,
-        foreground: cssVar('--text-primary', '#ede6d8'),
-        cursor: cssVar('--accent', cssVar('--text-primary', '#ede6d8')),
-        cursorAccent: terminalBg,
-        selectionBackground: cssVar('--accent-glow-strong', 'rgba(255, 255, 255, 0.22)'),
-        selectionForeground: undefined,
-        black: terminalBg,
-        red: '#e25555',
-        green: '#5ec269',
-        yellow: cssVar('--accent', cssVar('--text-primary', '#ede6d8')),
-        blue: '#5ba4e6',
-        magenta: '#c084fc',
-        cyan: '#22d3ee',
-        white: cssVar('--text-primary', '#ede6d8'),
-        brightBlack: cssVar('--text-tertiary', '#6b6355'),
-        brightRed: '#f87171',
-        brightGreen: '#86efac',
-        brightYellow: '#fde68a',
-        brightBlue: '#93c5fd',
-        brightMagenta: '#d8b4fe',
-        brightCyan: '#67e8f9',
-        brightWhite: '#ffffff'
-      },
+      drawBoldTextInBrightColors: false,
+      theme: toXtermTheme(theme),
       allowTransparency: false,
       scrollback: 3000,
       lineHeight: 1.2
@@ -167,31 +142,7 @@ function PopoutTerminal({ sessionId, onExited }: { sessionId: string; onExited: 
     const handler = (e: Event) => {
       const theme = (e as CustomEvent<SorcererTheme>).detail
       if (!theme || !termRef.current) return
-      const termBg = theme.colors['terminal-bg']
-      termRef.current.terminal.options.theme = {
-        background: termBg,
-        foreground: theme.colors['text-primary'],
-        cursor: theme.colors['accent'],
-        cursorAccent: termBg,
-        selectionBackground: theme.terminal.selectionBackground,
-        selectionForeground: undefined,
-        black: termBg,
-        red: theme.terminal.red,
-        green: theme.terminal.green,
-        yellow: theme.terminal.yellow,
-        blue: theme.terminal.blue,
-        magenta: theme.terminal.magenta,
-        cyan: theme.terminal.cyan,
-        white: theme.colors['text-primary'],
-        brightBlack: theme.colors['text-tertiary'],
-        brightRed: theme.terminal.brightRed,
-        brightGreen: theme.terminal.brightGreen,
-        brightYellow: theme.terminal.brightYellow,
-        brightBlue: theme.terminal.brightBlue,
-        brightMagenta: theme.terminal.brightMagenta,
-        brightCyan: theme.terminal.brightCyan,
-        brightWhite: theme.terminal.brightWhite
-      }
+      termRef.current.terminal.options.theme = toXtermTheme(theme)
     }
     window.addEventListener('sorcerer:themeChange', handler)
     return () => window.removeEventListener('sorcerer:themeChange', handler)

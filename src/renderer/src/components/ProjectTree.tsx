@@ -24,11 +24,16 @@ function formatResumeWarning(health: SessionResumeHealth | null | undefined): st
 }
 
 function getResumeStateLabel(session: Session): string | null {
-  if (session.resume_status !== 'launching') return null
-  if (session.provider === 'codex') {
-    return session.resume_reason || 'Capturing Codex thread identity.'
+  if (session.resume_status === 'launching') {
+    if (session.provider === 'codex') {
+      return session.resume_reason || 'Capturing Codex thread identity.'
+    }
+    return session.resume_reason || 'Resume state is still being prepared.'
   }
-  return session.resume_reason || 'Resume state is still being prepared.'
+  if (session.resume_status === 'unsupported') {
+    return session.resume_reason || 'This provider is restart-only in Sorcerer right now.'
+  }
+  return null
 }
 
 function TaskItem({ task }: { task: TaskData }) {
@@ -399,7 +404,7 @@ function SessionItem({
             )}
             {!isRenaming && getResumeStateLabel(session) && (
               <Tooltip label={getResumeStateLabel(session)!}>
-                <span className="tree-resume-state">capturing</span>
+                <span className="tree-resume-state">{session.resume_status === 'unsupported' ? 'restart only' : 'capturing'}</span>
               </Tooltip>
             )}
             {!isRenaming && !resumeHealth?.canResume && formatResumeWarning(resumeHealth) && (

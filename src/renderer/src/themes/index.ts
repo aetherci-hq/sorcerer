@@ -51,6 +51,34 @@ export interface SorcererTheme {
   terminal: SorcererTerminalColors
 }
 
+export function toXtermTheme(theme: SorcererTheme) {
+  const termBg = theme.colors['terminal-bg']
+  return {
+    background: termBg,
+    foreground: theme.terminal.foreground,
+    cursor: theme.terminal.cursor,
+    cursorAccent: termBg,
+    selectionBackground: theme.terminal.selectionBackground,
+    selectionForeground: undefined,
+    black: theme.terminal.black,
+    red: theme.terminal.red,
+    green: theme.terminal.green,
+    yellow: theme.terminal.yellow,
+    blue: theme.terminal.blue,
+    magenta: theme.terminal.magenta,
+    cyan: theme.terminal.cyan,
+    white: theme.terminal.white,
+    brightBlack: theme.terminal.brightBlack,
+    brightRed: theme.terminal.brightRed,
+    brightGreen: theme.terminal.brightGreen,
+    brightYellow: theme.terminal.brightYellow,
+    brightBlue: theme.terminal.brightBlue,
+    brightMagenta: theme.terminal.brightMagenta,
+    brightCyan: theme.terminal.brightCyan,
+    brightWhite: theme.terminal.brightWhite
+  }
+}
+
 export const DEFAULT_THEME: SorcererTheme = {
   id: 'default',
   name: 'Sorcerer Dark',
@@ -528,8 +556,15 @@ export function getThemeById(id: string): SorcererTheme {
   return THEMES[id] ?? DEFAULT_THEME
 }
 
+export function getAppliedTheme(): SorcererTheme {
+  if (typeof document === 'undefined') return DEFAULT_THEME
+  const themeId = document.documentElement.dataset.themeId || 'default'
+  return getThemeById(themeId)
+}
+
 export function applyTheme(theme: SorcererTheme): void {
   const root = document.documentElement
+  root.dataset.themeId = theme.id
   for (const [key, value] of Object.entries(theme.colors)) {
     root.style.setProperty(`--${key}`, value)
   }
