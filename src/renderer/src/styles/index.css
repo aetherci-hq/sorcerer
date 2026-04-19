@@ -3194,6 +3194,12 @@ button:focus-visible,
   opacity: 0.8;
 }
 
+.split-panel--focused .split-panel-action,
+.split-panel--focused .split-panel-close {
+  background-color: transparent;
+  box-shadow: none;
+}
+
 .split-panel-action svg {
   width: 14px;
   height: 14px;
@@ -4094,15 +4100,15 @@ button:focus-visible,
 }
 
 .terminal-restart-btn--primary {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--bg-root);
+  background: var(--accent-glow);
+  border-color: var(--accent-border-soft);
+  color: var(--text-secondary);
 }
 
 .terminal-restart-btn--primary:hover {
-  background: var(--accent-dim);
-  border-color: var(--accent-dim);
-  color: var(--bg-root);
+  background: var(--accent-surface-subtle);
+  border-color: var(--accent-border-medium);
+  color: var(--text-primary);
 }
 
 .terminal-action-row {
@@ -4116,13 +4122,14 @@ button:focus-visible,
   padding: 0;
   border: none;
   background: transparent;
-  color: var(--accent);
-  font-size: 12px;
+  color: var(--text-tertiary);
+  font-size: 12.5px;
   cursor: pointer;
+  opacity: 0.9;
 }
 
 .terminal-info-btn:hover {
-  color: var(--accent-dim);
+  color: var(--text-secondary);
 }
 
 .terminal-diagnostics {
