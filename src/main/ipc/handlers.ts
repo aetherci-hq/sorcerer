@@ -50,6 +50,8 @@ import {
   setSetting,
   listProviders,
   refreshProviders,
+  scanImportableSessions,
+  importExternalSessions,
   getUserInfo,
   getNetworkIp,
   hasClaudeConversation,
@@ -425,6 +427,14 @@ export function registerIPC(
 
   ipcMain.handle('session:diagnostics', (_event, sessionId: string) => {
     return getSessionDiagnostics(services, sessionId)
+  })
+
+  ipcMain.handle('session:scan-imports', (_event, projectId?: string) => {
+    return scanImportableSessions(services, projectId)
+  })
+
+  ipcMain.handle('session:import', (_event, candidateIds: string[]) => {
+    return importExternalSessions(services, candidateIds)
   })
 
   ipcMain.handle('session:has-conversation', (_event, sessionId: string) => {

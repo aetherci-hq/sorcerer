@@ -6,6 +6,7 @@ import { ContextMenu } from './components/ContextMenu'
 import { ToastContainer } from './components/Toast'
 import { NewSessionDialog } from './components/dialogs/NewSessionDialog'
 import { AddProjectDialog } from './components/dialogs/AddProjectDialog'
+import { ImportSessionsDialog } from './components/dialogs/ImportSessionsDialog'
 import { DeleteDialog } from './components/dialogs/DeleteDialog'
 import { LandDialog } from './components/dialogs/LandDialog'
 import { ArchiveDialog } from './components/dialogs/ArchiveDialog'
@@ -233,6 +234,7 @@ export function App() {
       <ToastContainer />
       <NewSessionDialog />
       <AddProjectDialog />
+      <ImportSessionsDialog />
       <DeleteDialog />
       <LandDialog />
       <ArchiveDialog />

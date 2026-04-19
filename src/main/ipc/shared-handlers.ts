@@ -103,6 +103,59 @@ function findMostRecentClaudeRuntimeSession(cwd: string): string | null {
   return readClaudeRuntimeSessions(cwd)[0]?.sessionId || null
 }
 
+type ExternalSessionImportCandidate = {
+  id: string
+  provider: 'claude' | 'codex'
+  providerSessionId: string
+  title: string
+  cwd: string
+  createdAt: number
+  updatedAt: number | null
+  branch: string
+  model: string
+  projectId: string | null
+  projectName: string
+  projectPath: string
+  willCreateProject: boolean
+}
+
+function slugifySessionLabel(value: string): string {
+  const normalized = value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+  return normalized.slice(0, 48) || 'imported-session'
+}
+
+async function detectBranchForPath(cwd: string): Promise<string> {
+  try {
+    const git = simpleGit(cwd)
+    const branch = (await git.revparse(['--abbrev-ref', 'HEAD'])).trim()
+    return branch === 'HEAD' ? '' : branch
+  } catch {
+    return ''
+  }
+}
+
+function deriveImportedSessionName(candidate: {
+  provider: 'claude' | 'codex'
+  title: string
+  branch: string
+  cwd: string
+}): string {
+  const branchLeaf = candidate.branch.split('/').pop()?.trim() || ''
+  if (branchLeaf && !['main', 'master'].includes(branchLeaf.toLowerCase())) {
+    return slugifySessionLabel(branchLeaf)
+  }
+
+  const title = candidate.title.trim()
+  if (title) {
+    return slugifySessionLabel(title.split(/\s+/).slice(0, 6).join(' '))
+  }
+
+  return slugifySessionLabel(path.basename(candidate.cwd))
+}
+
 /**
  * Check whether a specific claude_session_id has a conversation file on disk.
  */
@@ -603,6 +656,153 @@ export async function reconcileCodexSessions(
   return { checked: sessions.length, updated }
 }
 
+export async function scanImportableSessions(
+  { db }: Pick<HandlerServices, 'db'>,
+  projectId?: string
+): Promise<ExternalSessionImportCandidate[]> {
+  const projects = db.listProjects()
+  const targetProject = projectId ? db.getProject(projectId) : null
+  const existingSessions = db.listSessions().filter((session: any) => session.status !== 'deleted')
+  const existingClaudeIds = new Set(
+    existingSessions
+      .map((session: any) => session.claude_session_id as string | undefined)
+      .filter((value): value is string => !!value)
+  )
+  const existingProviderIds = new Set(
+    existingSessions
+      .map((session: any) => session.provider_session_id as string | undefined)
+      .filter((value): value is string => !!value)
+  )
+
+  const candidates: ExternalSessionImportCandidate[] = []
+
+  for (const runtimeSession of readClaudeRuntimeSessions()) {
+    const cwd = String(runtimeSession.cwd)
+    if (!fs.existsSync(cwd)) continue
+    if (existingClaudeIds.has(runtimeSession.sessionId)) continue
+    if (targetProject && normalizeComparablePath(targetProject.path as string) !== normalizeComparablePath(cwd)) continue
+
+    const project = projects.find((entry: any) => normalizeComparablePath(entry.path as string) === normalizeComparablePath(cwd))
+    const branch = await detectBranchForPath(cwd)
+    candidates.push({
+      id: `claude:${runtimeSession.sessionId}`,
+      provider: 'claude',
+      providerSessionId: runtimeSession.sessionId,
+      title: branch || path.basename(cwd),
+      cwd,
+      createdAt: runtimeSession.startedAt || 0,
+      updatedAt: runtimeSession.startedAt || null,
+      branch,
+      model: '',
+      projectId: project?.id || null,
+      projectName: (project?.name as string | undefined) || path.basename(cwd),
+      projectPath: project?.path as string || cwd,
+      willCreateProject: !project
+    })
+  }
+
+  const stateDbPath = getLatestCodexStateDbPath()
+  if (stateDbPath && fs.existsSync(stateDbPath)) {
+    const SQL = await getSqlJs()
+    const stateDb = new SQL.Database(fs.readFileSync(stateDbPath))
+    try {
+      const stmt = stateDb.prepare(`
+        SELECT id, cwd, title, created_at, updated_at, model
+        FROM threads
+        WHERE archived = 0 AND source = 'cli'
+        ORDER BY updated_at DESC
+        LIMIT 500
+      `)
+
+      while (stmt.step()) {
+        const row = stmt.getAsObject() as {
+          id?: string
+          cwd?: string
+          title?: string
+          created_at?: number
+          updated_at?: number
+          model?: string
+        }
+        if (!row.id || !row.cwd) continue
+        const cwd = String(row.cwd).replace(/^\\\\\?\\/, '')
+        if (!fs.existsSync(cwd)) continue
+        if (existingProviderIds.has(String(row.id))) continue
+        if (targetProject && normalizeComparablePath(targetProject.path as string) !== normalizeComparablePath(cwd)) continue
+
+        const project = projects.find((entry: any) => normalizeComparablePath(entry.path as string) === normalizeComparablePath(cwd))
+        const branch = await detectBranchForPath(cwd)
+        candidates.push({
+          id: `codex:${row.id}`,
+          provider: 'codex',
+          providerSessionId: String(row.id),
+          title: String(row.title || '').trim() || branch || path.basename(cwd),
+          cwd,
+          createdAt: Number(row.created_at || 0),
+          updatedAt: Number(row.updated_at || 0) || null,
+          branch,
+          model: String(row.model || ''),
+          projectId: project?.id || null,
+          projectName: (project?.name as string | undefined) || path.basename(cwd),
+          projectPath: project?.path as string || cwd,
+          willCreateProject: !project
+        })
+      }
+      stmt.free()
+    } finally {
+      stateDb.close()
+    }
+  }
+
+  candidates.sort((left, right) => {
+    const leftStamp = left.updatedAt || left.createdAt || 0
+    const rightStamp = right.updatedAt || right.createdAt || 0
+    return rightStamp - leftStamp
+  })
+
+  return candidates
+}
+
+export async function importExternalSessions(
+  services: Pick<HandlerServices, 'db'>,
+  candidateIds: string[]
+): Promise<any[]> {
+  const { db } = services
+  const available = await scanImportableSessions(services)
+  const selected = available.filter((candidate) => candidateIds.includes(candidate.id))
+  const imported: any[] = []
+
+  for (const candidate of selected) {
+    let projectId = candidate.projectId
+    if (!projectId) {
+      const createdProject = addProjectByPath(services, candidate.projectPath, candidate.projectName)
+      projectId = createdProject?.id as string
+    }
+    if (!projectId) continue
+
+    const importedSession = db.addSession({
+      id: uuidv4(),
+      project_id: projectId,
+      name: deriveImportedSessionName(candidate),
+      branch: candidate.branch,
+      worktree_path: candidate.cwd,
+      status: 'idle',
+      claude_session_id: candidate.provider === 'claude' ? candidate.providerSessionId : undefined,
+      provider_session_id: candidate.provider === 'codex' ? candidate.providerSessionId : null,
+      started_at: candidate.createdAt || null,
+      provider_session_captured_at: candidate.createdAt || null,
+      provider_session_validated_at: Math.floor(Date.now() / 1000),
+      provider_session_source: 'import',
+      resume_status: 'ready',
+      resume_reason: null,
+      provider: candidate.provider,
+      model: candidate.model || ''
+    })
+    imported.push(importedSession)
+  }
+
+  return imported
+}
+
 function ensureClaudeTrust(cwd: string): void {
   const key = cwd.replace(/\\/g, '/')
   const configPath = path.join(os.homedir(), '.claude.json')
@@ -737,7 +937,7 @@ export function listProjects({ db }: HandlerServices): any[] {
 }
 
 export function addProjectByPath(
-  { db }: HandlerServices,
+  { db }: Pick<HandlerServices, 'db'>,
   projectPath: string,
   customName?: string
 ): any {

@@ -62,6 +62,22 @@ export interface SessionDiagnostics {
   worktreePath: string | null
 }
 
+export interface ExternalSessionImportCandidate {
+  id: string
+  provider: 'claude' | 'codex'
+  providerSessionId: string
+  title: string
+  cwd: string
+  createdAt: number
+  updatedAt: number | null
+  branch: string
+  model: string
+  projectId: string | null
+  projectName: string
+  projectPath: string
+  willCreateProject: boolean
+}
+
 // ── Team / task types (from file watcher) ─────────────────────────
 
 export interface TeamConfig {

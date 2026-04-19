@@ -176,6 +176,8 @@ export function createRemoteClient(baseUrl: string, token: string): SorcererAPI 
       list: (projectId?: string) => rpc('session:list', projectId),
       create: (projectId: string, name: string, useMainRepo?: boolean, bypassPermissions?: boolean, remoteControl?: boolean, provider?: string, model?: string) =>
         rpc('session:create', projectId, name, useMainRepo, bypassPermissions, remoteControl, provider, model),
+      scanImports: (projectId?: string) => rpc('session:scan-imports', projectId),
+      import: (candidateIds: string[]) => rpc('session:import', candidateIds),
       spawnShell: (sessionId: string, cwd: string) => rpc('session:spawn-shell', sessionId, cwd),
       kill: (sessionId: string) => rpc('session:kill', sessionId),
       archive: (sessionId: string) => rpc('session:archive', sessionId),

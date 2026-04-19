@@ -2403,6 +2403,131 @@ select.dialog-input option {
   padding-top: 8px;
 }
 
+.import-sessions-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.import-sessions-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.import-sessions-toggle-all {
+  margin: 0;
+}
+
+.import-sessions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 420px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.import-sessions-empty {
+  min-height: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: var(--text-dim);
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  background: var(--panel-elevated);
+}
+
+.import-session-card {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 12px;
+  align-items: start;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel-elevated);
+  cursor: pointer;
+  transition: border-color 120ms ease, transform 120ms ease, background 120ms ease;
+}
+
+.import-session-card:hover {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--panel-elevated) 84%, var(--accent) 16%);
+}
+
+.import-session-card__check {
+  padding-top: 2px;
+}
+
+.import-session-card__body {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.import-session-card__topline,
+.import-session-card__meta,
+.import-session-card__footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.import-session-card__title {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.import-session-card__provider {
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  line-height: 1.4;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background: var(--surface);
+  color: var(--text-dim);
+}
+
+.import-session-card__provider--claude {
+  color: #d97706;
+}
+
+.import-session-card__provider--codex {
+  color: #0f766e;
+}
+
+.import-session-card__meta,
+.import-session-card__footer {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.import-session-card__path,
+.import-session-card__id {
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.import-session-card__path {
+  color: var(--text-muted);
+  word-break: break-all;
+}
+
+.import-session-card__footer {
+  justify-content: space-between;
+}
+
+.import-session-card__id {
+  color: var(--text-muted);
+}
+
 .dialog-btn {
   height: 34px;
   padding: 0 16px;

@@ -24,6 +24,8 @@ const api = {
   session: {
     list: (projectId?: string) => ipcRenderer.invoke('session:list', projectId),
     create: (projectId: string, name: string, useMainRepo?: boolean, bypassPermissions?: boolean, remoteControl?: boolean, provider?: string, model?: string) => ipcRenderer.invoke('session:create', projectId, name, useMainRepo, bypassPermissions, remoteControl, provider, model),
+    scanImports: (projectId?: string) => ipcRenderer.invoke('session:scan-imports', projectId),
+    import: (candidateIds: string[]) => ipcRenderer.invoke('session:import', candidateIds),
     spawnShell: (sessionId: string, cwd: string) => ipcRenderer.invoke('session:spawn-shell', sessionId, cwd),
     kill: (sessionId: string) => ipcRenderer.invoke('session:kill', sessionId),
     archive: (sessionId: string) => ipcRenderer.invoke('session:archive', sessionId),

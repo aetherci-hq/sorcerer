@@ -330,6 +330,8 @@ export function ContextMenu() {
   } else if (contextMenu.type === 'projects-header') {
     items = [
       { label: 'Add Project', icon: <PlusIcon className={iconClass} />, action: () => openDialog('add-project') },
+      { label: 'Import Sessions', icon: <UploadIcon className={iconClass} />, action: () => openDialog('import-sessions') },
+      { type: 'separator' },
       { label: 'New Group', icon: <FolderIcon className={iconClass} />, action: async () => {
         const group = await useProjectStore.getState().addGroup('New Group')
         if (group) {
@@ -377,6 +379,7 @@ export function ContextMenu() {
 
     items = [
       { label: 'New Session', icon: <PlusIcon className={iconClass} />, shortcut: 'Ctrl+N', action: () => openDialog('new-session', contextMenu.targetId) },
+      { label: 'Import Sessions', icon: <UploadIcon className={iconClass} />, action: () => openDialog('import-sessions', contextMenu.targetId) },
       { label: 'Open Quick Terminal', icon: <TerminalIcon className={iconClass} />, action: async () => {
         const newSession = await window.sorcerer?.session.createProjectQuickTerminal(contextMenu.targetId)
         if (newSession) {
