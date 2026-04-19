@@ -30,6 +30,25 @@ export function ContextMenu() {
   const [resumeHealth, setResumeHealth] = useState<SessionResumeHealth | null>(null)
   const [sessionDiagnostics, setSessionDiagnostics] = useState<SessionDiagnostics | null>(null)
 
+  const updateMenuPosition = () => {
+    if (!contextMenu || !menuRef.current) {
+      setPos(null)
+      return
+    }
+    const rect = menuRef.current.getBoundingClientRect()
+    const pad = 8
+    const viewportWidth = window.innerWidth
+    const viewportHeight = window.innerHeight
+    const maxHeight = Math.max(120, viewportHeight - pad * 2)
+    const clampedHeight = Math.min(rect.height, maxHeight)
+    const maxLeft = Math.max(pad, viewportWidth - rect.width - pad)
+    const maxTop = Math.max(pad, viewportHeight - clampedHeight - pad)
+    const left = Math.min(Math.max(contextMenu.x, pad), maxLeft)
+    const top = Math.min(Math.max(contextMenu.y, pad), maxTop)
+
+    setPos({ top, left, maxHeight })
+  }
+
   useEffect(() => {
     if (!contextMenu || contextMenu.type !== 'session') {
       setResumeHealth(null)
@@ -52,20 +71,26 @@ export function ContextMenu() {
 
   // Clamp menu position to viewport before paint
   useLayoutEffect(() => {
-    if (!contextMenu || !menuRef.current) { setPos(null); return }
-    const rect = menuRef.current.getBoundingClientRect()
-    const pad = 8
-    const viewportWidth = window.innerWidth
-    const viewportHeight = window.innerHeight
-    const maxHeight = Math.max(120, viewportHeight - pad * 2)
-    const clampedHeight = Math.min(rect.height, maxHeight)
-    const maxLeft = Math.max(pad, viewportWidth - rect.width - pad)
-    const maxTop = Math.max(pad, viewportHeight - clampedHeight - pad)
-    const left = Math.min(Math.max(contextMenu.x, pad), maxLeft)
-    const top = Math.min(Math.max(contextMenu.y, pad), maxTop)
+    if (!contextMenu || !menuRef.current) {
+      setPos(null)
+      return
+    }
 
-    setPos({ top, left, maxHeight })
-  }, [contextMenu])
+    updateMenuPosition()
+
+    const resizeObserver = new ResizeObserver(() => {
+      updateMenuPosition()
+    })
+    resizeObserver.observe(menuRef.current)
+
+    const onWindowResize = () => updateMenuPosition()
+    window.addEventListener('resize', onWindowResize)
+
+    return () => {
+      resizeObserver.disconnect()
+      window.removeEventListener('resize', onWindowResize)
+    }
+  }, [contextMenu, sessionDiagnostics, resumeHealth])
 
   // Focus first item when menu opens
   useEffect(() => {
