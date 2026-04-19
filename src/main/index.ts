@@ -9,7 +9,7 @@ import { WorktreeService } from './services/worktree-service'
 import { FileWatcherService } from './services/file-watcher-service'
 import { PopoutService } from './services/popout-service'
 import { registerIPC } from './ipc/handlers'
-import { syncWorktrees, checkResumeFailed, extractCodexThreadIdFromOutput, findCodexThreadIdForCwd, canRecoverSessionByCwd, persistCodexSessionIdentity, markSessionResumeState } from './ipc/shared-handlers'
+import { syncWorktrees, checkResumeFailed, extractCodexThreadIdFromOutput, findCodexThreadIdForCwd, canRecoverSessionByCwd, persistCodexSessionIdentity, markSessionResumeState, reconcileCodexSessions, resolveCodexThreadForSession } from './ipc/shared-handlers'
 import { AgentOrchestrator } from './services/agent-orchestrator'
 import { refreshProviders as refreshProviderRegistry } from './services/provider-registry'
 
@@ -164,15 +164,15 @@ async function createWindow(): Promise<void> {
     const session = dbService.getSession(sessionId)
     if (!session || session.provider !== 'codex' || session.type === 'quick-terminal') return
 
-    const providerSessionId =
-      extractCodexThreadIdFromOutput(data) ||
-      extractCodexThreadIdFromOutput(ptyService.scrollback.getScrollback(sessionId))
+    void (async () => {
+      const resolvedThread = await resolveCodexThreadForSession({ db: dbService, pty: ptyService }, sessionId)
+      if (!resolvedThread.id) return
+      if (resolvedThread.id === session.provider_session_id && session.resume_status === 'ready') return
 
-    if (!providerSessionId) return
-    if (providerSessionId === session.provider_session_id && session.resume_status === 'ready') return
-
-    persistCodexSessionIdentity(dbService, sessionId, providerSessionId, 'live-output')
-    console.log(`[codex-thread] ${sessionId}: captured ${providerSessionId} from live output`)
+      const source = resolvedThread.source === 'scrollback' ? 'live-output' : resolvedThread.source
+      persistCodexSessionIdentity(dbService, sessionId, resolvedThread.id, source)
+      console.log(`[codex-thread] ${sessionId}: captured ${resolvedThread.id} from ${source}`)
+    })()
   })
 
   // Detect failed resumes (e.g. "No conversation found to continue")
@@ -263,6 +263,15 @@ async function createWindow(): Promise<void> {
         }
       } catch (err) {
         console.error('[providers] Startup refresh failed (non-fatal):', err)
+      }
+
+      try {
+        const result = await reconcileCodexSessions(dbService)
+        if (result.updated > 0) {
+          console.log(`[codex-reconcile] checked ${result.checked}, updated ${result.updated}`)
+        }
+      } catch (err) {
+        console.error('[codex-reconcile] Startup reconciliation failed (non-fatal):', err)
       }
 
       // One-time cleanup: clear mock team_name values from sessions

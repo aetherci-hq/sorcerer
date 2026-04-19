@@ -10,6 +10,7 @@ interface SessionState {
   sessions: Session[]
   activeSessionId: string | null
   loading: boolean
+  pendingActions: Record<string, 'resume' | 'restart'>
 
   loadSessions: (projectId?: string) => Promise<void>
   createSession: (projectId: string, name: string, useMainRepo?: boolean, bypassPermissions?: boolean, remoteControl?: boolean, provider?: string, model?: string) => Promise<{ session: Session; error?: string } | { session: null; error: string }>
@@ -32,6 +33,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   sessions: [],
   activeSessionId: null,
   loading: false,
+  pendingActions: {},
 
   loadSessions: async (projectId?: string) => {
     set({ loading: true })
@@ -134,6 +136,9 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   },
 
   restartSession: async (sessionId) => {
+    set((state) => ({
+      pendingActions: { ...state.pendingActions, [sessionId]: 'restart' }
+    }))
     try {
       // Dispose cached terminal so the restarted session gets a fresh terminal
       disposeTerminal(sessionId)
@@ -146,10 +151,19 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       }
     } catch (err) {
       console.error('[session-store] restartSession failed:', err)
+    } finally {
+      set((state) => {
+        const next = { ...state.pendingActions }
+        delete next[sessionId]
+        return { pendingActions: next }
+      })
     }
   },
 
   resumeSession: async (sessionId) => {
+    set((state) => ({
+      pendingActions: { ...state.pendingActions, [sessionId]: 'resume' }
+    }))
     try {
       // Dispose cached terminal so the resumed session gets a fresh terminal
       // with clean IPC listeners — prevents stale output from prior run
@@ -169,6 +183,12 @@ export const useSessionStore = create<SessionState>((set, get) => ({
         session ? `Could not resume "${session.name}": ${message}` : message,
         'error'
       )
+    } finally {
+      set((state) => {
+        const next = { ...state.pendingActions }
+        delete next[sessionId]
+        return { pendingActions: next }
+      })
     }
   },
 

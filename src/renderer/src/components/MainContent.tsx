@@ -11,19 +11,35 @@ import { QuickNotesPanel, parseQuickNotesPanelId } from './QuickNotesPanel'
 import { useQuickNotesStore } from '../stores/useQuickNotesStore'
 import { MissionPanel } from './MissionPanel'
 import { ParticleCanvas } from './ParticleCanvas'
-import type { Session, Agent, SessionResumeHealth, SplitNode } from '../types'
+import type { Session, Agent, SessionResumeHealth, SessionDiagnostics, SplitNode } from '../types'
 
 function IdleSessionPanel({ session }: { session: Session }) {
   const resumeSession = useSessionStore((s) => s.resumeSession)
   const restartSession = useSessionStore((s) => s.restartSession)
+  const pendingAction = useSessionStore((s) => s.pendingActions[session.id] || null)
   const [resumeHealth, setResumeHealth] = useState<SessionResumeHealth | null>(null)
+  const [diagnostics, setDiagnostics] = useState<SessionDiagnostics | null>(null)
+  const [showDiagnostics, setShowDiagnostics] = useState(false)
 
   useEffect(() => {
     getApi().session.resumeHealth(session.id).then(setResumeHealth).catch(() => setResumeHealth(null))
   }, [session.id])
 
+  useEffect(() => {
+    if (!showDiagnostics) return
+    getApi().session.diagnostics(session.id).then(setDiagnostics).catch(() => setDiagnostics(null))
+  }, [session.id, showDiagnostics])
+
   const canResume = resumeHealth?.canResume ?? true
   const resumeHint = resumeHealth?.reason || null
+  const restartLabel = session.provider === 'gemini' || session.provider === 'opencode' ? 'Start New Session' : 'New Session'
+  const isResuming = pendingAction === 'resume'
+  const isRestarting = pendingAction === 'restart'
+
+  const copyValue = (value: string | null | undefined) => {
+    if (!value) return
+    void navigator.clipboard.writeText(value)
+  }
 
   return (
     <div className="terminal-placeholder">
@@ -36,21 +52,51 @@ function IdleSessionPanel({ session }: { session: Session }) {
           {resumeHint}
         </div>
       )}
+      <button
+        className="terminal-info-btn"
+        onClick={() => setShowDiagnostics((current) => !current)}
+      >
+        {showDiagnostics ? 'Hide session info' : 'Session info'}
+      </button>
+      {showDiagnostics && diagnostics && (
+        <div className="terminal-diagnostics">
+          <div className="terminal-diagnostics-row">
+            <span className="terminal-diagnostics-label">Sorcerer Session</span>
+            <button className="terminal-diagnostics-value" onClick={() => copyValue(diagnostics.sessionId)}>
+              {diagnostics.sessionId}
+            </button>
+          </div>
+          <div className="terminal-diagnostics-row">
+            <span className="terminal-diagnostics-label">{diagnostics.providerThreadLabel}</span>
+            <button className="terminal-diagnostics-value" onClick={() => copyValue(diagnostics.providerThreadId)}>
+              {diagnostics.providerThreadId || 'Unavailable'}
+            </button>
+          </div>
+          <div className="terminal-diagnostics-row">
+            <span className="terminal-diagnostics-label">Resume Source</span>
+            <span className="terminal-diagnostics-text">{diagnostics.providerThreadSource || 'Unknown'}</span>
+          </div>
+        </div>
+      )}
       <div className="terminal-action-row">
         {canResume && (
-          <button className="terminal-restart-btn terminal-restart-btn--primary" onClick={() => resumeSession(session.id)}>
-            <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
-              <path d="M6 3.5a.5.5 0 0 1 .795-.404l6 4.5a.5.5 0 0 1 0 .808l-6 4.5A.5.5 0 0 1 6 12.5v-9z" />
-            </svg>
-            Resume
+          <button className="terminal-restart-btn terminal-restart-btn--primary" disabled={!!pendingAction} onClick={() => resumeSession(session.id)}>
+            {isResuming ? <span className="btn-spinner btn-spinner--sm" /> : (
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+                <path d="M6 3.5a.5.5 0 0 1 .795-.404l6 4.5a.5.5 0 0 1 0 .808l-6 4.5A.5.5 0 0 1 6 12.5v-9z" />
+              </svg>
+            )}
+            {isResuming ? 'Resuming…' : 'Resume'}
           </button>
         )}
-        <button className={`terminal-restart-btn${!canResume ? ' terminal-restart-btn--primary' : ''}`} onClick={() => restartSession(session.id)}>
-          <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
-            <path d="M11.534 7h3.932a.25.25 0 0 1 .192.41l-1.966 2.36a.25.25 0 0 1-.384 0l-1.966-2.36a.25.25 0 0 1 .192-.41zm-11 2h3.932a.25.25 0 0 0 .192-.41L2.692 6.23a.25.25 0 0 0-.384 0L.342 8.59A.25.25 0 0 0 .534 9z" />
-            <path fillRule="evenodd" d="M8 3c-1.552 0-2.94.707-3.857 1.818a.5.5 0 1 1-.771-.636A6.002 6.002 0 0 1 13.917 7H12.9A5.002 5.002 0 0 0 8 3zM3.1 9a5.002 5.002 0 0 0 8.757 2.182.5.5 0 1 1 .771.636A6.002 6.002 0 0 1 2.083 9H3.1z" />
-          </svg>
-          New Session
+        <button className={`terminal-restart-btn${!canResume ? ' terminal-restart-btn--primary' : ''}`} disabled={!!pendingAction} onClick={() => restartSession(session.id)}>
+          {isRestarting ? <span className="btn-spinner btn-spinner--sm" /> : (
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+              <path d="M11.534 7h3.932a.25.25 0 0 1 .192.41l-1.966 2.36a.25.25 0 0 1-.384 0l-1.966-2.36a.25.25 0 0 1 .192-.41zm-11 2h3.932a.25.25 0 0 0 .192-.41L2.692 6.23a.25.25 0 0 0-.384 0L.342 8.59A.25.25 0 0 0 .534 9z" />
+              <path fillRule="evenodd" d="M8 3c-1.552 0-2.94.707-3.857 1.818a.5.5 0 1 1-.771-.636A6.002 6.002 0 0 1 13.917 7H12.9A5.002 5.002 0 0 0 8 3zM3.1 9a5.002 5.002 0 0 0 8.757 2.182.5.5 0 1 1 .771.636A6.002 6.002 0 0 1 2.083 9H3.1z" />
+            </svg>
+          )}
+          {isRestarting ? 'Starting…' : restartLabel}
         </button>
       </div>
     </div>

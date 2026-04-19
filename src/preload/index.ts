@@ -36,6 +36,16 @@ const api = {
       reason: string | null
       guidance: string[]
     }>,
+    diagnostics: (sessionId: string) => ipcRenderer.invoke('session:diagnostics', sessionId) as Promise<{
+      sessionId: string
+      provider: string
+      providerThreadId: string | null
+      providerThreadLabel: string
+      providerThreadSource: string | null
+      resumeStatus: string | null
+      resumeReason: string | null
+      worktreePath: string | null
+    } | null>,
     setTeam: (sessionId: string, teamName: string | null) => ipcRenderer.invoke('session:set-team', sessionId, teamName),
     gitStatus: (sessionId: string) => ipcRenderer.invoke('session:git-status', sessionId),
     divergence: (sessionId: string) => ipcRenderer.invoke('session:divergence', sessionId) as Promise<{ behind: number; ahead: number } | null>,

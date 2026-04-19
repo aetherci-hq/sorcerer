@@ -11,10 +11,11 @@ import {
   RefreshIcon, UploadIcon, ExternalLinkIcon, ArchiveIcon, RotateCcwIcon, EditIcon, PlayIcon, StopIcon, TerminalIcon, MergeIcon, NotesIcon, SmartphoneIcon, FolderIcon, SettingsIcon, MaximizeIcon
 } from './icons'
 import { useQuickNotesStore } from '../stores/useQuickNotesStore'
-import type { SessionResumeHealth } from '../types'
+import type { SessionDiagnostics, SessionResumeHealth } from '../types'
 
 type MenuItem =
   | { label: string; icon?: ReactNode; shortcut?: string; action: () => void; danger?: boolean; eager?: boolean; disabled?: boolean }
+  | { type: 'meta'; label: string; value: string }
   | { type: 'separator' }
 
 export function ContextMenu() {
@@ -27,16 +28,23 @@ export function ContextMenu() {
   const [pos, setPos] = useState<{ top: number; left: number; maxHeight: number } | null>(null)
   const [loadingItem, setLoadingItem] = useState<number | null>(null)
   const [resumeHealth, setResumeHealth] = useState<SessionResumeHealth | null>(null)
+  const [sessionDiagnostics, setSessionDiagnostics] = useState<SessionDiagnostics | null>(null)
 
   useEffect(() => {
     if (!contextMenu || contextMenu.type !== 'session') {
       setResumeHealth(null)
+      setSessionDiagnostics(null)
       return
     }
     let cancelled = false
-    getApi().session.resumeHealth(contextMenu.targetId)
-      .then((health) => { if (!cancelled) setResumeHealth(health) })
-      .catch(() => { if (!cancelled) setResumeHealth(null) })
+    void Promise.all([
+      getApi().session.resumeHealth(contextMenu.targetId).catch(() => null),
+      getApi().session.diagnostics(contextMenu.targetId).catch(() => null)
+    ]).then(([health, diagnostics]) => {
+      if (cancelled) return
+      setResumeHealth(health)
+      setSessionDiagnostics(diagnostics)
+    })
     return () => {
       cancelled = true
     }
@@ -472,6 +480,17 @@ export function ContextMenu() {
       { label: 'Delete Session', icon: <TrashIcon className={iconClass} />, danger: true, action: () => openDialog('delete-session', contextMenu.targetId) }
     ]
   } else {
+    const sessionDiagnosticItems: MenuItem[] = sessionDiagnostics ? [
+      { type: 'separator' as const },
+      { type: 'meta' as const, label: 'Sorcerer Session', value: sessionDiagnostics.sessionId },
+      { type: 'meta' as const, label: sessionDiagnostics.providerThreadLabel, value: sessionDiagnostics.providerThreadId || 'Unavailable' },
+      { type: 'meta' as const, label: 'Resume Source', value: sessionDiagnostics.providerThreadSource || 'Unknown' },
+      { label: 'Copy Sorcerer Session ID', icon: <CopyIcon className={iconClass} />, action: () => copyToClipboard(sessionDiagnostics.sessionId) },
+      ...(sessionDiagnostics.providerThreadId ? [
+        { label: `Copy ${sessionDiagnostics.providerThreadLabel}`, icon: <CopyIcon className={iconClass} />, action: () => copyToClipboard(sessionDiagnostics.providerThreadId!) }
+      ] : [])
+    ] : []
+
     items = [
       { label: 'Split Right', icon: <SplitHorizontalIcon className={iconClass} />, action: () => { focusTargetPanel(contextMenu.targetId); splitRight(contextMenu.targetId) } },
       { label: 'Split Down', icon: <SplitVerticalIcon className={iconClass} />, action: () => { focusTargetPanel(contextMenu.targetId); splitDown(contextMenu.targetId) } },
@@ -556,6 +575,7 @@ export function ContextMenu() {
           { label: 'Land on Main', icon: <MergeIcon className={iconClass} />, action: () => openDialog('land-session', contextMenu.targetId) },
         ] : []),
       ] : []),
+      ...sessionDiagnosticItems,
       { type: 'separator' },
       { label: 'Archive Session', icon: <ArchiveIcon className={iconClass} />, action: () => openDialog('archive-session', contextMenu.targetId) },
       { type: 'separator' },
@@ -574,8 +594,13 @@ export function ContextMenu() {
       }}
     >
       {items.map((item, i) =>
-        'type' in item ? (
+        'type' in item && item.type === 'separator' ? (
           <div key={i} className="context-menu-separator" />
+        ) : 'type' in item && item.type === 'meta' ? (
+          <div key={i} className="context-menu-meta">
+            <span className="context-menu-meta-label">{item.label}</span>
+            <span className="context-menu-meta-value">{item.value}</span>
+          </div>
         ) : (
           <button
             key={i}

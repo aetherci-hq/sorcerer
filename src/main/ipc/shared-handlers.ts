@@ -176,15 +176,15 @@ export function canRecoverSessionByCwd(db: DatabaseService, session: any): boole
   return otherSessionsUsingCwd.length === 0
 }
 
-export function getSessionResumeHealth(
+export async function getSessionResumeHealth(
   { db, pty }: Pick<HandlerServices, 'db' | 'pty'>,
   sessionId: string
-): {
+): Promise<{
   canResume: boolean
   level: 'ok' | 'warning'
   reason: string | null
   guidance: string[]
-} {
+}> {
   const session = db.getSession(sessionId)
   if (!session) {
     return {
@@ -207,7 +207,6 @@ export function getSessionResumeHealth(
     }
   }
 
-  const allowCwdRecovery = canRecoverSessionByCwd(db, session)
   const provider = (session.provider as string) || 'claude'
 
   if (session.type === 'quick-terminal') {
@@ -215,6 +214,7 @@ export function getSessionResumeHealth(
   }
 
   if (provider === 'claude') {
+    const allowCwdRecovery = canRecoverSessionByCwd(db, session)
     const claudeSessionId = session.claude_session_id as string | undefined
     if (claudeSessionId && claudeSessionExists(cwd, claudeSessionId)) {
       return { canResume: true, level: 'ok', reason: null, guidance: [] }
@@ -235,9 +235,14 @@ export function getSessionResumeHealth(
   }
 
   if (provider === 'codex') {
-    const providerSessionId = session.provider_session_id as string | undefined
-    const scrollbackThreadId = extractCodexThreadIdFromOutput(pty.scrollback.getScrollback(sessionId))
-    if (providerSessionId || scrollbackThreadId) {
+    const resolvedThread = await resolveCodexThreadForSession({ db, pty }, sessionId)
+    if (resolvedThread.id) {
+      if (
+        resolvedThread.id !== session.provider_session_id ||
+        (session.resume_status as string | undefined) !== 'ready'
+      ) {
+        persistCodexSessionIdentity(db, sessionId, resolvedThread.id, resolvedThread.source)
+      }
       return { canResume: true, level: 'ok', reason: null, guidance: [] }
     }
     if ((session.resume_status as string | undefined) === 'launching') {
@@ -266,13 +271,35 @@ export function getSessionResumeHealth(
     return {
       canResume: false,
       level: 'warning',
-      reason: !allowCwdRecovery
-        ? 'This direct session shares a project directory with other sessions, and Sorcerer cannot safely infer its Codex thread.'
-        : 'Codex thread identity is missing for this session.',
+      reason: 'Codex thread identity is missing for this session.',
       guidance: [
-        'Open the session that still has the correct Codex thread if one sibling is already intact.',
-        'Use separate worktree-backed sessions for parallel Codex work in the same project.',
+        'Keep the session running until Sorcerer captures the Codex thread.',
+        'If the thread already exists in Codex CLI state, try Resume Session again after restarting Sorcerer.',
         'Start a new session if you no longer need the original Codex thread.'
+      ]
+    }
+  }
+
+  if (provider === 'gemini') {
+    return {
+      canResume: false,
+      level: 'warning',
+      reason: 'Gemini CLI sessions are restart-only in Sorcerer right now; there is no provider-backed resume identity.',
+      guidance: [
+        'Use New Session to continue working in the same project.',
+        'Keep long-running work in a single live session if you need continuity until Sorcerer adds Gemini resume support.'
+      ]
+    }
+  }
+
+  if (provider === 'opencode') {
+    return {
+      canResume: false,
+      level: 'warning',
+      reason: 'OpenCode sessions are restart-only in Sorcerer right now; there is no provider-backed resume identity.',
+      guidance: [
+        'Use New Session to continue working in the same project.',
+        'Keep long-running work in a single live session if you need continuity until Sorcerer adds OpenCode resume support.'
       ]
     }
   }
@@ -280,16 +307,69 @@ export function getSessionResumeHealth(
   return { canResume: true, level: 'ok', reason: null, guidance: [] }
 }
 
+export function getSessionDiagnostics(
+  { db }: Pick<HandlerServices, 'db'>,
+  sessionId: string
+): {
+  sessionId: string
+  provider: string
+  providerThreadId: string | null
+  providerThreadLabel: string
+  providerThreadSource: string | null
+  resumeStatus: string | null
+  resumeReason: string | null
+  worktreePath: string | null
+} | null {
+  const session = db.getSession(sessionId)
+  if (!session) return null
+
+  const provider = (session.provider as string) || 'claude'
+  const providerThreadId =
+    provider === 'claude'
+      ? (session.claude_session_id as string | null | undefined) || null
+      : (session.provider_session_id as string | null | undefined) || null
+  const providerThreadLabel =
+    provider === 'codex'
+      ? 'Codex Thread'
+      : provider === 'claude'
+        ? 'Claude Session'
+        : 'Provider Session'
+
+  return {
+    sessionId: session.id as string,
+    provider,
+    providerThreadId,
+    providerThreadLabel,
+    providerThreadSource: (session.provider_session_source as string | null | undefined) || null,
+    resumeStatus: (session.resume_status as string | null | undefined) || null,
+    resumeReason: (session.resume_reason as string | null | undefined) || null,
+    worktreePath: (session.worktree_path as string | null | undefined) || null
+  }
+}
+
 export function markSessionResumeState(
   db: DatabaseService,
   sessionId: string,
-  status: 'launching' | 'ready' | 'degraded',
+  status: 'launching' | 'ready' | 'degraded' | 'unsupported',
   reason: string | null
 ): void {
   db.updateSession(sessionId, {
     resume_status: status,
     resume_reason: reason
   })
+}
+
+function getInitialResumeState(provider: string): { status: 'launching' | 'ready' | 'unsupported'; reason: string | null } {
+  if (provider === 'codex') {
+    return { status: 'launching', reason: 'Waiting for Codex thread capture.' }
+  }
+  if (provider === 'gemini') {
+    return { status: 'unsupported', reason: 'Gemini CLI does not provide a session resume contract in Sorcerer yet.' }
+  }
+  if (provider === 'opencode') {
+    return { status: 'unsupported', reason: 'OpenCode does not provide a session resume contract in Sorcerer yet.' }
+  }
+  return { status: 'ready', reason: null }
 }
 
 export function persistCodexSessionIdentity(
@@ -348,16 +428,15 @@ async function getSqlJs(): Promise<any> {
 
 export function extractCodexThreadIdFromOutput(output: string): string | null {
   const cleaned = output.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '').replace(/\r/g, '')
-  const match = cleaned.match(/\bcodex resume(?:\s+--)?\s+([0-9a-fA-F-]{36})\b/)
-  return match?.[1] || null
+  const matches = [...cleaned.matchAll(/\bcodex resume(?:\s+--)?\s+([0-9a-fA-F-]{36})\b/g)]
+  return matches.length > 0 ? matches[matches.length - 1]?.[1] || null : null
 }
 
-export async function findCodexThreadIdForCwd(
-  cwd: string,
-  startedAt?: number | null
-): Promise<string | null> {
+async function listCodexThreadsForCwd(
+  cwd: string
+): Promise<Array<{ id: string; created_at: number; updated_at: number }>> {
   const stateDbPath = getLatestCodexStateDbPath()
-  if (!stateDbPath || !fs.existsSync(stateDbPath)) return null
+  if (!stateDbPath || !fs.existsSync(stateDbPath)) return []
 
   const SQL = await getSqlJs()
   const stateDb = new SQL.Database(fs.readFileSync(stateDbPath))
@@ -390,26 +469,138 @@ export async function findCodexThreadIdForCwd(
     }
     stmt.free()
 
-    if (matches.length === 0) return null
-
-    if (startedAt) {
-      const recentMatches = matches.filter((match) => match.created_at >= startedAt - 300)
-      const pool = recentMatches.length > 0 ? recentMatches : matches
-      pool.sort((left, right) => {
-        const leftDistance = Math.abs(left.created_at - startedAt)
-        const rightDistance = Math.abs(right.created_at - startedAt)
-        if (leftDistance !== rightDistance) return leftDistance - rightDistance
-        return right.updated_at - left.updated_at
-      })
-      return pool[0]?.id || null
-    }
-
-    return matches[0]?.id || null
+    return matches
   } catch {
-    return null
+    return []
   } finally {
     stateDb.close()
   }
+}
+
+export async function findCodexThreadIdForCwd(
+  cwd: string,
+  anchorAt?: number | null
+): Promise<string | null> {
+  const matches = await listCodexThreadsForCwd(cwd)
+  if (matches.length === 0) return null
+
+  if (anchorAt) {
+    const recentMatches = matches.filter((match) => match.created_at >= anchorAt - 300)
+    const pool = recentMatches.length > 0 ? recentMatches : matches
+    pool.sort((left, right) => {
+      const leftDistance = Math.abs(left.created_at - anchorAt)
+      const rightDistance = Math.abs(right.created_at - anchorAt)
+      if (leftDistance !== rightDistance) return leftDistance - rightDistance
+      return right.updated_at - left.updated_at
+    })
+    return pool[0]?.id || null
+  }
+
+  return matches[0]?.id || null
+}
+
+async function codexThreadBelongsToCwd(threadId: string, cwd: string): Promise<boolean> {
+  const matches = await listCodexThreadsForCwd(cwd)
+  return matches.some((match) => match.id === threadId)
+}
+
+export async function resolveCodexThreadForSession(
+  { db, pty }: Pick<HandlerServices, 'db' | 'pty'>,
+  sessionId: string
+): Promise<{ id: string | null; source: 'stored' | 'scrollback' | 'cwd-recovery' | 'resume-discovery' | null }> {
+  const session = db.getSession(sessionId)
+  if (!session) return { id: null, source: null }
+
+  const cwd = fs.existsSync(session.worktree_path as string)
+    ? (session.worktree_path as string)
+    : (db.getProject(session.project_id as string)?.path as string || '')
+  if (!cwd) return { id: null, source: null }
+
+  const storedThreadId = session.provider_session_id as string | undefined
+  if (storedThreadId && await codexThreadBelongsToCwd(storedThreadId, cwd)) {
+    return { id: storedThreadId, source: 'stored' }
+  }
+
+  const scrollbackThreadId = extractCodexThreadIdFromOutput(pty.scrollback.getScrollback(sessionId))
+  if (scrollbackThreadId && await codexThreadBelongsToCwd(scrollbackThreadId, cwd)) {
+    return { id: scrollbackThreadId, source: 'scrollback' }
+  }
+
+  // Recovery should prefer the Sorcerer session's original creation time.
+  // `started_at` changes on every restart/resume and can point at an unrelated
+  // newer Codex thread in the same cwd.
+  const recoveryAnchor =
+    (session.created_at as number | null | undefined) ||
+    (session.provider_session_captured_at as number | null | undefined) ||
+    (session.started_at as number | null | undefined) ||
+    null
+  const recoveredThreadId = await findCodexThreadIdForCwd(
+    cwd,
+    recoveryAnchor
+  )
+  if (recoveredThreadId) {
+    return {
+      id: recoveredThreadId,
+      source: storedThreadId ? 'resume-discovery' : 'cwd-recovery'
+    }
+  }
+
+  return { id: null, source: null }
+}
+
+export async function reconcileCodexSessions(
+  db: DatabaseService
+): Promise<{ checked: number; updated: number }> {
+  const sessions = db.listSessions().filter((session: any) =>
+    session?.provider === 'codex' &&
+    session?.type !== 'quick-terminal' &&
+    session?.status !== 'deleted'
+  )
+
+  let updated = 0
+  for (const session of sessions) {
+    const cwd = fs.existsSync(session.worktree_path as string)
+      ? (session.worktree_path as string)
+      : (db.getProject(session.project_id as string)?.path as string || '')
+    if (!cwd) continue
+
+    const storedThreadId = session.provider_session_id as string | undefined
+    if (storedThreadId && await codexThreadBelongsToCwd(storedThreadId, cwd)) {
+      if ((session.resume_status as string | undefined) !== 'ready') {
+        markSessionResumeState(db, session.id, 'ready', null)
+      }
+      continue
+    }
+
+    const recoveredThreadId = await findCodexThreadIdForCwd(
+      cwd,
+      (session.created_at as number | null | undefined) ||
+      (session.started_at as number | null | undefined) ||
+      null
+    )
+
+    if (recoveredThreadId) {
+      persistCodexSessionIdentity(
+        db,
+        session.id,
+        recoveredThreadId,
+        storedThreadId ? 'resume-discovery' : 'cwd-recovery'
+      )
+      updated++
+      continue
+    }
+
+    if (!storedThreadId) {
+      markSessionResumeState(
+        db,
+        session.id,
+        'degraded',
+        'Codex thread identity is missing for this session.'
+      )
+    }
+  }
+
+  return { checked: sessions.length, updated }
 }
 
 function ensureClaudeTrust(cwd: string): void {
@@ -750,6 +941,7 @@ export async function createSession(
   const skipPerms = bypassPermissions !== false  // default true
   const rc = remoteControl ? 1 : 0
   const startedAt = Math.floor(Date.now() / 1000)
+  const initialResumeState = getInitialResumeState(resolvedProvider)
   const session = db.addSession({
     id,
     project_id: projectId,
@@ -764,8 +956,8 @@ export async function createSession(
     provider_session_captured_at: null,
     provider_session_validated_at: null,
     provider_session_source: null,
-    resume_status: resolvedProvider === 'codex' ? 'launching' : 'ready',
-    resume_reason: resolvedProvider === 'codex' ? 'Waiting for Codex thread capture.' : null,
+    resume_status: initialResumeState.status,
+    resume_reason: initialResumeState.reason,
     provider: resolvedProvider,
     model: resolvedModel
   })
@@ -1025,6 +1217,10 @@ export async function restartSession(
         resume_status: 'launching',
         resume_reason: 'Waiting for Codex thread capture.'
       })
+    } else if (provider === 'gemini') {
+      markSessionResumeState(db, sessionId, 'unsupported', 'Gemini CLI sessions are restart-only in Sorcerer right now.')
+    } else if (provider === 'opencode') {
+      markSessionResumeState(db, sessionId, 'unsupported', 'OpenCode sessions are restart-only in Sorcerer right now.')
     }
 
     const updates: Record<string, unknown> = {}
@@ -1057,11 +1253,10 @@ export async function resumeSession(
 ): Promise<any> {
   const session = db.getSession(sessionId)
   if (!session) throw new Error('Session not found')
-  const resumeHealth = getSessionResumeHealth({ db, pty }, sessionId)
+  const resumeHealth = await getSessionResumeHealth({ db, pty }, sessionId)
   if (!resumeHealth.canResume) {
     throw new Error(`${resumeHealth.reason} ${resumeHealth.guidance.join(' ')}`.trim())
   }
-  const allowCwdRecovery = canRecoverSessionByCwd(db, session)
 
   // Kill existing process if running
   if (pty.isRunning(sessionId)) {
@@ -1086,6 +1281,7 @@ export async function resumeSession(
     let args: string[]
 
     if (provider === 'claude') {
+      const allowCwdRecovery = canRecoverSessionByCwd(db, session)
       let claudeSessionId = session.claude_session_id as string | undefined
       let selectionSource = claudeSessionId ? 'stored' : 'none'
       if (claudeSessionId && !claudeSessionExists(cwd, claudeSessionId)) {
@@ -1144,24 +1340,22 @@ export async function resumeSession(
       }
       trackResume(sessionId)
     } else if (provider === 'codex') {
-      let providerSessionId = session.provider_session_id as string | undefined
-      let selectionSource = providerSessionId ? 'stored' : 'none'
+      const resolvedThread = await resolveCodexThreadForSession({ db, pty }, sessionId)
+      const providerSessionId = resolvedThread.id || undefined
+      const selectionSource = resolvedThread.source || 'none'
       if (!providerSessionId) {
-        providerSessionId = extractCodexThreadIdFromOutput(pty.scrollback.getScrollback(sessionId))
-        if (providerSessionId) {
-          console.log(`[session:resume] Found Codex thread: ${providerSessionId}`)
-          selectionSource = 'scrollback'
-          persistCodexSessionIdentity(
-            db,
-            sessionId,
-            providerSessionId,
-            'scrollback'
-          )
-        } else {
-          console.log(`[session:resume] No Codex thread id stored for ${sessionId}; blocking resume because provider identity is missing`)
-          markSessionResumeState(db, sessionId, 'degraded', 'Codex thread identity missing; resume would require inference.')
-          throw new Error('Codex thread identity is missing for this session. Start a new session instead of attempting an ambiguous resume.')
-        }
+        console.log(`[session:resume] No Codex thread id available for ${sessionId}; blocking resume because provider identity is missing`)
+        markSessionResumeState(db, sessionId, 'degraded', 'Codex thread identity missing; resume would require inference.')
+        throw new Error('Codex thread identity is missing for this session. Start a new session instead of attempting an ambiguous resume.')
+      }
+      if (selectionSource !== 'stored') {
+        console.log(`[session:resume] Recovered Codex thread: ${providerSessionId} via ${selectionSource}`)
+        persistCodexSessionIdentity(
+          db,
+          sessionId,
+          providerSessionId,
+          selectionSource === 'scrollback' ? 'scrollback' : 'resume-discovery'
+        )
       }
 
       const baseArgs = runner.getArgs({

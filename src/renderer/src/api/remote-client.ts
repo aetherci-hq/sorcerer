@@ -183,6 +183,7 @@ export function createRemoteClient(baseUrl: string, token: string): SorcererAPI 
       restart: (sessionId: string) => rpc('session:restart', sessionId),
       resume: (sessionId: string) => rpc('session:resume', sessionId),
       resumeHealth: (sessionId: string) => rpc('session:resume-health', sessionId),
+      diagnostics: (sessionId: string) => rpc('session:diagnostics', sessionId),
       setTeam: (sessionId: string, teamName: string | null) => rpc('session:set-team', sessionId, teamName),
       gitStatus: (sessionId: string) => rpc('session:git-status', sessionId),
       checkDeleteSafety: (sessionId: string) => rpc('session:check-delete-safety', sessionId),

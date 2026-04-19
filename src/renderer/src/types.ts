@@ -33,11 +33,12 @@ export interface Session {
   created_at?: number
   started_at?: number | null
   archived_at?: number | null
+  claude_session_id?: string | null
   provider_session_id?: string | null
   provider_session_captured_at?: number | null
   provider_session_validated_at?: number | null
   provider_session_source?: string | null
-  resume_status?: 'launching' | 'ready' | 'degraded' | null
+  resume_status?: 'launching' | 'ready' | 'degraded' | 'unsupported' | null
   resume_reason?: string | null
   provider?: string
   model?: string
@@ -48,6 +49,17 @@ export interface SessionResumeHealth {
   level: 'ok' | 'warning'
   reason: string | null
   guidance: string[]
+}
+
+export interface SessionDiagnostics {
+  sessionId: string
+  provider: string
+  providerThreadId: string | null
+  providerThreadLabel: string
+  providerThreadSource: string | null
+  resumeStatus: string | null
+  resumeReason: string | null
+  worktreePath: string | null
 }
 
 // ── Team / task types (from file watcher) ─────────────────────────
