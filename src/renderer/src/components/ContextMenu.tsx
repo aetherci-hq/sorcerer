@@ -92,13 +92,6 @@ export function ContextMenu() {
     }
   }, [contextMenu, sessionDiagnostics, resumeHealth])
 
-  // Focus first item when menu opens
-  useEffect(() => {
-    if (!contextMenu || !menuRef.current) return
-    const firstBtn = menuRef.current.querySelector<HTMLButtonElement>('.context-menu-item')
-    firstBtn?.focus()
-  }, [contextMenu])
-
   useEffect(() => {
     if (!contextMenu) return
     const onClick = (e: MouseEvent) => {
@@ -115,9 +108,9 @@ export function ContextMenu() {
         if (btns.length === 0) return
         const idx = btns.indexOf(document.activeElement as HTMLButtonElement)
         if (e.key === 'ArrowDown') {
-          btns[(idx + 1) % btns.length].focus()
+          btns[idx >= 0 ? (idx + 1) % btns.length : 0].focus()
         } else {
-          btns[(idx - 1 + btns.length) % btns.length].focus()
+          btns[idx >= 0 ? (idx - 1 + btns.length) % btns.length : btns.length - 1].focus()
         }
       }
     }
