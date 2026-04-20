@@ -1301,7 +1301,7 @@ function ensureClaudeTrust(cwd: string): void {
 function ensureCodexTrust(cwd: string): void {
   const codexDir = path.join(os.homedir(), '.codex')
   const configPath = path.join(codexDir, 'config.toml')
-  const section = `[projects.'${cwd.replace(/'/g, "\\'")}']`
+  const section = `[projects.${JSON.stringify(cwd)}]`
   const trustLine = 'trust_level = "trusted"'
 
   if (!fs.existsSync(codexDir)) {

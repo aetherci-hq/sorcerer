@@ -428,13 +428,23 @@ export class ApiServer {
     res: http.ServerResponse
   ): void {
     // Only forward the pathname+query to the Vite dev server, never an arbitrary host.
-    // Construct the target URL entirely from the trusted base — only the path comes from the request.
+    // Keep the target protocol/host fixed to the trusted Vite dev server and forward only a sanitized path.
     const base = new URL(process.env.ELECTRON_RENDERER_URL!)
     const reqPath = (req.url || '/').replace(/^[a-zA-Z]+:\/\/[^/]*/, '') // strip any scheme+host
-    const viteUrl = new URL(reqPath, base.origin)
+    const normalizedPath = reqPath.startsWith('/') ? reqPath : `/${reqPath}`
+    const parsedPath = new URL(normalizedPath, 'http://localhost')
     const proxyReq = http.request(
-      viteUrl,
-      { method: req.method, headers: req.headers },
+      {
+        protocol: base.protocol,
+        hostname: base.hostname,
+        port: base.port,
+        method: req.method,
+        headers: {
+          ...req.headers,
+          host: base.host
+        },
+        path: `${parsedPath.pathname}${parsedPath.search}`
+      },
       (proxyRes) => {
         res.writeHead(proxyRes.statusCode ?? 502, proxyRes.headers)
         proxyRes.pipe(res)
