@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { canRecoverSessionByCwd, getCodexRecoveryAnchor, getImportedCodexSessionState, persistCodexSessionIdentity, resolveCodexExitThreadIdentity, resolveSessionWorkingDirectory, selectCodexThreadForAnchor } from '../../ipc/shared-handlers'
+import { canRecoverSessionByCwd, getCodexRecoveryAnchor, getImportedCodexSessionState, persistCodexSessionIdentity, resolveCodexExitThreadIdentity, resolveCodexSubAgentRow, resolveSessionWorkingDirectory, selectCodexThreadForAnchor } from '../../ipc/shared-handlers'
 
 describe('Codex session recovery helpers', () => {
   it('prefers the thread closest to the session creation time', () => {
@@ -228,6 +228,41 @@ describe('Codex session recovery helpers', () => {
     expect(result).toEqual({
       providerSessionId: 'thread-recovered',
       source: 'cwd-recovery'
+    })
+  })
+
+  it('extracts Codex sub-agent visuals from state rows without treating them as sessions', () => {
+    const subAgent = resolveCodexSubAgentRow({
+      id: 'child-thread',
+      title: 'Investigate renderer wiring',
+      edge_status: 'running',
+      updated_at: 1776694778,
+      created_at: 1776694745,
+      agent_nickname: null,
+      agent_role: null,
+      parent_thread_id: 'parent-thread',
+      source: JSON.stringify({
+        subagent: {
+          thread_spawn: {
+            parent_thread_id: 'parent-thread',
+            depth: 1,
+            agent_nickname: 'Plato',
+            agent_role: 'explorer'
+          }
+        }
+      })
+    })
+
+    expect(subAgent).toEqual({
+      threadId: 'child-thread',
+      parentThreadId: 'parent-thread',
+      nickname: 'Plato',
+      role: 'explorer',
+      title: 'Investigate renderer wiring',
+      status: 'running',
+      updatedAt: 1776694778000,
+      createdAt: 1776694745000,
+      depth: 1
     })
   })
 })

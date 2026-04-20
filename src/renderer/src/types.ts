@@ -68,6 +68,18 @@ export interface SessionDiagnostics {
   lastExitedAt: number | null
 }
 
+export interface ProviderSubAgent {
+  threadId: string
+  parentThreadId: string
+  nickname: string | null
+  role: string | null
+  title: string
+  status: string
+  updatedAt: number | null
+  createdAt: number | null
+  depth: number
+}
+
 export interface ExternalSessionImportCandidate {
   id: string
   provider: 'claude' | 'codex'

@@ -57,6 +57,7 @@ import {
   hasClaudeConversation,
   getSessionResumeHealth,
   getSessionDiagnostics,
+  listProviderSubAgents,
   loadQuickNote,
   saveQuickNote,
   deleteQuickNote,
@@ -427,6 +428,10 @@ export function registerIPC(
 
   ipcMain.handle('session:diagnostics', (_event, sessionId: string) => {
     return getSessionDiagnostics(services, sessionId)
+  })
+
+  ipcMain.handle('session:list-provider-subagents', (_event, sessionId: string) => {
+    return listProviderSubAgents(services, sessionId)
   })
 
   ipcMain.handle('session:scan-imports', (_event, projectId?: string) => {

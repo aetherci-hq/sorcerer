@@ -4,12 +4,15 @@ import { useProjectStore } from '../stores/useProjectStore'
 import { useSessionStore } from '../stores/useSessionStore'
 import { useUIStore, getAllSessionIds, findLeafBySession } from '../stores/useUIStore'
 import { useTeamStore } from '../stores/useTeamStore'
-import { ChevronIcon, FolderIcon, TerminalIcon, ShellPromptIcon, UserIcon, MoreHorizontalIcon, NotesIcon, WifiIcon, ChevronsCollapseIcon, PlusIcon, AlertTriangleIcon } from './icons'
+import { ChevronIcon, FolderIcon, TerminalIcon, ShellPromptIcon, UserIcon, MoreHorizontalIcon, NotesIcon, WifiIcon, ChevronsCollapseIcon, PlusIcon, AlertTriangleIcon, BotIcon } from './icons'
 import { useQuickNotesStore } from '../stores/useQuickNotesStore'
 import { StatusDot } from './StatusDot'
 import { Tooltip } from './Tooltip'
 import { EmptyState } from './EmptyState'
-import type { Project, ProjectGroup, Session, SessionResumeHealth, TeamMember, TaskData } from '../types'
+import type { Project, ProjectGroup, ProviderSubAgent, Session, SessionResumeHealth, TeamMember, TaskData } from '../types'
+
+const PROVIDER_SUBAGENT_ACTIVE_MS = 90_000
+const PROVIDER_SUBAGENT_EXPIRE_MS = 2 * 60_000
 
 function formatSessionChangeSummary(status: { added: number; deleted: number } | null): string | null {
   if (!status || (status.added === 0 && status.deleted === 0)) return null
@@ -34,6 +37,33 @@ function getResumeStateLabel(session: Session): string | null {
     return session.resume_reason || 'This provider is restart-only in Sorcerer right now.'
   }
   return null
+}
+
+function formatProviderActivityTime(timestamp: number | null): string {
+  if (!timestamp) return 'recently'
+  const diffMs = Date.now() - timestamp
+  const diffSeconds = Math.max(0, Math.floor(diffMs / 1000))
+  if (diffSeconds < 10) return 'just now'
+  if (diffSeconds < 60) return `${diffSeconds}s ago`
+  const diffMinutes = Math.floor(diffSeconds / 60)
+  if (diffMinutes < 60) return `${diffMinutes}m ago`
+  const diffHours = Math.floor(diffMinutes / 60)
+  if (diffHours < 24) return `${diffHours}h ago`
+  return `${Math.floor(diffHours / 24)}d ago`
+}
+
+function getProviderSubAgentVisualState(subAgent: ProviderSubAgent): 'active' | 'done' | 'expired' {
+  const referenceTime = subAgent.updatedAt || subAgent.createdAt
+  if (!referenceTime) return 'active'
+
+  const ageMs = Date.now() - referenceTime
+  if (ageMs <= PROVIDER_SUBAGENT_ACTIVE_MS) return 'active'
+  if (ageMs <= PROVIDER_SUBAGENT_EXPIRE_MS) return 'done'
+  return 'expired'
+}
+
+function getVisibleProviderSubAgents(subAgents: ProviderSubAgent[]): ProviderSubAgent[] {
+  return subAgents.filter((subAgent) => getProviderSubAgentVisualState(subAgent) !== 'expired')
 }
 
 function TaskItem({ task }: { task: TaskData }) {
@@ -210,9 +240,51 @@ function ChildNotesItem({
   )
 }
 
+function ProviderSubAgentItem({
+  subAgent,
+  parentSessionId,
+}: {
+  subAgent: ProviderSubAgent
+  parentSessionId: string
+}) {
+  const { setActiveSession } = useSessionStore()
+  const visualState = getProviderSubAgentVisualState(subAgent)
+
+  const activityLabel = formatProviderActivityTime(subAgent.updatedAt || subAgent.createdAt)
+  const summary = [
+    subAgent.nickname || subAgent.role || 'Codex sub-agent',
+    subAgent.role ? `Role: ${subAgent.role}` : null,
+    visualState === 'done' ? `Completed ${activityLabel}` : `Updated ${activityLabel}`
+  ].filter(Boolean).join(' • ')
+
+  return (
+    <Tooltip label={summary}>
+      <div
+        className={`tree-item tree-subagent tree-subagent--${visualState}`}
+        onClick={() => setActiveSession(parentSessionId)}
+      >
+        <div className={`tree-subagent-dot tree-subagent-dot--${visualState}`} />
+        <BotIcon className="tree-icon tree-icon--subagent" />
+        <div className="tree-subagent-copy">
+          <span className="tree-label tree-subagent-title">
+            {subAgent.nickname || subAgent.title}
+          </span>
+          <span className="tree-subagent-meta">
+            <span className="tree-subagent-provider">codex</span>
+            {subAgent.role ? <span>{subAgent.role}</span> : null}
+            {visualState === 'done' ? <span className="tree-subagent-state">done</span> : null}
+            <span className="tree-subagent-updated">{activityLabel}</span>
+          </span>
+        </div>
+      </div>
+    </Tooltip>
+  )
+}
+
 function SessionItem({
   session,
   childQTs,
+  providerSubAgents,
   isActive,
   staggerClass,
   projectId,
@@ -220,6 +292,7 @@ function SessionItem({
 }: {
   session: Session
   childQTs: Session[]
+  providerSubAgents: ProviderSubAgent[]
   isActive: boolean
   staggerClass?: string
   projectId: string
@@ -257,11 +330,15 @@ function SessionItem({
   // Quick notes panel open?
   const hasNotesPanel = useQuickNotesStore((s) => s.openNotePanels.has(session.id))
   const hasSavedNotes = useQuickNotesStore((s) => s.savedNotes.has(session.id))
+  const visibleProviderSubAgents = getVisibleProviderSubAgents(providerSubAgents)
+  const activeProviderSubAgentCount = visibleProviderSubAgents.filter((subAgent) =>
+    getProviderSubAgentVisualState(subAgent) === 'active'
+  ).length
 
   // Team members and tasks for this session
   const team = session.team_name ? teams.find((t) => t.name === session.team_name) : undefined
   const hasTeammates = (team?.members.length ?? 0) > 0
-  const hasChildren = childQTs.length > 0 || hasTeammates || hasNotesPanel
+  const hasChildren = childQTs.length > 0 || visibleProviderSubAgents.length > 0 || hasTeammates || hasNotesPanel
   const tasks = session.team_name ? (tasksByTeam[session.team_name] || []) : []
   const totalTaskCount = tasks.length
   const completedTaskCount = tasks.filter((t) => t.status === 'completed').length
@@ -407,6 +484,19 @@ function SessionItem({
                 <span className="tree-resume-state">{session.resume_status === 'unsupported' ? 'restart only' : 'capturing'}</span>
               </Tooltip>
             )}
+            {!isRenaming && visibleProviderSubAgents.length > 0 && (
+              <Tooltip
+                label={
+                  activeProviderSubAgentCount > 0
+                    ? `${activeProviderSubAgentCount} active Codex sub-agent${activeProviderSubAgentCount !== 1 ? 's' : ''}, ${visibleProviderSubAgents.length} visible total`
+                    : `${visibleProviderSubAgents.length} recent Codex sub-agent${visibleProviderSubAgents.length !== 1 ? 's' : ''}`
+                }
+              >
+                <span className={`tree-subagent-summary ${activeProviderSubAgentCount > 0 ? 'tree-subagent-summary--active' : ''}`}>
+                  {activeProviderSubAgentCount > 0 ? `${activeProviderSubAgentCount} active` : `${visibleProviderSubAgents.length} recent`}
+                </span>
+              </Tooltip>
+            )}
             {!isRenaming && !resumeHealth?.canResume && formatResumeWarning(resumeHealth) && (
               <Tooltip label={formatResumeWarning(resumeHealth)!}>
                 <span className="tree-resume-warning" aria-label="Resume warning">
@@ -451,6 +541,13 @@ function SessionItem({
                 key={qt.id}
                 session={qt}
                 isActive={qt.id === activeSessionId}
+              />
+            ))}
+            {visibleProviderSubAgents.map((subAgent) => (
+              <ProviderSubAgentItem
+                key={subAgent.threadId}
+                subAgent={subAgent}
+                parentSessionId={session.id}
               />
             ))}
             {hasTeammates && team && team.members.map((member, i) => (
@@ -498,8 +595,14 @@ function ProjectItem({ project, staggerClass, projectIndex, onDragStart: onProje
   }
   const archivedSessions = projectSessions.filter((s) => s.status === 'archived')
   const [resumeHealthBySession, setResumeHealthBySession] = useState<Record<string, SessionResumeHealth>>({})
+  const [providerSubAgentsBySession, setProviderSubAgentsBySession] = useState<Record<string, ProviderSubAgent[]>>({})
+  const [subAgentClock, setSubAgentClock] = useState(() => Date.now())
   const resumeHealthKey = projectSessions
     .map((session) => `${session.id}:${session.status}:${session.provider || ''}:${session.started_at || 0}:${session.worktree_path}`)
+    .join('|')
+  const providerSubAgentKey = projectSessions
+    .filter((session) => session.provider === 'codex' && session.type !== 'quick-terminal')
+    .map((session) => `${session.id}:${session.provider_session_id || ''}:${session.status}:${session.provider_session_captured_at || 0}`)
     .join('|')
 
   useEffect(() => {
@@ -529,6 +632,55 @@ function ProjectItem({ project, staggerClass, projectIndex, onDragStart: onProje
       cancelled = true
     }
   }, [resumeHealthKey])
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setSubAgentClock(Date.now())
+    }, 15_000)
+    return () => clearInterval(interval)
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    let interval: ReturnType<typeof setInterval> | null = null
+
+    const codexSessions = projectSessions.filter((session) =>
+      session.provider === 'codex' &&
+      session.type !== 'quick-terminal' &&
+      !!session.provider_session_id
+    )
+
+    if (codexSessions.length === 0) {
+      setProviderSubAgentsBySession({})
+      return
+    }
+
+    const refresh = () => {
+      void Promise.all(
+        codexSessions.map(async (session) => {
+          try {
+            const subAgents = await getApi().session.listProviderSubAgents(session.id)
+            return [session.id, subAgents] as const
+          } catch {
+            return [session.id, [] as ProviderSubAgent[]] as const
+          }
+        })
+      ).then((entries) => {
+        if (cancelled) return
+        setProviderSubAgentsBySession(Object.fromEntries(entries))
+      })
+    }
+
+    refresh()
+    interval = setInterval(refresh, 15000)
+
+    return () => {
+      cancelled = true
+      if (interval) clearInterval(interval)
+    }
+  }, [providerSubAgentKey])
+
+  void subAgentClock
 
   const hasResumeWarning = projectSessions.some((session) => resumeHealthBySession[session.id] && !resumeHealthBySession[session.id].canResume)
   const projectWarningLabel = hasResumeWarning
@@ -649,6 +801,7 @@ function ProjectItem({ project, staggerClass, projectIndex, onDragStart: onProje
               key={session.id}
               session={session}
               childQTs={childQTMap.get(session.id) || []}
+              providerSubAgents={providerSubAgentsBySession[session.id] || []}
               isActive={session.id === activeSessionId}
               staggerClass={`stagger-${Math.min(i + 6, 10)}`}
               projectId={project.id}
@@ -665,6 +818,7 @@ function ProjectItem({ project, staggerClass, projectIndex, onDragStart: onProje
                   key={session.id}
                   session={session}
                   childQTs={[]}
+                  providerSubAgents={[]}
                   isActive={session.id === activeSessionId}
                   staggerClass={`stagger-${Math.min(i + 8, 10)}`}
                   projectId={project.id}
