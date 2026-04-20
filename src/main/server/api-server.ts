@@ -134,6 +134,7 @@ export class ApiServer {
     // Hook into PTY exit → broadcast to WS clients
     this._ptyExitListener = (sessionId: string, exitCode: number) => {
       this.wsHandler?.broadcastTerminalExit(sessionId, exitCode)
+      this.scrollback.remove(sessionId)
     }
     this.services.pty.onExit(this._ptyExitListener)
 

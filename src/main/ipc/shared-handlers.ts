@@ -8,6 +8,7 @@ import { PTYService } from '../services/pty-service'
 import { DatabaseService } from '../services/database-service'
 import { WorktreeService } from '../services/worktree-service'
 import { FileWatcherService } from '../services/file-watcher-service'
+import { getTerminalOutputTail } from '../services/terminal-output-utils'
 import { getProviderRunner } from '../services/provider-runners'
 import { getDefaultProviderId, listProviders as listProviderRegistry, refreshProviders as refreshProviderRegistry, resolveLaunchModel } from '../services/provider-registry'
 
@@ -200,6 +201,36 @@ type ExternalSessionImportCandidate = {
   willCreateProject: boolean
 }
 
+export type ProviderSubAgent = {
+  threadId: string
+  parentThreadId: string
+  nickname: string | null
+  role: string | null
+  title: string
+  status: string
+  updatedAt: number | null
+  createdAt: number | null
+  depth: number
+}
+
+type CodexSessionIdentitySource =
+  | 'stored'
+  | 'live-output'
+  | 'scrollback'
+  | 'exit-output'
+  | 'cwd-recovery'
+  | 'resume-discovery'
+
+function normalizeTimestampForSort(timestamp: number | null | undefined): number {
+  if (!timestamp) return 0
+  return timestamp > 10_000_000_000 ? timestamp : timestamp * 1000
+}
+
+function normalizeProviderTimestamp(timestamp: number | null | undefined): number | null {
+  if (!timestamp) return null
+  return timestamp > 10_000_000_000 ? timestamp : timestamp * 1000
+}
+
 function slugifySessionLabel(value: string): string {
   const normalized = value
     .toLowerCase()
@@ -294,6 +325,74 @@ function normalizeComparablePath(targetPath: string): string {
   return targetPath.replace(/^\\\\\?\\/, '').replace(/\//g, '\\').toLowerCase()
 }
 
+export function resolveSessionWorkingDirectory(
+  db: Pick<DatabaseService, 'getProject'>,
+  session: any,
+  options: { allowProjectFallback?: boolean; pathExists?: (targetPath: string) => boolean } = {}
+): string | null {
+  const pathExists = options.pathExists || ((targetPath: string) => fs.existsSync(targetPath))
+  const worktreePath = session?.worktree_path as string | undefined
+  if (worktreePath && pathExists(worktreePath)) {
+    return worktreePath
+  }
+
+  if (!options.allowProjectFallback || !worktreePath) {
+    return null
+  }
+
+  const projectPath = db.getProject(session.project_id as string)?.path as string | undefined
+  if (!projectPath || !pathExists(projectPath)) {
+    return null
+  }
+
+  return normalizeComparablePath(projectPath) === normalizeComparablePath(worktreePath)
+    ? projectPath
+    : null
+}
+
+export function getCodexRecoveryAnchor(session: any): number | null {
+  const providerSessionCapturedAt = session?.provider_session_captured_at as number | null | undefined
+  const startedAt = session?.started_at as number | null | undefined
+  const createdAt = session?.created_at as number | null | undefined
+  const hasPinnedProviderThread = !!(session?.provider_session_id as string | null | undefined)
+  const isLaunching = (session?.resume_status as string | null | undefined) === 'launching'
+
+  if (providerSessionCapturedAt) return providerSessionCapturedAt
+  if (!hasPinnedProviderThread && isLaunching && startedAt) return startedAt
+  return (
+    createdAt ||
+    startedAt ||
+    null
+  )
+}
+
+export function selectCodexThreadForAnchor(
+  matches: Array<{ id: string; created_at: number; updated_at: number }>,
+  anchorAt?: number | null
+): string | null {
+  if (matches.length === 0) return null
+  if (!anchorAt) return matches[0]?.id || null
+
+  const proximityWindowSeconds = 300
+  const anchoredMatches = matches.filter((match) =>
+    Math.abs(match.created_at - anchorAt) <= proximityWindowSeconds
+  )
+  if (anchoredMatches.length === 0) return null
+
+  anchoredMatches.sort((left, right) => {
+    const leftDistance = Math.abs(left.created_at - anchorAt)
+    const rightDistance = Math.abs(right.created_at - anchorAt)
+    if (leftDistance !== rightDistance) return leftDistance - rightDistance
+    return right.updated_at - left.updated_at
+  })
+
+  return anchoredMatches[0]?.id || null
+}
+
+function isHeuristicCodexThreadSource(source: string | null | undefined): boolean {
+  return source === 'cwd-recovery' || source === 'resume-discovery'
+}
+
 export function canRecoverSessionByCwd(db: DatabaseService, session: any): boolean {
   const cwd = session?.worktree_path as string | undefined
   if (!cwd) return false
@@ -302,6 +401,7 @@ export function canRecoverSessionByCwd(db: DatabaseService, session: any): boole
   const otherSessionsUsingCwd = db.listSessions().filter((candidate: any) => {
     if (!candidate || candidate.id === session.id) return false
     if (candidate.status === 'deleted' || candidate.status === 'archived') return false
+    if (candidate.type === 'quick-terminal') return false
     const candidateCwd = candidate.worktree_path as string | undefined
     if (!candidateCwd) return false
     return normalizeComparablePath(candidateCwd) === normalizedCwd
@@ -329,9 +429,7 @@ export async function getSessionResumeHealth(
     }
   }
 
-  const cwd = fs.existsSync(session.worktree_path as string)
-    ? (session.worktree_path as string)
-    : (db.getProject(session.project_id as string)?.path as string || '')
+  const cwd = resolveSessionWorkingDirectory(db, session, { allowProjectFallback: true })
   if (!cwd) {
     return {
       canResume: false,
@@ -371,12 +469,6 @@ export async function getSessionResumeHealth(
   if (provider === 'codex') {
     const resolvedThread = await resolveCodexThreadForSession({ db, pty }, sessionId)
     if (resolvedThread.id) {
-      if (
-        resolvedThread.id !== session.provider_session_id ||
-        (session.resume_status as string | undefined) !== 'ready'
-      ) {
-        persistCodexSessionIdentity(db, sessionId, resolvedThread.id, resolvedThread.source)
-      }
       return { canResume: true, level: 'ok', reason: null, guidance: [] }
     }
     if ((session.resume_status as string | undefined) === 'launching') {
@@ -453,6 +545,9 @@ export function getSessionDiagnostics(
   resumeStatus: string | null
   resumeReason: string | null
   worktreePath: string | null
+  lastOutputTail: string | null
+  lastExitCode: number | null
+  lastExitedAt: number | null
 } | null {
   const session = db.getSession(sessionId)
   if (!session) return null
@@ -477,8 +572,27 @@ export function getSessionDiagnostics(
     providerThreadSource: (session.provider_session_source as string | null | undefined) || null,
     resumeStatus: (session.resume_status as string | null | undefined) || null,
     resumeReason: (session.resume_reason as string | null | undefined) || null,
-    worktreePath: (session.worktree_path as string | null | undefined) || null
+    worktreePath: (session.worktree_path as string | null | undefined) || null,
+    lastOutputTail: (session.last_output_tail as string | null | undefined) || null,
+    lastExitCode: (session.last_exit_code as number | null | undefined) ?? null,
+    lastExitedAt: (session.last_exited_at as number | null | undefined) ?? null
   }
+}
+
+export function persistSessionExitSummary(
+  db: DatabaseService,
+  sessionId: string,
+  output: string,
+  exitCode: number
+): void {
+  const session = db.getSession(sessionId)
+  if (!session) return
+
+  db.updateSession(sessionId, {
+    last_output_tail: getTerminalOutputTail(output, session.type === 'quick-terminal' ? 1200 : 4000) || null,
+    last_exit_code: exitCode,
+    last_exited_at: Math.floor(Date.now() / 1000)
+  })
 }
 
 export function markSessionResumeState(
@@ -491,6 +605,26 @@ export function markSessionResumeState(
     resume_status: status,
     resume_reason: reason
   })
+}
+
+function getCodexThreadAnchorForPersistence(
+  session: any,
+  providerSessionId: string,
+  now: number
+): number {
+  if (
+    session.provider_session_id === providerSessionId &&
+    typeof session.provider_session_captured_at === 'number' &&
+    session.provider_session_captured_at > 0
+  ) {
+    return session.provider_session_captured_at as number
+  }
+
+  const startedAt = session.started_at as number | null | undefined
+  const capturedAt = session.provider_session_captured_at as number | null | undefined
+  const createdAt = session.created_at as number | null | undefined
+
+  return startedAt || capturedAt || createdAt || now
 }
 
 function getInitialResumeState(provider: string): { status: 'launching' | 'ready' | 'unsupported'; reason: string | null } {
@@ -510,12 +644,13 @@ export function persistCodexSessionIdentity(
   db: DatabaseService,
   sessionId: string,
   providerSessionId: string,
-  source: 'live-output' | 'scrollback' | 'exit-output' | 'cwd-recovery' | 'resume-discovery'
+  source: CodexSessionIdentitySource
 ): void {
   const session = db.getSession(sessionId)
   if (!session) return
 
   const now = Math.floor(Date.now() / 1000)
+  const threadAnchor = getCodexThreadAnchorForPersistence(session, providerSessionId, now)
   const updates: Record<string, unknown> = {
     provider_session_validated_at: now,
     resume_status: 'ready',
@@ -524,11 +659,89 @@ export function persistCodexSessionIdentity(
 
   if (session.provider_session_id !== providerSessionId) {
     updates.provider_session_id = providerSessionId
-    updates.provider_session_captured_at = now
+    updates.provider_session_captured_at = threadAnchor
+    updates.provider_session_source = source
+  } else if (session.provider_session_source !== source) {
     updates.provider_session_source = source
   }
 
   db.updateSession(sessionId, updates)
+}
+
+export async function getImportedCodexSessionState(
+  providerSessionId: string | undefined,
+  cwd: string,
+  options: {
+    belongsToCwd?: (threadId: string, targetCwd: string) => Promise<boolean>
+    validatedAt?: number
+  } = {}
+): Promise<{
+  providerSessionId: string | undefined
+  providerSessionValidatedAt: number | null
+  providerSessionSource: string
+  resumeStatus: 'ready' | 'degraded'
+  resumeReason: string | null
+}> {
+  const belongsToCwd = options.belongsToCwd || codexThreadBelongsToCwd
+  const validatedAt = options.validatedAt ?? Math.floor(Date.now() / 1000)
+  const canValidate = !!providerSessionId && await belongsToCwd(providerSessionId, cwd)
+
+  if (canValidate) {
+    return {
+      providerSessionId,
+      providerSessionValidatedAt: validatedAt,
+      providerSessionSource: 'import',
+      resumeStatus: 'ready',
+      resumeReason: null
+    }
+  }
+
+  return {
+    providerSessionId,
+    providerSessionValidatedAt: null,
+    providerSessionSource: 'import-unverified',
+    resumeStatus: 'degraded',
+    resumeReason: 'Imported Codex thread could not be validated for this working directory.'
+  }
+}
+
+export async function resolveCodexExitThreadIdentity(
+  session: any,
+  scrollbackText: string,
+  options: {
+    cwd: string | null
+    allowCwdRecovery: boolean
+    threadBelongsToCwd?: (threadId: string, cwd: string) => Promise<boolean>
+    findThreadIdForCwd?: (cwd: string, anchorAt?: number | null) => Promise<string | null>
+  }
+): Promise<{ providerSessionId: string | null; source: 'exit-output' | 'cwd-recovery' | 'resume-discovery' | null }> {
+  const extractedThreadId = extractCodexThreadIdFromOutput(scrollbackText)
+  const threadBelongsToCwd = options.threadBelongsToCwd || codexThreadBelongsToCwd
+  const findThreadIdForCwd = options.findThreadIdForCwd || findCodexThreadIdForCwd
+
+  const validatedExtractedThreadId =
+    extractedThreadId && options.cwd && await threadBelongsToCwd(extractedThreadId, options.cwd)
+      ? extractedThreadId
+      : null
+
+  const recoveredThreadId =
+    !validatedExtractedThreadId && options.cwd && options.allowCwdRecovery
+      ? await findThreadIdForCwd(options.cwd, getCodexRecoveryAnchor(session))
+      : null
+
+  const providerSessionId = validatedExtractedThreadId || recoveredThreadId
+  if (!providerSessionId) {
+    return { providerSessionId: null, source: null }
+  }
+
+  if (validatedExtractedThreadId) {
+    return { providerSessionId, source: 'exit-output' }
+  }
+
+  return {
+    providerSessionId,
+    source: session.provider_session_id ? 'resume-discovery' : 'cwd-recovery'
+  }
 }
 
 function getLatestCodexStateDbPath(): string | null {
@@ -558,6 +771,130 @@ async function getSqlJs(): Promise<any> {
     })
   }
   return sqlJsPromise
+}
+
+function parseCodexSubAgentSource(source: string | null | undefined): {
+  parentThreadId: string | null
+  depth: number
+  nickname: string | null
+  role: string | null
+} {
+  if (!source || source === 'cli') {
+    return { parentThreadId: null, depth: 0, nickname: null, role: null }
+  }
+
+  try {
+    const parsed = JSON.parse(source) as {
+      subagent?: {
+        thread_spawn?: {
+          parent_thread_id?: string
+          depth?: number
+          agent_nickname?: string | null
+          agent_role?: string | null
+        }
+      }
+    }
+    const spawn = parsed.subagent?.thread_spawn
+    return {
+      parentThreadId: typeof spawn?.parent_thread_id === 'string' ? spawn.parent_thread_id : null,
+      depth: typeof spawn?.depth === 'number' ? spawn.depth : 0,
+      nickname: typeof spawn?.agent_nickname === 'string' ? spawn.agent_nickname : null,
+      role: typeof spawn?.agent_role === 'string' ? spawn.agent_role : null
+    }
+  } catch {
+    return { parentThreadId: null, depth: 0, nickname: null, role: null }
+  }
+}
+
+export function resolveCodexSubAgentRow(row: {
+  id?: string
+  title?: string
+  edge_status?: string | null
+  updated_at?: number | null
+  created_at?: number | null
+  agent_nickname?: string | null
+  agent_role?: string | null
+  source?: string | null
+  parent_thread_id?: string | null
+}): ProviderSubAgent | null {
+  if (!row.id) return null
+
+  const parsedSource = parseCodexSubAgentSource(row.source)
+  const parentThreadId = row.parent_thread_id || parsedSource.parentThreadId
+  if (!parentThreadId) return null
+
+  return {
+    threadId: String(row.id),
+    parentThreadId: String(parentThreadId),
+    nickname: row.agent_nickname || parsedSource.nickname || null,
+    role: row.agent_role || parsedSource.role || null,
+    title: String(row.title || '').trim() || 'Codex sub-agent',
+    status: String(row.edge_status || 'active'),
+    updatedAt: normalizeProviderTimestamp(row.updated_at),
+    createdAt: normalizeProviderTimestamp(row.created_at),
+    depth: parsedSource.depth > 0 ? parsedSource.depth : 1
+  }
+}
+
+export async function listProviderSubAgents(
+  { db }: Pick<HandlerServices, 'db'>,
+  sessionId: string
+): Promise<ProviderSubAgent[]> {
+  const session = db.getSession(sessionId)
+  if (!session || session.provider !== 'codex') return []
+
+  const providerSessionId = session.provider_session_id as string | null | undefined
+  if (!providerSessionId) return []
+
+  const stateDbPath = getLatestCodexStateDbPath()
+  if (!stateDbPath || !fs.existsSync(stateDbPath)) return []
+
+  const SQL = await getSqlJs()
+  const stateDb = new SQL.Database(fs.readFileSync(stateDbPath))
+
+  try {
+    const stmt = stateDb.prepare(`
+      SELECT
+        child.id,
+        child.title,
+        child.updated_at,
+        child.created_at,
+        child.agent_nickname,
+        child.agent_role,
+        child.source,
+        edge.parent_thread_id,
+        edge.status AS edge_status
+      FROM thread_spawn_edges edge
+      JOIN threads child ON child.id = edge.child_thread_id
+      WHERE edge.parent_thread_id = ?
+        AND child.archived = 0
+      ORDER BY child.updated_at DESC
+      LIMIT 50
+    `)
+
+    stmt.bind([providerSessionId])
+    const results: ProviderSubAgent[] = []
+    while (stmt.step()) {
+      const parsed = resolveCodexSubAgentRow(stmt.getAsObject() as {
+        id?: string
+        title?: string
+        edge_status?: string | null
+        updated_at?: number | null
+        created_at?: number | null
+        agent_nickname?: string | null
+        agent_role?: string | null
+        source?: string | null
+        parent_thread_id?: string | null
+      })
+      if (parsed) results.push(parsed)
+    }
+    stmt.free()
+    return results
+  } catch {
+    return []
+  } finally {
+    stateDb.close()
+  }
 }
 
 export function extractCodexThreadIdFromOutput(output: string): string | null {
@@ -616,24 +953,10 @@ export async function findCodexThreadIdForCwd(
   anchorAt?: number | null
 ): Promise<string | null> {
   const matches = await listCodexThreadsForCwd(cwd)
-  if (matches.length === 0) return null
-
-  if (anchorAt) {
-    const recentMatches = matches.filter((match) => match.created_at >= anchorAt - 300)
-    const pool = recentMatches.length > 0 ? recentMatches : matches
-    pool.sort((left, right) => {
-      const leftDistance = Math.abs(left.created_at - anchorAt)
-      const rightDistance = Math.abs(right.created_at - anchorAt)
-      if (leftDistance !== rightDistance) return leftDistance - rightDistance
-      return right.updated_at - left.updated_at
-    })
-    return pool[0]?.id || null
-  }
-
-  return matches[0]?.id || null
+  return selectCodexThreadForAnchor(matches, anchorAt)
 }
 
-async function codexThreadBelongsToCwd(threadId: string, cwd: string): Promise<boolean> {
+export async function codexThreadBelongsToCwd(threadId: string, cwd: string): Promise<boolean> {
   const matches = await listCodexThreadsForCwd(cwd)
   return matches.some((match) => match.id === threadId)
 }
@@ -641,33 +964,34 @@ async function codexThreadBelongsToCwd(threadId: string, cwd: string): Promise<b
 export async function resolveCodexThreadForSession(
   { db, pty }: Pick<HandlerServices, 'db' | 'pty'>,
   sessionId: string
-): Promise<{ id: string | null; source: 'stored' | 'scrollback' | 'cwd-recovery' | 'resume-discovery' | null }> {
+): Promise<{ id: string | null; source: Exclude<CodexSessionIdentitySource, 'live-output' | 'exit-output'> | null }> {
   const session = db.getSession(sessionId)
   if (!session) return { id: null, source: null }
 
-  const cwd = fs.existsSync(session.worktree_path as string)
-    ? (session.worktree_path as string)
-    : (db.getProject(session.project_id as string)?.path as string || '')
+  const cwd = resolveSessionWorkingDirectory(db, session, { allowProjectFallback: true })
   if (!cwd) return { id: null, source: null }
 
+  const recoveryAnchor = getCodexRecoveryAnchor(session)
   const storedThreadId = session.provider_session_id as string | undefined
-  if (storedThreadId && await codexThreadBelongsToCwd(storedThreadId, cwd)) {
-    return { id: storedThreadId, source: 'stored' }
-  }
-
   const scrollbackThreadId = extractCodexThreadIdFromOutput(pty.scrollback.getScrollback(sessionId))
   if (scrollbackThreadId && await codexThreadBelongsToCwd(scrollbackThreadId, cwd)) {
     return { id: scrollbackThreadId, source: 'scrollback' }
   }
 
-  // Recovery should prefer the Sorcerer session's original creation time.
-  // `started_at` changes on every restart/resume and can point at an unrelated
-  // newer Codex thread in the same cwd.
-  const recoveryAnchor =
-    (session.created_at as number | null | undefined) ||
-    (session.provider_session_captured_at as number | null | undefined) ||
-    (session.started_at as number | null | undefined) ||
-    null
+  if (storedThreadId && await codexThreadBelongsToCwd(storedThreadId, cwd)) {
+    if (isHeuristicCodexThreadSource(session.provider_session_source as string | null | undefined)) {
+      const anchoredThreadId = await findCodexThreadIdForCwd(cwd, recoveryAnchor)
+      if (anchoredThreadId && anchoredThreadId !== storedThreadId) {
+        return { id: anchoredThreadId, source: 'resume-discovery' }
+      }
+    }
+    return { id: storedThreadId, source: 'stored' }
+  }
+
+  if (!canRecoverSessionByCwd(db, session)) {
+    return { id: null, source: null }
+  }
+
   const recoveredThreadId = await findCodexThreadIdForCwd(
     cwd,
     recoveryAnchor
@@ -693,24 +1017,34 @@ export async function reconcileCodexSessions(
 
   let updated = 0
   for (const session of sessions) {
-    const cwd = fs.existsSync(session.worktree_path as string)
-      ? (session.worktree_path as string)
-      : (db.getProject(session.project_id as string)?.path as string || '')
+    const cwd = resolveSessionWorkingDirectory(db, session, { allowProjectFallback: true })
     if (!cwd) continue
 
     const storedThreadId = session.provider_session_id as string | undefined
     if (storedThreadId && await codexThreadBelongsToCwd(storedThreadId, cwd)) {
-      if ((session.resume_status as string | undefined) !== 'ready') {
+      if (isHeuristicCodexThreadSource(session.provider_session_source as string | null | undefined)) {
+        persistCodexSessionIdentity(db, session.id, storedThreadId, 'stored')
+      } else if ((session.resume_status as string | undefined) !== 'ready') {
         markSessionResumeState(db, session.id, 'ready', null)
       }
       continue
     }
 
+    if (!canRecoverSessionByCwd(db, session)) {
+      markSessionResumeState(
+        db,
+        session.id,
+        'degraded',
+        storedThreadId
+          ? 'Codex thread identity could not be revalidated and this session shares a working directory with other sessions.'
+          : 'Codex thread identity is missing and this session shares a working directory with other sessions.'
+      )
+      continue
+    }
+
     const recoveredThreadId = await findCodexThreadIdForCwd(
       cwd,
-      (session.created_at as number | null | undefined) ||
-      (session.started_at as number | null | undefined) ||
-      null
+      getCodexRecoveryAnchor(session)
     )
 
     if (recoveredThreadId) {
@@ -724,14 +1058,14 @@ export async function reconcileCodexSessions(
       continue
     }
 
-    if (!storedThreadId) {
-      markSessionResumeState(
-        db,
-        session.id,
-        'degraded',
-        'Codex thread identity is missing for this session.'
-      )
-    }
+    markSessionResumeState(
+      db,
+      session.id,
+      'degraded',
+      storedThreadId
+        ? 'Stored Codex thread identity is no longer valid for this working directory.'
+        : 'Codex thread identity is missing for this session.'
+    )
   }
 
   return { checked: sessions.length, updated }
@@ -882,8 +1216,8 @@ export async function scanImportableSessions(
   }
 
   candidates.sort((left, right) => {
-    const leftStamp = left.updatedAt || left.createdAt || 0
-    const rightStamp = right.updatedAt || right.createdAt || 0
+    const leftStamp = normalizeTimestampForSort(left.updatedAt || left.createdAt || 0)
+    const rightStamp = normalizeTimestampForSort(right.updatedAt || right.createdAt || 0)
     return rightStamp - leftStamp
   })
 
@@ -907,6 +1241,23 @@ export async function importExternalSessions(
     }
     if (!projectId) continue
 
+    let providerSessionId: string | undefined
+    let providerSessionValidatedAt: number | null = null
+    let providerSessionSource: string | undefined
+    let resumeStatus: string | null = null
+    let resumeReason: string | null = null
+
+    if (candidate.provider === 'codex') {
+      const importedState = await getImportedCodexSessionState(candidate.providerSessionId, candidate.cwd)
+      providerSessionId = importedState.providerSessionId
+      providerSessionValidatedAt = importedState.providerSessionValidatedAt
+      providerSessionSource = importedState.providerSessionSource
+      resumeStatus = importedState.resumeStatus
+      resumeReason = importedState.resumeReason
+    } else if (candidate.provider === 'claude') {
+      resumeStatus = 'ready'
+    }
+
     const importedSession = db.addSession({
       id: uuidv4(),
       project_id: projectId,
@@ -915,13 +1266,13 @@ export async function importExternalSessions(
       worktree_path: candidate.cwd,
       status: 'idle',
       claude_session_id: candidate.provider === 'claude' ? candidate.providerSessionId : undefined,
-      provider_session_id: candidate.provider === 'codex' ? candidate.providerSessionId : null,
-      started_at: candidate.createdAt || null,
+      provider_session_id: providerSessionId,
+      started_at: candidate.createdAt || undefined,
       provider_session_captured_at: candidate.createdAt || null,
-      provider_session_validated_at: Math.floor(Date.now() / 1000),
-      provider_session_source: 'import',
-      resume_status: 'ready',
-      resume_reason: null,
+      provider_session_validated_at: providerSessionValidatedAt,
+      provider_session_source: providerSessionSource,
+      resume_status: resumeStatus,
+      resume_reason: resumeReason,
       provider: candidate.provider,
       model: candidate.model || ''
     })
@@ -1279,11 +1630,11 @@ export async function createSession(
     bypass_permissions: skipPerms ? 1 : 0,
     remote_control: rc,
     claude_session_id: claudeSessionId,
-    provider_session_id: null,
+    provider_session_id: undefined,
     started_at: startedAt,
     provider_session_captured_at: null,
     provider_session_validated_at: null,
-    provider_session_source: null,
+    provider_session_source: undefined,
     resume_status: initialResumeState.status,
     resume_reason: initialResumeState.reason,
     provider: resolvedProvider,
@@ -1514,9 +1865,10 @@ export async function restartSession(
   }
 
   // Check if worktree directory still exists
-  const cwd = fs.existsSync(session.worktree_path as string)
-    ? (session.worktree_path as string)
-    : (db.getProject(session.project_id as string)?.path as string || process.cwd())
+  const cwd = resolveSessionWorkingDirectory(db, session, { allowProjectFallback: true })
+  if (!cwd) {
+    throw new Error('The session working directory is no longer available.')
+  }
 
   if (session.type === 'quick-terminal') {
     // Quick terminal: spawn plain shell
@@ -1570,7 +1922,14 @@ export async function restartSession(
     }
   }
   const pid = pty.getPid(sessionId)
-  db.updateSession(sessionId, { status: 'active', pid: pid ?? null, started_at: Math.floor(Date.now() / 1000) })
+  db.updateSession(sessionId, {
+    status: 'active',
+    pid: pid ?? null,
+    started_at: Math.floor(Date.now() / 1000),
+    last_output_tail: null,
+    last_exit_code: null,
+    last_exited_at: null
+  })
 
   return db.getSession(sessionId)
 }
@@ -1592,9 +1951,10 @@ export async function resumeSession(
   }
 
   // Check if worktree directory still exists
-  const cwd = fs.existsSync(session.worktree_path as string)
-    ? (session.worktree_path as string)
-    : (db.getProject(session.project_id as string)?.path as string || process.cwd())
+  const cwd = resolveSessionWorkingDirectory(db, session, { allowProjectFallback: true })
+  if (!cwd) {
+    throw new Error('The session working directory is no longer available.')
+  }
 
   if (session.type === 'quick-terminal') {
     // Quick terminal: just restart the shell
@@ -1670,20 +2030,22 @@ export async function resumeSession(
     } else if (provider === 'codex') {
       const resolvedThread = await resolveCodexThreadForSession({ db, pty }, sessionId)
       const providerSessionId = resolvedThread.id || undefined
-      const selectionSource = resolvedThread.source || 'none'
+      const selectionSource = resolvedThread.source
       if (!providerSessionId) {
         console.log(`[session:resume] No Codex thread id available for ${sessionId}; blocking resume because provider identity is missing`)
         markSessionResumeState(db, sessionId, 'degraded', 'Codex thread identity missing; resume would require inference.')
         throw new Error('Codex thread identity is missing for this session. Start a new session instead of attempting an ambiguous resume.')
       }
-      if (selectionSource !== 'stored') {
+      if (selectionSource && selectionSource !== 'stored') {
         console.log(`[session:resume] Recovered Codex thread: ${providerSessionId} via ${selectionSource}`)
         persistCodexSessionIdentity(
           db,
           sessionId,
           providerSessionId,
-          selectionSource === 'scrollback' ? 'scrollback' : 'resume-discovery'
+          selectionSource
         )
+      } else if (isHeuristicCodexThreadSource(session.provider_session_source as string | null | undefined)) {
+        persistCodexSessionIdentity(db, sessionId, providerSessionId, 'stored')
       }
 
       const baseArgs = runner.getArgs({
@@ -1698,7 +2060,7 @@ export async function resumeSession(
           resume_status: 'ready',
           resume_reason: null
         })
-        console.log(`[session:resume] ${sessionId}: provider=codex mode=resume source=${selectionSource} target=${providerSessionId} cwd=${cwd}`)
+        console.log(`[session:resume] ${sessionId}: provider=codex mode=resume source=${selectionSource || 'none'} target=${providerSessionId} cwd=${cwd}`)
       }
       if (providerSessionId) trackResume(sessionId)
     } else {
@@ -1725,7 +2087,14 @@ export async function resumeSession(
     }
   }
   const pid = pty.getPid(sessionId)
-  db.updateSession(sessionId, { status: 'active', pid: pid ?? null, started_at: Math.floor(Date.now() / 1000) })
+  db.updateSession(sessionId, {
+    status: 'active',
+    pid: pid ?? null,
+    started_at: Math.floor(Date.now() / 1000),
+    last_output_tail: null,
+    last_exit_code: null,
+    last_exited_at: null
+  })
 
   return db.getSession(sessionId)
 }

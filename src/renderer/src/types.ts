@@ -40,6 +40,9 @@ export interface Session {
   provider_session_source?: string | null
   resume_status?: 'launching' | 'ready' | 'degraded' | 'unsupported' | null
   resume_reason?: string | null
+  last_output_tail?: string | null
+  last_exit_code?: number | null
+  last_exited_at?: number | null
   provider?: string
   model?: string
 }
@@ -60,6 +63,9 @@ export interface SessionDiagnostics {
   resumeStatus: string | null
   resumeReason: string | null
   worktreePath: string | null
+  lastOutputTail: string | null
+  lastExitCode: number | null
+  lastExitedAt: number | null
 }
 
 export interface ExternalSessionImportCandidate {

@@ -155,6 +155,7 @@ export class PTYService {
 
       for (const listener of this.exitListeners) listener(sessionId, exitCode)
       this.sessions.delete(sessionId)
+      this.scrollback.remove(sessionId)
     })
   }
 
@@ -178,8 +179,7 @@ export class PTYService {
       session.ptyProcess.kill()
       this.sessions.delete(sessionId)
     }
-    // Clean up scrollback and extra listeners
-    this.scrollback.remove(sessionId)
+    // Scrollback is released on the PTY exit event so exit handlers can still inspect it.
     this.extraListeners.delete(sessionId)
   }
 

@@ -9,6 +9,7 @@ import simpleGit from 'simple-git'
 import { DatabaseService } from './database-service'
 import { PTYService } from './pty-service'
 import { generateCompletion, type AIMessage } from './ai-provider-service'
+import { getTerminalOutputTail } from './terminal-output-utils'
 
 interface SessionContext {
   name: string
@@ -84,14 +85,7 @@ async function getGitSummary(worktreePath: string): Promise<string | undefined> 
 
 function getScrollbackTail(pty: PTYService, sessionId: string, maxChars: number = 500): string | undefined {
   const scrollback = pty.scrollback.getScrollback(sessionId)
-  if (!scrollback) return undefined
-
-  // Strip ANSI escape codes for readability
-  const clean = scrollback.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '').replace(/\r/g, '')
-
-  // Take the last N chars
-  const tail = clean.length > maxChars ? clean.slice(-maxChars) : clean
-  return tail.trim() || undefined
+  return getTerminalOutputTail(scrollback, maxChars)
 }
 
 export function collectBriefingData(db: DatabaseService, pty: PTYService): BriefingData {
@@ -123,9 +117,10 @@ export function collectBriefingData(db: DatabaseService, pty: PTYService): Brief
       ctx.quickNotes = (note.content as string).slice(0, 300)
     }
 
-    // Scrollback (only for active sessions)
     if (s.status === 'active') {
       ctx.scrollbackTail = getScrollbackTail(pty, s.id)
+    } else {
+      ctx.scrollbackTail = (s.last_output_tail as string | undefined) || undefined
     }
 
     sessions.push(ctx)

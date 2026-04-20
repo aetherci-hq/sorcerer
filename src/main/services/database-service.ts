@@ -240,6 +240,15 @@ export class DatabaseService {
     try {
       this.db.run(`ALTER TABLE sessions ADD COLUMN resume_reason TEXT`)
     } catch { /* column already exists */ }
+    try {
+      this.db.run(`ALTER TABLE sessions ADD COLUMN last_output_tail TEXT`)
+    } catch { /* column already exists */ }
+    try {
+      this.db.run(`ALTER TABLE sessions ADD COLUMN last_exit_code INTEGER`)
+    } catch { /* column already exists */ }
+    try {
+      this.db.run(`ALTER TABLE sessions ADD COLUMN last_exited_at INTEGER`)
+    } catch { /* column already exists */ }
 
     // Briefing archive table
     this.db.run(`
@@ -491,6 +500,9 @@ export class DatabaseService {
     provider_session_source: string | null
     resume_status: string | null
     resume_reason: string | null
+    last_output_tail: string | null
+    last_exit_code: number | null
+    last_exited_at: number | null
     provider: string
     model: string
   }>): any {

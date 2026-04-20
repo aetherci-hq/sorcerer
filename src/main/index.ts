@@ -9,7 +9,7 @@ import { WorktreeService } from './services/worktree-service'
 import { FileWatcherService } from './services/file-watcher-service'
 import { PopoutService } from './services/popout-service'
 import { registerIPC } from './ipc/handlers'
-import { syncWorktrees, checkResumeFailed, extractCodexThreadIdFromOutput, findCodexThreadIdForCwd, canRecoverSessionByCwd, persistCodexSessionIdentity, markSessionResumeState, reconcileCodexSessions, resolveCodexThreadForSession } from './ipc/shared-handlers'
+import { syncWorktrees, checkResumeFailed, canRecoverSessionByCwd, persistCodexSessionIdentity, markSessionResumeState, reconcileCodexSessions, resolveCodexThreadForSession, persistSessionExitSummary, resolveSessionWorkingDirectory, resolveCodexExitThreadIdentity } from './ipc/shared-handlers'
 import { AgentOrchestrator } from './services/agent-orchestrator'
 import { refreshProviders as refreshProviderRegistry } from './services/provider-registry'
 
@@ -167,9 +167,16 @@ async function createWindow(): Promise<void> {
     void (async () => {
       const resolvedThread = await resolveCodexThreadForSession({ db: dbService, pty: ptyService }, sessionId)
       if (!resolvedThread.id) return
-      if (resolvedThread.id === session.provider_session_id && session.resume_status === 'ready') return
+      if (
+        resolvedThread.id === session.provider_session_id &&
+        session.resume_status === 'ready' &&
+        session.provider_session_source !== 'cwd-recovery' &&
+        session.provider_session_source !== 'resume-discovery'
+      ) return
 
-      const source = resolvedThread.source === 'scrollback' ? 'live-output' : resolvedThread.source
+      const source = resolvedThread.source === 'scrollback'
+        ? 'live-output'
+        : (resolvedThread.source || 'cwd-recovery')
       persistCodexSessionIdentity(dbService, sessionId, resolvedThread.id, source)
       console.log(`[codex-thread] ${sessionId}: captured ${resolvedThread.id} from ${source}`)
     })()
@@ -179,17 +186,18 @@ async function createWindow(): Promise<void> {
   ptyService.onExit((sessionId, exitCode) => {
     const scrollbackText = ptyService.scrollback.getScrollback(sessionId)
     const session = dbService.getSession(sessionId)
+    if (session) {
+      persistSessionExitSummary(dbService, sessionId, scrollbackText, exitCode)
+    }
     if (session && session.provider === 'codex' && session.type !== 'quick-terminal') {
-      const cwd = fs.existsSync(session.worktree_path as string)
-        ? (session.worktree_path as string)
-        : (dbService.getProject(session.project_id as string)?.path as string || process.cwd())
+      const cwd = resolveSessionWorkingDirectory(dbService, session, { allowProjectFallback: true })
       const allowCwdRecovery = canRecoverSessionByCwd(dbService, session)
       void (async () => {
-        const providerSessionId =
-          extractCodexThreadIdFromOutput(scrollbackText) ||
-          (allowCwdRecovery ? await findCodexThreadIdForCwd(cwd, session.started_at as number | null) : null)
-        if (providerSessionId) {
-          const source = extractCodexThreadIdFromOutput(scrollbackText) ? 'exit-output' : 'cwd-recovery'
+        const { providerSessionId, source } = await resolveCodexExitThreadIdentity(session, scrollbackText, {
+          cwd,
+          allowCwdRecovery
+        })
+        if (providerSessionId && source) {
           persistCodexSessionIdentity(dbService, sessionId, providerSessionId, source)
           console.log(`[codex-thread] ${sessionId}: stored ${providerSessionId} from ${source}`)
         } else if (!session.provider_session_id) {
@@ -556,7 +564,11 @@ ipcMain.handle('popout:isOpen', (_e, panelId: string) => {
 })
 
 ipcMain.handle('popout:getScrollback', (_e, sessionId: string) => {
-  return ptyService.scrollback.getScrollback(sessionId)
+  const live = ptyService.scrollback.getScrollback(sessionId)
+  if (live) return live
+
+  const session = dbService?.getSession(sessionId)
+  return (session?.last_output_tail as string | undefined) || ''
 })
 
 // When a popout window resumes/restarts a session, notify the main window

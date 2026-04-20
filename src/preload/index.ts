@@ -47,7 +47,21 @@ const api = {
       resumeStatus: string | null
       resumeReason: string | null
       worktreePath: string | null
+      lastOutputTail: string | null
+      lastExitCode: number | null
+      lastExitedAt: number | null
     } | null>,
+    listProviderSubAgents: (sessionId: string) => ipcRenderer.invoke('session:list-provider-subagents', sessionId) as Promise<Array<{
+      threadId: string
+      parentThreadId: string
+      nickname: string | null
+      role: string | null
+      title: string
+      status: string
+      updatedAt: number | null
+      createdAt: number | null
+      depth: number
+    }>>,
     setTeam: (sessionId: string, teamName: string | null) => ipcRenderer.invoke('session:set-team', sessionId, teamName),
     gitStatus: (sessionId: string) => ipcRenderer.invoke('session:git-status', sessionId),
     divergence: (sessionId: string) => ipcRenderer.invoke('session:divergence', sessionId) as Promise<{ behind: number; ahead: number } | null>,
