@@ -8,5 +8,8 @@ out/
 .env.local
 .claude/
 docs/
+!docs/
+!docs/releases/
+!docs/releases/*.md
 nul
 *claude_b64*
