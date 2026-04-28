@@ -187,7 +187,7 @@ function findMostRecentClaudeRuntimeSession(cwd: string): string | null {
 
 type ExternalSessionImportCandidate = {
   id: string
-  provider: 'claude' | 'codex'
+  provider: string
   providerSessionId: string
   title: string
   cwd: string
@@ -250,7 +250,7 @@ async function detectBranchForPath(cwd: string): Promise<string> {
 }
 
 function deriveImportedSessionName(candidate: {
-  provider: 'claude' | 'codex'
+  provider: string
   title: string
   branch: string
   cwd: string
@@ -310,10 +310,6 @@ export function ensureProviderTrust(provider: string, cwd: string): void {
   try {
     if (normalizedProvider === 'claude') {
       ensureClaudeTrust(cwd)
-      return
-    }
-    if (normalizedProvider === 'codex') {
-      ensureCodexTrust(cwd)
       return
     }
   } catch {
@@ -744,9 +740,9 @@ export async function resolveCodexExitThreadIdentity(
   }
 }
 
-function getLatestCodexStateDbPath(): string | null {
+function getCodexStateDbPaths(): string[] {
   const codexDir = path.join(os.homedir(), '.codex')
-  if (!fs.existsSync(codexDir)) return null
+  if (!fs.existsSync(codexDir)) return []
 
   try {
     const entries = fs.readdirSync(codexDir)
@@ -756,10 +752,30 @@ function getLatestCodexStateDbPath(): string | null {
         mtime: fs.statSync(path.join(codexDir, entry)).mtimeMs
       }))
       .sort((a, b) => b.mtime - a.mtime)
-    return entries.length > 0 ? path.join(codexDir, entries[0].name) : null
+    return entries.map((entry) => path.join(codexDir, entry.name))
   } catch {
-    return null
+    return []
   }
+}
+
+async function openReadableCodexStateDb(): Promise<{ stateDb: any; stateDbPath: string } | null> {
+  const stateDbPaths = getCodexStateDbPaths()
+  if (stateDbPaths.length === 0) return null
+
+  const SQL = await getSqlJs()
+
+  for (const stateDbPath of stateDbPaths) {
+    if (!fs.existsSync(stateDbPath)) continue
+    try {
+      const stateDb = new SQL.Database(fs.readFileSync(stateDbPath))
+      stateDb.exec('SELECT 1')
+      return { stateDb, stateDbPath }
+    } catch (error) {
+      console.warn(`[codex-state] Skipping unreadable state DB: ${stateDbPath}`, error)
+    }
+  }
+
+  return null
 }
 
 async function getSqlJs(): Promise<any> {
@@ -846,11 +862,9 @@ export async function listProviderSubAgents(
   const providerSessionId = session.provider_session_id as string | null | undefined
   if (!providerSessionId) return []
 
-  const stateDbPath = getLatestCodexStateDbPath()
-  if (!stateDbPath || !fs.existsSync(stateDbPath)) return []
-
-  const SQL = await getSqlJs()
-  const stateDb = new SQL.Database(fs.readFileSync(stateDbPath))
+  const stateDbHandle = await openReadableCodexStateDb()
+  if (!stateDbHandle) return []
+  const { stateDb } = stateDbHandle
 
   try {
     const stmt = stateDb.prepare(`
@@ -899,18 +913,33 @@ export async function listProviderSubAgents(
 
 export function extractCodexThreadIdFromOutput(output: string): string | null {
   const cleaned = output.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '').replace(/\r/g, '')
-  const matches = [...cleaned.matchAll(/\bcodex resume(?:\s+--)?\s+([0-9a-fA-F-]{36})\b/g)]
-  return matches.length > 0 ? matches[matches.length - 1]?.[1] || null : null
+  // Match common thread ID patterns: 'codex resume <uuid>', 'thread_id: <uuid>', 'thread_id=<uuid>', or standalone UUIDs in status lines
+  const uuidPattern = '[0-9a-fA-F-]{36}'
+  const patterns = [
+    new RegExp(`\\bcodex resume(?:\\s+--)?\\s+(${uuidPattern})\\b`, 'g'),
+    new RegExp(`\\bthread_id[:=]\\s*(${uuidPattern})\\b`, 'g'),
+    new RegExp(`\\bThread ID:\\s*(${uuidPattern})\\b`, 'g'),
+    new RegExp(`\\bSession ID:\\s*(${uuidPattern})\\b`, 'g')
+  ]
+
+  let lastMatch: string | null = null
+  for (const pattern of patterns) {
+    const matches = [...cleaned.matchAll(pattern)]
+    if (matches.length > 0) {
+      const match = matches[matches.length - 1]?.[1]
+      if (match) lastMatch = match
+    }
+  }
+
+  return lastMatch
 }
 
 async function listCodexThreadsForCwd(
   cwd: string
 ): Promise<Array<{ id: string; created_at: number; updated_at: number }>> {
-  const stateDbPath = getLatestCodexStateDbPath()
-  if (!stateDbPath || !fs.existsSync(stateDbPath)) return []
-
-  const SQL = await getSqlJs()
-  const stateDb = new SQL.Database(fs.readFileSync(stateDbPath))
+  const stateDbHandle = await openReadableCodexStateDb()
+  if (!stateDbHandle) return []
+  const { stateDb } = stateDbHandle
   const wantedCwd = normalizeComparablePath(cwd)
 
   try {
@@ -1003,6 +1032,18 @@ export async function resolveCodexThreadForSession(
     }
   }
 
+  // Fallback: If we are allowed to recover by CWD (meaning this is the only active session for this CWD),
+  // just pick the latest thread found in the Codex DB for this CWD, ignoring the time anchor.
+  if (canRecoverSessionByCwd(db, session)) {
+    const allMatches = await listCodexThreadsForCwd(cwd)
+    if (allMatches.length > 0) {
+      return {
+        id: allMatches[0].id,
+        source: 'cwd-recovery'
+      }
+    }
+  }
+
   return { id: null, source: null }
 }
 
@@ -1042,10 +1083,18 @@ export async function reconcileCodexSessions(
       continue
     }
 
-    const recoveredThreadId = await findCodexThreadIdForCwd(
+    let recoveredThreadId = await findCodexThreadIdForCwd(
       cwd,
       getCodexRecoveryAnchor(session)
     )
+
+    // Fallback: If anchor match fails but we are safe to recover by CWD, pick the latest thread
+    if (!recoveredThreadId && canRecoverSessionByCwd(db, session)) {
+      const allMatches = await listCodexThreadsForCwd(cwd)
+      if (allMatches.length > 0) {
+        recoveredThreadId = allMatches[0].id
+      }
+    }
 
     if (recoveredThreadId) {
       persistCodexSessionIdentity(
@@ -1163,10 +1212,9 @@ export async function scanImportableSessions(
     }
   }
 
-  const stateDbPath = getLatestCodexStateDbPath()
-  if (stateDbPath && fs.existsSync(stateDbPath)) {
-    const SQL = await getSqlJs()
-    const stateDb = new SQL.Database(fs.readFileSync(stateDbPath))
+  const stateDbHandle = await openReadableCodexStateDb()
+  if (stateDbHandle) {
+    const { stateDb } = stateDbHandle
     try {
       const stmt = stateDb.prepare(`
         SELECT id, cwd, title, created_at, updated_at, model
@@ -1296,51 +1344,6 @@ function ensureClaudeTrust(cwd: string): void {
     hasTrustDialogAccepted: true
   }
   fs.writeFileSync(configPath, JSON.stringify(data, null, 2))
-}
-
-function ensureCodexTrust(cwd: string): void {
-  const codexDir = path.join(os.homedir(), '.codex')
-  const configPath = path.join(codexDir, 'config.toml')
-  const section = `[projects.${JSON.stringify(cwd)}]`
-  const trustLine = 'trust_level = "trusted"'
-
-  if (!fs.existsSync(codexDir)) {
-    fs.mkdirSync(codexDir, { recursive: true })
-  }
-
-  const source = fs.existsSync(configPath) ? fs.readFileSync(configPath, 'utf8') : ''
-  const lines = source.length > 0 ? source.split(/\r?\n/) : []
-  const sectionIndex = lines.findIndex((line) => line.trim() === section)
-
-  if (sectionIndex === -1) {
-    const next = source.trimEnd()
-    const prefix = next.length > 0 ? `${next}\n\n` : ''
-    fs.writeFileSync(configPath, `${prefix}${section}\n${trustLine}\n`)
-    return
-  }
-
-  let endIndex = lines.length
-  for (let i = sectionIndex + 1; i < lines.length; i++) {
-    if (lines[i].trim().startsWith('[')) {
-      endIndex = i
-      break
-    }
-  }
-
-  const trustIndex = lines.findIndex((line, index) =>
-    index > sectionIndex &&
-    index < endIndex &&
-    line.trim().startsWith('trust_level')
-  )
-
-  if (trustIndex !== -1) {
-    if (lines[trustIndex].trim() === trustLine) return
-    lines[trustIndex] = trustLine
-  } else {
-    lines.splice(endIndex, 0, trustLine)
-  }
-
-  fs.writeFileSync(configPath, `${lines.join('\n').trimEnd()}\n`)
 }
 
 // ── Resume failure detection ────────────────────────────────
@@ -2031,12 +2034,15 @@ export async function resumeSession(
       const resolvedThread = await resolveCodexThreadForSession({ db, pty }, sessionId)
       const providerSessionId = resolvedThread.id || undefined
       const selectionSource = resolvedThread.source
-      if (!providerSessionId) {
-        console.log(`[session:resume] No Codex thread id available for ${sessionId}; blocking resume because provider identity is missing`)
-        markSessionResumeState(db, sessionId, 'degraded', 'Codex thread identity missing; resume would require inference.')
-        throw new Error('Codex thread identity is missing for this session. Start a new session instead of attempting an ambiguous resume.')
+      const allowCwdRecovery = canRecoverSessionByCwd(db, session)
+
+      if (!providerSessionId && !allowCwdRecovery) {
+        console.log(`[session:resume] No Codex thread id available for ${sessionId} and recovery disabled; blocking resume.`)
+        markSessionResumeState(db, sessionId, 'degraded', 'Codex thread identity missing; resume would be ambiguous.')
+        throw new Error('Codex thread identity is missing for this session and multiple sessions share this directory. Start a new session instead.')
       }
-      if (selectionSource && selectionSource !== 'stored') {
+
+      if (selectionSource && selectionSource !== 'stored' && providerSessionId) {
         console.log(`[session:resume] Recovered Codex thread: ${providerSessionId} via ${selectionSource}`)
         persistCodexSessionIdentity(
           db,
@@ -2044,7 +2050,7 @@ export async function resumeSession(
           providerSessionId,
           selectionSource
         )
-      } else if (isHeuristicCodexThreadSource(session.provider_session_source as string | null | undefined)) {
+      } else if (providerSessionId && isHeuristicCodexThreadSource(session.provider_session_source as string | null | undefined)) {
         persistCodexSessionIdentity(db, sessionId, providerSessionId, 'stored')
       }
 
@@ -2053,16 +2059,24 @@ export async function resumeSession(
         model: resolvedModel
       })
 
-      args = providerSessionId ? ['resume', providerSessionId, ...baseArgs] : baseArgs
       if (providerSessionId) {
+        args = ['resume', providerSessionId, ...baseArgs]
         db.updateSession(sessionId, {
           provider_session_validated_at: Math.floor(Date.now() / 1000),
           resume_status: 'ready',
           resume_reason: null
         })
         console.log(`[session:resume] ${sessionId}: provider=codex mode=resume source=${selectionSource || 'none'} target=${providerSessionId} cwd=${cwd}`)
+      } else {
+        // Fallback to --last if we are safe to recover by CWD
+        args = ['resume', '--last', ...baseArgs]
+        db.updateSession(sessionId, {
+          resume_status: 'ready',
+          resume_reason: 'Resuming latest thread via --last'
+        })
+        console.log(`[session:resume] ${sessionId}: provider=codex mode=resume source=fallback-last target=--last cwd=${cwd}`)
       }
-      if (providerSessionId) trackResume(sessionId)
+      trackResume(sessionId)
     } else {
       args = runner.getArgs({
         bypassPermissions: session.bypass_permissions !== 0,

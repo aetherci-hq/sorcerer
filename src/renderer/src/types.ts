@@ -82,7 +82,7 @@ export interface ProviderSubAgent {
 
 export interface ExternalSessionImportCandidate {
   id: string
-  provider: 'claude' | 'codex'
+  provider: string
   providerSessionId: string
   title: string
   cwd: string

@@ -2532,10 +2532,37 @@ select.dialog-input option {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  flex-wrap: wrap;
+}
+
+.import-sessions-toolbar__controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  flex: 1 1 360px;
 }
 
 .import-sessions-toggle-all {
   margin: 0;
+  margin-left: auto;
+}
+
+.import-sessions-toolbar__filter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.import-sessions-toolbar__filter-label {
+  font-size: 11px;
+  color: var(--text-dim);
+  line-height: 1;
+}
+
+.import-sessions-toolbar__filter .dialog-select {
+  min-width: 168px;
 }
 
 .import-sessions-list {
@@ -2593,8 +2620,20 @@ select.dialog-input option {
 }
 
 .import-session-card__topline,
-.import-session-card__meta,
 .import-session-card__footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.import-session-card__meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.import-session-card__meta-row {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -2627,11 +2666,15 @@ select.dialog-input option {
   color: #0f766e;
 }
 
-.import-session-card__meta,
+.import-session-card__meta-row,
 .import-session-card__footer {
   font-size: 11px;
   color: var(--text-secondary);
   line-height: 1.4;
+}
+
+.import-session-card__meta-row--timestamps {
+  color: var(--text-dim);
 }
 
 .import-session-card__path,
