@@ -1,0 +1,848 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Status Signal — Concept</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  /* ── Reset ── */
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  /* ── Tokens ── */
+  :root {
+    --bg-root:       #111114;
+    --bg-sidebar:    #18181c;
+    --bg-hover:      #232329;
+    --bg-active:     #2a2a32;
+    --bg-elevated:   #28282f;
+    --border-subtle: #2a2a32;
+    --border-medium: #353540;
+    --text-primary:  #e8e6e3;
+    --text-secondary:#9b9a97;
+    --text-tertiary: #6b6a68;
+    --text-muted:    #4a4a4f;
+    --accent:        #e2a445;
+    --accent-dim:    #c48a2a;
+    --accent-glow:   rgba(226, 164, 69, 0.12);
+    --signal-color:  #e8e6e3;
+    --font-body:     'DM Sans', system-ui, sans-serif;
+    --font-display:  'Instrument Serif', Georgia, serif;
+    --font-mono:     'JetBrains Mono', monospace;
+  }
+
+  body {
+    background: var(--bg-root);
+    color: var(--text-primary);
+    font-family: var(--font-body);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 60px 40px 80px;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ── Layout ── */
+  .page { max-width: 900px; width: 100%; }
+
+  .header {
+    margin-bottom: 64px;
+    padding-bottom: 48px;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .header h1 {
+    font-family: var(--font-display);
+    font-size: 42px;
+    font-weight: 400;
+    letter-spacing: -0.5px;
+    line-height: 1.1;
+    margin-bottom: 16px;
+  }
+
+  .header h1 em {
+    font-style: italic;
+    color: var(--accent);
+  }
+
+  .header p {
+    font-size: 15px;
+    line-height: 1.7;
+    color: var(--text-secondary);
+    max-width: 600px;
+  }
+
+  .section {
+    margin-bottom: 64px;
+  }
+
+  .section-label {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--text-tertiary);
+    margin-bottom: 24px;
+  }
+
+  /* ══════════════════════════════════
+     SIGNAL INDICATORS — The New System
+     ══════════════════════════════════ */
+
+  /*
+   * Philosophy: Shape + Motion > Color coding
+   *
+   * Active  → radiating ring (sonar ping) — "broadcasting"
+   * Idle    → horizontal dash — "at rest"
+   * Waiting → spinning arc — "processing"
+   * Starting → breathing dot — "coming alive"
+   * Archived → faint hollow ring — "record exists"
+   *
+   * All use the same warm white/accent color.
+   * No traffic lights. No color memorization.
+   */
+
+  .signal {
+    position: relative;
+    width: 10px;
+    height: 10px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  /* ── ACTIVE: Radiating ping ── */
+  .signal--active .signal-core {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--signal-color);
+    box-shadow: 0 0 8px rgba(232, 230, 227, 0.3);
+    position: relative;
+  }
+
+  .signal--active .signal-ring {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .signal--active .signal-ring::after {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    border: 1px solid var(--signal-color);
+    animation: signal-radiate 2.4s cubic-bezier(0.25, 0.46, 0.45, 0.94) infinite;
+  }
+
+  @keyframes signal-radiate {
+    0% {
+      transform: scale(1);
+      opacity: 0.5;
+    }
+    80% {
+      transform: scale(2.8);
+      opacity: 0;
+    }
+    100% {
+      transform: scale(2.8);
+      opacity: 0;
+    }
+  }
+
+  /* ── IDLE: Horizontal dash ── */
+  .signal--idle .signal-core {
+    width: 8px;
+    height: 2px;
+    border-radius: 1px;
+    background: var(--text-tertiary);
+  }
+
+  /* ── WAITING: Spinning arc ── */
+  .signal--waiting .signal-core {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    border: 1.5px solid transparent;
+    border-top-color: var(--signal-color);
+    border-right-color: rgba(232, 230, 227, 0.2);
+    animation: signal-spin 1.2s linear infinite;
+    box-sizing: border-box;
+  }
+
+  @keyframes signal-spin {
+    to { transform: rotate(360deg); }
+  }
+
+  /* ── STARTING: Breathing dot ── */
+  .signal--starting .signal-core {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--signal-color);
+    animation: signal-breathe 1.4s ease-in-out infinite;
+  }
+
+  @keyframes signal-breathe {
+    0%, 100% {
+      opacity: 0.35;
+      transform: scale(0.8);
+    }
+    50% {
+      opacity: 1;
+      transform: scale(1.1);
+    }
+  }
+
+  /* ── ARCHIVED: Faint hollow ring ── */
+  .signal--archived .signal-core {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    border: 1px solid var(--text-muted);
+    box-sizing: border-box;
+    opacity: 0.6;
+  }
+
+
+  /* ══════════════════════
+     SHOWCASE: Indicator Row
+     ══════════════════════ */
+  .showcase {
+    display: flex;
+    gap: 48px;
+    flex-wrap: wrap;
+  }
+
+  .showcase-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+  }
+
+  .showcase-indicator {
+    width: 48px;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg-sidebar);
+    border: 1px solid var(--border-subtle);
+    border-radius: 10px;
+  }
+
+  /* Scale up in showcase for visibility */
+  .showcase-indicator .signal {
+    transform: scale(2.2);
+  }
+
+  .showcase-label {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    letter-spacing: 0.3px;
+  }
+
+  .showcase-desc {
+    font-size: 12px;
+    color: var(--text-tertiary);
+    max-width: 100px;
+    text-align: center;
+    line-height: 1.4;
+  }
+
+
+  /* ══════════════════════
+     MOCK SIDEBAR
+     ══════════════════════ */
+  .sidebar-mock {
+    width: 280px;
+    background: var(--bg-sidebar);
+    border-radius: 12px;
+    border: 1px solid var(--border-subtle);
+    padding: 16px 0;
+    overflow: hidden;
+  }
+
+  .sidebar-section-label {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 1.2px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    padding: 8px 16px 6px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .sidebar-section-label .count {
+    font-size: 9px;
+    background: var(--bg-hover);
+    padding: 1px 6px;
+    border-radius: 4px;
+    color: var(--text-tertiary);
+  }
+
+  .mock-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 16px;
+    cursor: default;
+    transition: background 0.15s ease;
+    position: relative;
+  }
+
+  .mock-item:hover {
+    background: var(--bg-hover);
+  }
+
+  .mock-item--active {
+    background: var(--bg-active);
+  }
+
+  .mock-item--active::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 5px;
+    bottom: 5px;
+    width: 2px;
+    background: var(--accent);
+    border-radius: 2px;
+  }
+
+  .mock-item--archived {
+    opacity: 0.5;
+  }
+
+  .mock-icon {
+    width: 14px;
+    height: 14px;
+    color: var(--text-tertiary);
+    flex-shrink: 0;
+  }
+
+  .mock-label {
+    font-size: 13px;
+    font-weight: 400;
+    color: var(--text-primary);
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .mock-item--archived .mock-label {
+    text-decoration: line-through;
+    text-decoration-color: var(--text-muted);
+  }
+
+  .mock-sublabel {
+    font-size: 11px;
+    color: var(--text-tertiary);
+    margin-left: 4px;
+  }
+
+  .mock-divider {
+    height: 1px;
+    background: var(--border-subtle);
+    margin: 8px 16px;
+  }
+
+
+  /* ══════════════════════
+     COMPARISON
+     ══════════════════════ */
+  .comparison {
+    display: flex;
+    gap: 32px;
+    flex-wrap: wrap;
+  }
+
+  .comparison-col {
+    flex: 1;
+    min-width: 280px;
+  }
+
+  .comparison-label {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 1.2px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 16px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  /* Old dots (for comparison) */
+  .old-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .old-dot--active {
+    background: #5ec269;
+    box-shadow: 0 0 6px rgba(94, 194, 105, 0.35);
+  }
+  .old-dot--idle {
+    background: #e2a445;
+    box-shadow: 0 0 6px rgba(226, 164, 69, 0.3);
+  }
+  .old-dot--waiting {
+    background: #5ba4e6;
+    box-shadow: 0 0 6px rgba(91, 164, 230, 0.3);
+    animation: old-pulse 2s ease-in-out infinite;
+  }
+  .old-dot--archived {
+    background: #6b6a68;
+  }
+  @keyframes old-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+  }
+
+
+  /* ══════════════════════
+     PRINCIPLES
+     ══════════════════════ */
+  .principles {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 20px;
+  }
+
+  .principle {
+    padding: 20px;
+    background: var(--bg-sidebar);
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+  }
+
+  .principle-title {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.5px;
+    color: var(--accent);
+    margin-bottom: 8px;
+  }
+
+  .principle-body {
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--text-secondary);
+  }
+
+  /* ══════════════════════
+     STATUS BAR MOCK
+     ══════════════════════ */
+  .status-bar-mock {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    background: var(--bg-sidebar);
+    border: 1px solid var(--border-subtle);
+    border-radius: 6px;
+    font-size: 11px;
+    color: var(--text-secondary);
+    font-family: var(--font-mono);
+    width: fit-content;
+  }
+
+  .status-bar-mock .signal {
+    transform: scale(0.85);
+  }
+
+  .status-bar-mock span {
+    font-weight: 500;
+  }
+
+  /* Collapsed sidebar mock */
+  .collapsed-mock {
+    width: 52px;
+    background: var(--bg-sidebar);
+    border-radius: 12px;
+    border: 1px solid var(--border-subtle);
+    padding: 12px 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .collapsed-dot {
+    width: 32px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    cursor: default;
+    transition: background 0.15s ease;
+  }
+
+  .collapsed-dot:hover {
+    background: var(--bg-hover);
+  }
+
+  .collapsed-dot--active {
+    background: var(--bg-active);
+  }
+
+  .context-row {
+    display: flex;
+    gap: 24px;
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  /* Footer note */
+  .footer-note {
+    margin-top: 32px;
+    padding-top: 32px;
+    border-top: 1px solid var(--border-subtle);
+    font-size: 12px;
+    color: var(--text-muted);
+    line-height: 1.6;
+    font-style: italic;
+    font-family: var(--font-display);
+    font-size: 15px;
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- Header -->
+  <header class="header">
+    <h1>Status <em>Signal</em></h1>
+    <p>
+      Status communicated through shape and motion — not color memorization.
+      One color family. Distinct silhouettes. Animation means alive, stillness means not.
+      The shape tells you what kind of alive.
+    </p>
+  </header>
+
+
+  <!-- Design Principles -->
+  <section class="section">
+    <div class="section-label">Design Principles</div>
+    <div class="principles">
+      <div class="principle">
+        <div class="principle-title">Shape as language</div>
+        <div class="principle-body">Each state has a distinct silhouette. You never need to decode a color — the form tells you.</div>
+      </div>
+      <div class="principle">
+        <div class="principle-title">Motion as vitality</div>
+        <div class="principle-body">If it moves, it's alive. The type of motion tells you what it's doing. No motion means at rest.</div>
+      </div>
+      <div class="principle">
+        <div class="principle-title">Monochromatic</div>
+        <div class="principle-body">One warm neutral tone at varying intensities. No traffic light palette. No color memorization required.</div>
+      </div>
+      <div class="principle">
+        <div class="principle-title">Peripheral legibility</div>
+        <div class="principle-body">Scannable in peripheral vision. Active items catch the eye through motion; everything else recedes.</div>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- Indicator Showcase -->
+  <section class="section">
+    <div class="section-label">The Five States</div>
+    <div class="showcase">
+
+      <div class="showcase-item">
+        <div class="showcase-indicator">
+          <div class="signal signal--active">
+            <span class="signal-core"></span>
+            <span class="signal-ring"></span>
+          </div>
+        </div>
+        <div class="showcase-label">Active</div>
+        <div class="showcase-desc">Radiating ping. Broadcasting. Alive.</div>
+      </div>
+
+      <div class="showcase-item">
+        <div class="showcase-indicator">
+          <div class="signal signal--idle">
+            <span class="signal-core"></span>
+          </div>
+        </div>
+        <div class="showcase-label">Idle</div>
+        <div class="showcase-desc">Flat dash. At rest. Session ended.</div>
+      </div>
+
+      <div class="showcase-item">
+        <div class="showcase-indicator">
+          <div class="signal signal--waiting">
+            <span class="signal-core"></span>
+          </div>
+        </div>
+        <div class="showcase-label">Waiting</div>
+        <div class="showcase-desc">Spinning arc. Processing. Thinking.</div>
+      </div>
+
+      <div class="showcase-item">
+        <div class="showcase-indicator">
+          <div class="signal signal--starting">
+            <span class="signal-core"></span>
+          </div>
+        </div>
+        <div class="showcase-label">Starting</div>
+        <div class="showcase-desc">Breathing dot. Coming alive.</div>
+      </div>
+
+      <div class="showcase-item">
+        <div class="showcase-indicator">
+          <div class="signal signal--archived">
+            <span class="signal-core"></span>
+          </div>
+        </div>
+        <div class="showcase-label">Archived</div>
+        <div class="showcase-desc">Hollow ring. Faint. Historical.</div>
+      </div>
+
+    </div>
+  </section>
+
+
+  <!-- In Context: Sidebar -->
+  <section class="section">
+    <div class="section-label">In Context</div>
+    <div class="context-row">
+
+      <!-- Expanded sidebar -->
+      <div class="sidebar-mock">
+        <div class="sidebar-section-label">Agents <span class="count">2</span></div>
+
+        <div class="mock-item mock-item--active">
+          <svg class="mock-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="3"/></svg>
+          <span class="mock-label">Code Review Agent</span>
+          <div class="signal signal--active">
+            <span class="signal-core"></span>
+            <span class="signal-ring"></span>
+          </div>
+        </div>
+
+        <div class="mock-item">
+          <svg class="mock-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="3"/></svg>
+          <span class="mock-label">Test Runner</span>
+          <div class="signal signal--idle">
+            <span class="signal-core"></span>
+          </div>
+        </div>
+
+        <div class="mock-divider"></div>
+        <div class="sidebar-section-label">Projects <span class="count">2</span></div>
+
+        <div class="mock-item" style="padding-left: 16px;">
+          <svg class="mock-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
+          <span class="mock-label">sorcerer</span>
+        </div>
+
+        <div class="mock-item mock-item--active" style="padding-left: 32px;">
+          <svg class="mock-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+          <span class="mock-label">status-dots-update</span>
+          <div class="signal signal--active">
+            <span class="signal-core"></span>
+            <span class="signal-ring"></span>
+          </div>
+        </div>
+
+        <div class="mock-item" style="padding-left: 32px;">
+          <svg class="mock-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+          <span class="mock-label">feature-auth</span>
+          <div class="signal signal--waiting">
+            <span class="signal-core"></span>
+          </div>
+        </div>
+
+        <div class="mock-item" style="padding-left: 32px;">
+          <svg class="mock-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+          <span class="mock-label">landing-page</span>
+          <div class="signal signal--idle">
+            <span class="signal-core"></span>
+          </div>
+        </div>
+
+        <div class="mock-item mock-item--archived" style="padding-left: 32px;">
+          <svg class="mock-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+          <span class="mock-label">old-prototype</span>
+          <div class="signal signal--archived">
+            <span class="signal-core"></span>
+          </div>
+        </div>
+
+        <div class="mock-divider"></div>
+
+        <div class="mock-item" style="padding-left: 16px;">
+          <svg class="mock-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
+          <span class="mock-label">webapp</span>
+        </div>
+
+        <div class="mock-item" style="padding-left: 32px;">
+          <svg class="mock-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+          <span class="mock-label">api-refactor</span>
+          <div class="signal signal--starting">
+            <span class="signal-core"></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Collapsed sidebar -->
+      <div class="collapsed-mock">
+        <div class="collapsed-dot collapsed-dot--active">
+          <div class="signal signal--active">
+            <span class="signal-core"></span>
+            <span class="signal-ring"></span>
+          </div>
+        </div>
+        <div class="collapsed-dot">
+          <div class="signal signal--waiting">
+            <span class="signal-core"></span>
+          </div>
+        </div>
+        <div class="collapsed-dot">
+          <div class="signal signal--idle">
+            <span class="signal-core"></span>
+          </div>
+        </div>
+        <div class="collapsed-dot">
+          <div class="signal signal--archived">
+            <span class="signal-core"></span>
+          </div>
+        </div>
+        <div class="collapsed-dot">
+          <div class="signal signal--idle">
+            <span class="signal-core"></span>
+          </div>
+        </div>
+        <div class="collapsed-dot">
+          <div class="signal signal--starting">
+            <span class="signal-core"></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Status bar -->
+      <div style="display: flex; flex-direction: column; gap: 10px;">
+        <div class="section-label" style="margin-bottom: 0;">Status Bar</div>
+        <div class="status-bar-mock">
+          <div class="signal signal--active">
+            <span class="signal-core"></span>
+            <span class="signal-ring"></span>
+          </div>
+          <span>Session: Active</span>
+        </div>
+        <div class="status-bar-mock">
+          <div class="signal signal--waiting">
+            <span class="signal-core"></span>
+          </div>
+          <span>Agent: Waiting</span>
+        </div>
+        <div class="status-bar-mock">
+          <div class="signal signal--idle">
+            <span class="signal-core"></span>
+          </div>
+          <span>Session: Idle</span>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+
+  <!-- Before / After Comparison -->
+  <section class="section">
+    <div class="section-label">Before &amp; After</div>
+    <div class="comparison">
+      <div class="comparison-col">
+        <div class="comparison-label">Before — Traffic Light Dots</div>
+        <div class="sidebar-mock">
+          <div class="mock-item mock-item--active">
+            <svg class="mock-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+            <span class="mock-label">status-dots-update</span>
+            <span class="old-dot old-dot--active"></span>
+          </div>
+          <div class="mock-item">
+            <svg class="mock-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+            <span class="mock-label">feature-auth</span>
+            <span class="old-dot old-dot--waiting"></span>
+          </div>
+          <div class="mock-item">
+            <svg class="mock-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+            <span class="mock-label">landing-page</span>
+            <span class="old-dot old-dot--idle"></span>
+          </div>
+          <div class="mock-item mock-item--archived">
+            <svg class="mock-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+            <span class="mock-label">old-prototype</span>
+            <span class="old-dot old-dot--archived"></span>
+          </div>
+        </div>
+      </div>
+
+      <div class="comparison-col">
+        <div class="comparison-label">After — Signal Indicators</div>
+        <div class="sidebar-mock">
+          <div class="mock-item mock-item--active">
+            <svg class="mock-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+            <span class="mock-label">status-dots-update</span>
+            <div class="signal signal--active">
+              <span class="signal-core"></span>
+              <span class="signal-ring"></span>
+            </div>
+          </div>
+          <div class="mock-item">
+            <svg class="mock-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+            <span class="mock-label">feature-auth</span>
+            <div class="signal signal--waiting">
+              <span class="signal-core"></span>
+            </div>
+          </div>
+          <div class="mock-item">
+            <svg class="mock-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+            <span class="mock-label">landing-page</span>
+            <div class="signal signal--idle">
+              <span class="signal-core"></span>
+            </div>
+          </div>
+          <div class="mock-item mock-item--archived">
+            <svg class="mock-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+            <span class="mock-label">old-prototype</span>
+            <div class="signal signal--archived">
+              <span class="signal-core"></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+
+  <div class="footer-note">
+    Shape tells you the state. Motion tells you it's alive. No color code to memorize.
+  </div>
+
+</div>
+</body>
+</html>
