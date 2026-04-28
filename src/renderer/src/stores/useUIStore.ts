@@ -173,6 +173,15 @@ function updateLeafSession(node: SplitNode, leafId: string, sessionId: string | 
   }
 }
 
+function assignLeafSession(node: SplitNode, leafId: string, sessionId: string | null): SplitNode {
+  if (sessionId === null) {
+    return updateLeafSession(node, leafId, null)
+  }
+
+  const clearedTree = clearSessionFromTree(node, sessionId)
+  return updateLeafSession(clearedTree, leafId, sessionId)
+}
+
 export function clearSessionFromTree(node: SplitNode, sessionId: string): SplitNode {
   if (node.type === 'leaf') {
     return node.sessionId === sessionId ? { ...node, sessionId: null } : node
@@ -462,7 +471,7 @@ export const useUIStore = create<UIState>()(
       setPanelSession: (panelId, sessionId) => {
         const state = get()
         if (!state.splitRoot) return
-        set({ splitRoot: updateLeafSession(state.splitRoot, panelId, sessionId) })
+        set({ splitRoot: assignLeafSession(state.splitRoot, panelId, sessionId) })
       },
 
       toggleMaximizePanel: (panelId) => {
