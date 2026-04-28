@@ -385,6 +385,32 @@ export function selectCodexThreadForAnchor(
   return anchoredMatches[0]?.id || null
 }
 
+export function selectStrictCodexThreadForAnchor(
+  matches: Array<{ id: string; created_at: number; updated_at: number }>,
+  anchorAt?: number | null
+): string | null {
+  if (matches.length === 0 || !anchorAt) return null
+
+  const strictWindowSeconds = 15
+  const anchoredMatches = matches
+    .map((match) => ({
+      ...match,
+      distance: Math.abs(match.created_at - anchorAt)
+    }))
+    .filter((match) => match.distance <= strictWindowSeconds)
+    .sort((left, right) => {
+      if (left.distance !== right.distance) return left.distance - right.distance
+      return right.updated_at - left.updated_at
+    })
+
+  if (anchoredMatches.length === 0) return null
+  if (anchoredMatches.length > 1 && anchoredMatches[0].distance === anchoredMatches[1].distance) {
+    return null
+  }
+
+  return anchoredMatches[0]?.id || null
+}
+
 function isHeuristicCodexThreadSource(source: string | null | undefined): boolean {
   return source === 'cwd-recovery' || source === 'resume-discovery'
 }
@@ -716,7 +742,7 @@ export async function resolveCodexExitThreadIdentity(
 ): Promise<{ providerSessionId: string | null; source: 'exit-output' | 'cwd-recovery' | 'resume-discovery' | null }> {
   const extractedThreadId = extractCodexThreadIdFromOutput(scrollbackText)
   const threadBelongsToCwd = options.threadBelongsToCwd || codexThreadBelongsToCwd
-  const findThreadIdForCwd = options.findThreadIdForCwd || findCodexThreadIdForCwd
+  const findThreadIdForCwd = options.findThreadIdForCwd || findStrictCodexThreadIdForCwd
 
   const validatedExtractedThreadId =
     extractedThreadId && options.cwd && await threadBelongsToCwd(extractedThreadId, options.cwd)
@@ -724,7 +750,7 @@ export async function resolveCodexExitThreadIdentity(
       : null
 
   const recoveredThreadId =
-    !validatedExtractedThreadId && options.cwd && options.allowCwdRecovery
+    !validatedExtractedThreadId && options.cwd
       ? await findThreadIdForCwd(options.cwd, getCodexRecoveryAnchor(session))
       : null
 
@@ -988,6 +1014,14 @@ export async function findCodexThreadIdForCwd(
   return selectCodexThreadForAnchor(matches, anchorAt)
 }
 
+export async function findStrictCodexThreadIdForCwd(
+  cwd: string,
+  anchorAt?: number | null
+): Promise<string | null> {
+  const matches = await listCodexThreadsForCwd(cwd)
+  return selectStrictCodexThreadForAnchor(matches, anchorAt)
+}
+
 export async function codexThreadBelongsToCwd(threadId: string, cwd: string): Promise<boolean> {
   const matches = await listCodexThreadsForCwd(cwd)
   return matches.some((match) => match.id === threadId)
@@ -1011,39 +1045,17 @@ export async function resolveCodexThreadForSession(
   }
 
   if (storedThreadId && await codexThreadBelongsToCwd(storedThreadId, cwd)) {
-    if (isHeuristicCodexThreadSource(session.provider_session_source as string | null | undefined)) {
-      const anchoredThreadId = await findCodexThreadIdForCwd(cwd, recoveryAnchor)
-      if (anchoredThreadId && anchoredThreadId !== storedThreadId) {
-        return { id: anchoredThreadId, source: 'resume-discovery' }
-      }
-    }
     return { id: storedThreadId, source: 'stored' }
   }
 
-  if (!canRecoverSessionByCwd(db, session)) {
-    return { id: null, source: null }
-  }
-
-  const recoveredThreadId = await findCodexThreadIdForCwd(
-    cwd,
-    recoveryAnchor
-  )
-  if (recoveredThreadId) {
+  const strictRecoveredThreadId =
+    !storedThreadId && !session.provider_session_captured_at
+      ? await findStrictCodexThreadIdForCwd(cwd, recoveryAnchor)
+      : null
+  if (strictRecoveredThreadId) {
     return {
-      id: recoveredThreadId,
+      id: strictRecoveredThreadId,
       source: storedThreadId ? 'resume-discovery' : 'cwd-recovery'
-    }
-  }
-
-  // Fallback: If we are allowed to recover by CWD (meaning this is the only active session for this CWD),
-  // just pick the latest thread found in the Codex DB for this CWD, ignoring the time anchor.
-  if (canRecoverSessionByCwd(db, session)) {
-    const allMatches = await listCodexThreadsForCwd(cwd)
-    if (allMatches.length > 0) {
-      return {
-        id: allMatches[0].id,
-        source: 'cwd-recovery'
-      }
     }
   }
 
@@ -1066,48 +1078,27 @@ export async function reconcileCodexSessions(
 
     const storedThreadId = session.provider_session_id as string | undefined
     if (storedThreadId && await codexThreadBelongsToCwd(storedThreadId, cwd)) {
-      if (isHeuristicCodexThreadSource(session.provider_session_source as string | null | undefined)) {
-        persistCodexSessionIdentity(db, session.id, storedThreadId, 'stored')
-      } else if ((session.resume_status as string | undefined) !== 'ready') {
+      if ((session.resume_status as string | undefined) !== 'ready') {
         markSessionResumeState(db, session.id, 'ready', null)
       }
       continue
     }
 
-    if (!canRecoverSessionByCwd(db, session)) {
-      markSessionResumeState(
-        db,
-        session.id,
-        'degraded',
-        storedThreadId
-          ? 'Codex thread identity could not be revalidated and this session shares a working directory with other sessions.'
-          : 'Codex thread identity is missing and this session shares a working directory with other sessions.'
+    if (!storedThreadId && !session.provider_session_captured_at) {
+      const strictRecoveredThreadId = await findStrictCodexThreadIdForCwd(
+        cwd,
+        getCodexRecoveryAnchor(session)
       )
-      continue
-    }
-
-    let recoveredThreadId = await findCodexThreadIdForCwd(
-      cwd,
-      getCodexRecoveryAnchor(session)
-    )
-
-    // Fallback: If anchor match fails but we are safe to recover by CWD, pick the latest thread
-    if (!recoveredThreadId && canRecoverSessionByCwd(db, session)) {
-      const allMatches = await listCodexThreadsForCwd(cwd)
-      if (allMatches.length > 0) {
-        recoveredThreadId = allMatches[0].id
+      if (strictRecoveredThreadId) {
+        persistCodexSessionIdentity(
+          db,
+          session.id,
+          strictRecoveredThreadId,
+          storedThreadId ? 'resume-discovery' : 'cwd-recovery'
+        )
+        updated++
+        continue
       }
-    }
-
-    if (recoveredThreadId) {
-      persistCodexSessionIdentity(
-        db,
-        session.id,
-        recoveredThreadId,
-        storedThreadId ? 'resume-discovery' : 'cwd-recovery'
-      )
-      updated++
-      continue
     }
 
     markSessionResumeState(
@@ -1116,7 +1107,9 @@ export async function reconcileCodexSessions(
       'degraded',
       storedThreadId
         ? 'Stored Codex thread identity is no longer valid for this working directory.'
-        : 'Codex thread identity is missing for this session.'
+        : canRecoverSessionByCwd(db, session)
+          ? 'Codex thread identity is missing for this session.'
+          : 'Codex thread identity is missing and this session shares a working directory with other sessions.'
     )
   }
 
@@ -2037,12 +2030,18 @@ export async function resumeSession(
       const resolvedThread = await resolveCodexThreadForSession({ db, pty }, sessionId)
       const providerSessionId = resolvedThread.id || undefined
       const selectionSource = resolvedThread.source
-      const allowCwdRecovery = canRecoverSessionByCwd(db, session)
+      const ambiguousCwd = !canRecoverSessionByCwd(db, session)
 
-      if (!providerSessionId && !allowCwdRecovery) {
-        console.log(`[session:resume] No Codex thread id available for ${sessionId} and recovery disabled; blocking resume.`)
-        markSessionResumeState(db, sessionId, 'degraded', 'Codex thread identity missing; resume would be ambiguous.')
-        throw new Error('Codex thread identity is missing for this session and multiple sessions share this directory. Start a new session instead.')
+      if (!providerSessionId) {
+        if (ambiguousCwd) {
+          console.log(`[session:resume] No Codex thread id available for ${sessionId}; blocking resume because multiple sessions share this cwd.`)
+          markSessionResumeState(db, sessionId, 'degraded', 'Codex thread identity is missing and this session shares a working directory with other sessions.')
+          throw new Error('Codex thread identity is missing for this session and multiple sessions share this directory. Start a new session instead.')
+        }
+
+        console.log(`[session:resume] No Codex thread id available for ${sessionId}; blocking resume because no canonical thread was captured.`)
+        markSessionResumeState(db, sessionId, 'degraded', 'Codex thread identity is missing for this session.')
+        throw new Error('Codex thread identity is missing for this session. Start a new session instead.')
       }
 
       if (selectionSource && selectionSource !== 'stored' && providerSessionId) {
@@ -2062,22 +2061,14 @@ export async function resumeSession(
         model: resolvedModel
       })
 
+      args = ['resume', providerSessionId, ...baseArgs]
       if (providerSessionId) {
-        args = ['resume', providerSessionId, ...baseArgs]
         db.updateSession(sessionId, {
           provider_session_validated_at: Math.floor(Date.now() / 1000),
           resume_status: 'ready',
           resume_reason: null
         })
         console.log(`[session:resume] ${sessionId}: provider=codex mode=resume source=${selectionSource || 'none'} target=${providerSessionId} cwd=${cwd}`)
-      } else {
-        // Fallback to --last if we are safe to recover by CWD
-        args = ['resume', '--last', ...baseArgs]
-        db.updateSession(sessionId, {
-          resume_status: 'ready',
-          resume_reason: 'Resuming latest thread via --last'
-        })
-        console.log(`[session:resume] ${sessionId}: provider=codex mode=resume source=fallback-last target=--last cwd=${cwd}`)
       }
       trackResume(sessionId)
     } else {

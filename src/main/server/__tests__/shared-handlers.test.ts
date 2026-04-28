@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { canRecoverSessionByCwd, getCodexRecoveryAnchor, getImportedCodexSessionState, persistCodexSessionIdentity, resolveCodexExitThreadIdentity, resolveCodexSubAgentRow, resolveSessionWorkingDirectory, selectCodexThreadForAnchor } from '../../ipc/shared-handlers'
+import { canRecoverSessionByCwd, getCodexRecoveryAnchor, getImportedCodexSessionState, persistCodexSessionIdentity, resolveCodexExitThreadIdentity, resolveCodexSubAgentRow, resolveSessionWorkingDirectory, selectCodexThreadForAnchor, selectStrictCodexThreadForAnchor } from '../../ipc/shared-handlers'
 
 describe('Codex session recovery helpers', () => {
   it('prefers the thread closest to the session creation time', () => {
@@ -20,6 +20,31 @@ describe('Codex session recovery helpers', () => {
       [
         { id: 'older', created_at: 1776635886, updated_at: 1776636263 },
         { id: 'newer', created_at: 1776647153, updated_at: 1776647294 }
+      ],
+      1776642201
+    )
+
+    expect(selected).toBeNull()
+  })
+
+  it('allows strict anchor recovery when one thread is an unambiguous near-exact match', () => {
+    const selected = selectStrictCodexThreadForAnchor(
+      [
+        { id: 'older', created_at: 1776635886, updated_at: 1776636263 },
+        { id: 'exactish', created_at: 1776642202, updated_at: 1776646955 },
+        { id: 'newer', created_at: 1776647153, updated_at: 1776647294 }
+      ],
+      1776642201
+    )
+
+    expect(selected).toBe('exactish')
+  })
+
+  it('refuses strict anchor recovery when the closest near-start matches are tied', () => {
+    const selected = selectStrictCodexThreadForAnchor(
+      [
+        { id: 'left', created_at: 1776642199, updated_at: 1776646955 },
+        { id: 'right', created_at: 1776642203, updated_at: 1776647294 }
       ],
       1776642201
     )

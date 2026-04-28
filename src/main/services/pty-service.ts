@@ -189,6 +189,35 @@ export class PTYService {
     }
   }
 
+  async killAllAndWait(timeoutMs = 1500): Promise<void> {
+    const sessionIds = Array.from(this.sessions.keys())
+    if (sessionIds.length === 0) return
+
+    await Promise.all(sessionIds.map((sessionId) => this.killAndWait(sessionId, timeoutMs)))
+  }
+
+  private killAndWait(sessionId: string, timeoutMs: number): Promise<void> {
+    if (!this.sessions.has(sessionId)) return Promise.resolve()
+
+    return new Promise((resolve) => {
+      let settled = false
+      const finish = () => {
+        if (settled) return
+        settled = true
+        clearTimeout(timer)
+        this.removeExitListener(handleExit)
+        resolve()
+      }
+      const handleExit = (exitedSessionId: string) => {
+        if (exitedSessionId === sessionId) finish()
+      }
+      const timer = setTimeout(finish, timeoutMs)
+
+      this.onExit(handleExit)
+      this.kill(sessionId)
+    })
+  }
+
   isRunning(sessionId: string): boolean {
     return this.sessions.has(sessionId)
   }

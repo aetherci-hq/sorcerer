@@ -9,7 +9,7 @@ import { WorktreeService } from './services/worktree-service'
 import { FileWatcherService } from './services/file-watcher-service'
 import { PopoutService } from './services/popout-service'
 import { registerIPC } from './ipc/handlers'
-import { syncWorktrees, checkResumeFailed, canRecoverSessionByCwd, persistCodexSessionIdentity, markSessionResumeState, reconcileCodexSessions, resolveCodexThreadForSession, persistSessionExitSummary, resolveSessionWorkingDirectory, resolveCodexExitThreadIdentity } from './ipc/shared-handlers'
+import { syncWorktrees, checkResumeFailed, canRecoverSessionByCwd, persistCodexSessionIdentity, markSessionResumeState, reconcileCodexSessions, persistSessionExitSummary, resolveSessionWorkingDirectory, resolveCodexExitThreadIdentity, extractCodexThreadIdFromOutput, codexThreadBelongsToCwd } from './ipc/shared-handlers'
 import { AgentOrchestrator } from './services/agent-orchestrator'
 import { refreshProviders as refreshProviderRegistry } from './services/provider-registry'
 
@@ -165,20 +165,20 @@ async function createWindow(): Promise<void> {
     if (!session || session.provider !== 'codex' || session.type === 'quick-terminal') return
 
     void (async () => {
-      const resolvedThread = await resolveCodexThreadForSession({ db: dbService, pty: ptyService }, sessionId)
-      if (!resolvedThread.id) return
+      const scrollbackText = ptyService.scrollback.getScrollback(sessionId)
+      const extractedThreadId = extractCodexThreadIdFromOutput(scrollbackText)
+      if (!extractedThreadId) return
+      const cwd = resolveSessionWorkingDirectory(dbService, session, { allowProjectFallback: true })
+      if (!cwd) return
+      if (!await codexThreadBelongsToCwd(extractedThreadId, cwd)) return
       if (
-        resolvedThread.id === session.provider_session_id &&
+        extractedThreadId === session.provider_session_id &&
         session.resume_status === 'ready' &&
-        session.provider_session_source !== 'cwd-recovery' &&
-        session.provider_session_source !== 'resume-discovery'
+        session.provider_session_source === 'live-output'
       ) return
 
-      const source = resolvedThread.source === 'scrollback'
-        ? 'live-output'
-        : (resolvedThread.source || 'cwd-recovery')
-      persistCodexSessionIdentity(dbService, sessionId, resolvedThread.id, source)
-      console.log(`[codex-thread] ${sessionId}: captured ${resolvedThread.id} from ${source}`)
+      persistCodexSessionIdentity(dbService, sessionId, extractedThreadId, 'live-output')
+      console.log(`[codex-thread] ${sessionId}: captured ${extractedThreadId} from live-output`)
     })()
   })
 
@@ -482,20 +482,22 @@ app.whenReady().then(() => {
 })
 
 app.on('window-all-closed', () => {
-  // Clean up services
-  if (ptyService) ptyService.killAll()
-  if (fileWatcherService) fileWatcherService.close()
-  if (dbService) dbService.close()
+  void (async () => {
+    // Give PTY exit handlers a brief chance to persist final state before the DB closes.
+    if (ptyService) await ptyService.killAllAndWait()
+    if (fileWatcherService) fileWatcherService.close()
+    if (dbService) dbService.close()
 
-  // Stop remote access server
-  import('./ipc/handlers').then(({ getGlobalApiServer }) => {
-    const server = getGlobalApiServer()
-    if (server) server.stop()
-  }).catch(() => {})
+    // Stop remote access server
+    import('./ipc/handlers').then(({ getGlobalApiServer }) => {
+      const server = getGlobalApiServer()
+      if (server) server.stop()
+    }).catch(() => {})
 
-  if (process.platform !== 'darwin') {
-    app.quit()
-  }
+    if (process.platform !== 'darwin') {
+      app.quit()
+    }
+  })()
 })
 
 // Handle window control IPC
