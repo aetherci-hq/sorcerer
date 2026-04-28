@@ -29,6 +29,26 @@ export function App() {
   useKeyboardShortcuts()
   const [briefingOpen, setBriefingOpen] = useState(false)
   const closeBriefing = useCallback(() => setBriefingOpen(false), [])
+  const sessions = useSessionStore((s) => s.sessions)
+
+  useEffect(() => {
+    const needsResumeRefresh = sessions.some((session) =>
+      session.type !== 'quick-terminal' &&
+      session.provider === 'codex' &&
+      (
+        session.resume_status === 'launching' ||
+        (session.status === 'active' && !session.provider_session_id)
+      )
+    )
+
+    if (!needsResumeRefresh) return
+
+    const interval = setInterval(() => {
+      void useSessionStore.getState().loadSessions()
+    }, 3000)
+
+    return () => clearInterval(interval)
+  }, [sessions])
 
   useEffect(() => {
     // Set platform class on <html> for OS-specific CSS (e.g. macOS traffic lights)

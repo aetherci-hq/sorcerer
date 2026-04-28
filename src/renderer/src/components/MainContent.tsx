@@ -23,7 +23,16 @@ function IdleSessionPanel({ session }: { session: Session }) {
 
   useEffect(() => {
     getApi().session.resumeHealth(session.id).then(setResumeHealth).catch(() => setResumeHealth(null))
-  }, [session.id])
+  }, [
+    session.id,
+    session.worktree_path,
+    session.provider,
+    session.status,
+    session.provider_session_id,
+    session.provider_session_source,
+    session.resume_status,
+    session.resume_reason
+  ])
 
   useEffect(() => {
     if (!showDiagnostics) return

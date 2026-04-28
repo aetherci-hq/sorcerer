@@ -56,12 +56,24 @@ describe('Codex session recovery helpers', () => {
   it('ignores quick terminals when deciding if cwd recovery is ambiguous', () => {
     const db = {
       listSessions: () => [
-        { id: 'session-1', worktree_path: 'C:\\repo', status: 'idle', type: 'session' },
+        { id: 'session-1', worktree_path: 'C:\\repo', status: 'idle', type: 'session', provider: 'claude' },
         { id: 'terminal-1', worktree_path: 'C:\\repo', status: 'idle', type: 'quick-terminal' }
       ]
     }
 
     expect(canRecoverSessionByCwd(db as any, db.listSessions()[0])).toBe(true)
+  })
+
+  it('ignores same-cwd sessions from other providers when deciding if recovery is ambiguous', () => {
+    const db = {
+      listSessions: () => [
+        { id: 'session-1', worktree_path: 'C:\\repo', status: 'idle', type: 'session', provider: 'claude' },
+        { id: 'session-2', worktree_path: 'C:\\repo', status: 'idle', type: 'session', provider: 'codex' }
+      ]
+    }
+
+    expect(canRecoverSessionByCwd(db as any, db.listSessions()[0])).toBe(true)
+    expect(canRecoverSessionByCwd(db as any, db.listSessions()[1])).toBe(true)
   })
 
   it('refuses project-root fallback when the missing worktree points somewhere else', () => {

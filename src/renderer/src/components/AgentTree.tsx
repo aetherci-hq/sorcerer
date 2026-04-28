@@ -268,7 +268,7 @@ function AgentItem({ agent, staggerClass }: { agent: Agent; staggerClass?: strin
           ) : (
             <>
               <span className="tree-label" onDoubleClick={handleDoubleClick}>{agent.name}</span>
-              {showProviderBadges && agent.provider && agent.provider !== 'claude' && (
+              {showProviderBadges && agent.provider && (
                 <span className="teammate-badge" style={{ fontSize: '9px' }}>{agent.provider}</span>
               )}
               {agent.description && (

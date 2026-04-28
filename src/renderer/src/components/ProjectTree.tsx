@@ -473,7 +473,7 @@ function SessionItem({
             ) : (
               <span className="tree-label" onDoubleClick={handleDoubleClick}>{session.name}</span>
             )}
-            {showProviderBadges && session.provider && session.provider !== 'claude' && (
+            {showProviderBadges && session.provider && (
               <span className="teammate-badge" style={{ fontSize: '9px' }}>{session.provider}</span>
             )}
             {isMainRepo && session.branch && !isRenaming && (
@@ -598,7 +598,17 @@ function ProjectItem({ project, staggerClass, projectIndex, onDragStart: onProje
   const [providerSubAgentsBySession, setProviderSubAgentsBySession] = useState<Record<string, ProviderSubAgent[]>>({})
   const [subAgentClock, setSubAgentClock] = useState(() => Date.now())
   const resumeHealthKey = projectSessions
-    .map((session) => `${session.id}:${session.status}:${session.provider || ''}:${session.started_at || 0}:${session.worktree_path}`)
+    .map((session) => [
+      session.id,
+      session.status,
+      session.provider || '',
+      session.started_at || 0,
+      session.worktree_path,
+      session.provider_session_id || '',
+      session.provider_session_source || '',
+      session.resume_status || '',
+      session.resume_reason || ''
+    ].join(':'))
     .join('|')
   const providerSubAgentKey = projectSessions
     .filter((session) => session.provider === 'codex' && session.type !== 'quick-terminal')

@@ -392,12 +392,15 @@ function isHeuristicCodexThreadSource(source: string | null | undefined): boolea
 export function canRecoverSessionByCwd(db: DatabaseService, session: any): boolean {
   const cwd = session?.worktree_path as string | undefined
   if (!cwd) return false
+  const provider = String(session?.provider || 'claude')
 
   const normalizedCwd = normalizeComparablePath(cwd)
   const otherSessionsUsingCwd = db.listSessions().filter((candidate: any) => {
     if (!candidate || candidate.id === session.id) return false
     if (candidate.status === 'deleted' || candidate.status === 'archived') return false
     if (candidate.type === 'quick-terminal') return false
+    const candidateProvider = String(candidate.provider || 'claude')
+    if (candidateProvider !== provider) return false
     const candidateCwd = candidate.worktree_path as string | undefined
     if (!candidateCwd) return false
     return normalizeComparablePath(candidateCwd) === normalizedCwd
