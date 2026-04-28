@@ -97,6 +97,25 @@ interface UIState {
 let splitIdCounter = 0
 function nextSplitId(): string { return 'sp_' + (++splitIdCounter) }
 
+function syncSplitIdCounter(node: SplitNode | null): void {
+  if (!node) return
+
+  let maxId = splitIdCounter
+  const visit = (current: SplitNode) => {
+    const match = current.id.match(/^sp_(\d+)$/)
+    if (match) {
+      maxId = Math.max(maxId, Number(match[1]))
+    }
+    if (current.type === 'split') {
+      visit(current.children[0])
+      visit(current.children[1])
+    }
+  }
+
+  visit(node)
+  splitIdCounter = Math.max(splitIdCounter, maxId)
+}
+
 export function findLeaf(node: SplitNode, leafId: string): SplitLeaf | null {
   if (node.type === 'leaf') return node.id === leafId ? node : null
   return findLeaf(node.children[0], leafId) || findLeaf(node.children[1], leafId)
@@ -217,6 +236,11 @@ const setStorage = {
         for (const v of parsed.state.expandedGroups) s.add(v)
         parsed.state.expandedGroups = s
       }
+      if (Array.isArray(parsed.state.poppedOutSessionIds)) {
+        const s = new Set<string>()
+        for (const v of parsed.state.poppedOutSessionIds) s.add(v)
+        parsed.state.poppedOutSessionIds = s
+      }
     }
     return parsed
   },
@@ -231,6 +255,9 @@ const setStorage = {
     }
     if (state.expandedGroups instanceof Set) {
       state.expandedGroups = Array.from(state.expandedGroups as Set<string>)
+    }
+    if (state.poppedOutSessionIds instanceof Set) {
+      state.poppedOutSessionIds = Array.from(state.poppedOutSessionIds as Set<string>)
     }
     localStorage.setItem(name, JSON.stringify({ ...v, state }))
   },
@@ -355,6 +382,7 @@ export const useUIStore = create<UIState>()(
         const state = get()
         const activeId = useSessionStore.getState().activeSessionId
         const direction = 'horizontal' as const
+        syncSplitIdCounter(state.splitRoot)
 
         if (!state.splitRoot) {
           const leftId = nextSplitId()
@@ -398,6 +426,7 @@ export const useUIStore = create<UIState>()(
         const state = get()
         const activeId = useSessionStore.getState().activeSessionId
         const direction = 'vertical' as const
+        syncSplitIdCounter(state.splitRoot)
 
         if (!state.splitRoot) {
           const leftId = nextSplitId()
@@ -514,7 +543,11 @@ export const useUIStore = create<UIState>()(
         sidebarWidth: state.sidebarWidth,
         agentPaneHeight: state.agentPaneHeight,
         showProviderBadges: state.showProviderBadges,
-        sidebarSelection: state.sidebarSelection
+        sidebarSelection: state.sidebarSelection,
+        splitRoot: state.splitRoot,
+        focusedPanelId: state.focusedPanelId,
+        maximizedPanelId: state.maximizedPanelId,
+        poppedOutSessionIds: state.poppedOutSessionIds
       })
     }
   )

@@ -23,13 +23,72 @@ import { useAgentStore } from './stores/useAgentStore'
 import { useTeamStore } from './stores/useTeamStore'
 import { useQuickNotesStore } from './stores/useQuickNotesStore'
 import { useToastStore } from './stores/useToastStore'
-import { useUIStore } from './stores/useUIStore'
+import { useUIStore, findLeaf } from './stores/useUIStore'
+import type { Agent, Session, SplitNode } from './types'
+
+function isQuickNotesPanelId(id: string): boolean {
+  return /^quicknotes:(session|agent):.+$/.test(id)
+}
+
+function panelTargetExists(id: string, sessions: Session[], agents: Agent[]): boolean {
+  if (isQuickNotesPanelId(id)) {
+    const match = id.match(/^quicknotes:(session|agent):(.+)$/)
+    if (!match) return false
+    const [, parentType, parentId] = match
+    return parentType === 'session'
+      ? sessions.some((session) => session.id === parentId)
+      : agents.some((agent) => agent.id === parentId)
+  }
+
+  return sessions.some((session) => session.id === id) || agents.some((agent) => agent.id === id)
+}
+
+function sanitizeSplitNode(node: SplitNode, isValidTarget: (id: string) => boolean): SplitNode {
+  if (node.type === 'leaf') {
+    return node.sessionId && !isValidTarget(node.sessionId)
+      ? { ...node, sessionId: null }
+      : node
+  }
+
+  return {
+    ...node,
+    children: [
+      sanitizeSplitNode(node.children[0], isValidTarget),
+      sanitizeSplitNode(node.children[1], isValidTarget)
+    ]
+  }
+}
+
+function splitTreeHasLeafId(node: SplitNode | null, leafId: string | null): boolean {
+  if (!node || !leafId) return false
+  if (node.type === 'leaf') return node.id === leafId
+  return splitTreeHasLeafId(node.children[0], leafId) || splitTreeHasLeafId(node.children[1], leafId)
+}
+
+function findFirstLeafSessionId(node: SplitNode | null): string | null {
+  if (!node) return null
+  if (node.type === 'leaf') return node.sessionId
+  return findFirstLeafSessionId(node.children[0]) || findFirstLeafSessionId(node.children[1])
+}
+
+function buildPopoutEntityName(panelId: string, sessions: Session[], agents: Agent[]): string | null {
+  const session = sessions.find((entry) => entry.id === panelId)
+  if (session) return session.name
+
+  const agent = agents.find((entry) => entry.id === panelId)
+  if (agent) return agent.name
+
+  return null
+}
 
 export function App() {
   useKeyboardShortcuts()
   const [briefingOpen, setBriefingOpen] = useState(false)
+  const [layoutReady, setLayoutReady] = useState(false)
+  const [layoutRestored, setLayoutRestored] = useState(false)
   const closeBriefing = useCallback(() => setBriefingOpen(false), [])
   const sessions = useSessionStore((s) => s.sessions)
+  const agents = useAgentStore((s) => s.agents)
 
   useEffect(() => {
     const needsResumeRefresh = sessions.some((session) =>
@@ -51,6 +110,48 @@ export function App() {
   }, [sessions])
 
   useEffect(() => {
+    if (!layoutReady || layoutRestored) return
+
+    const validTarget = (id: string) => panelTargetExists(id, sessions, agents)
+    const uiState = useUIStore.getState()
+    const sanitizedSplitRoot = uiState.splitRoot ? sanitizeSplitNode(uiState.splitRoot, validTarget) : null
+    const nextFocusedPanelId = splitTreeHasLeafId(sanitizedSplitRoot, uiState.focusedPanelId)
+      ? uiState.focusedPanelId
+      : null
+    const nextMaximizedPanelId = splitTreeHasLeafId(sanitizedSplitRoot, uiState.maximizedPanelId)
+      ? uiState.maximizedPanelId
+      : null
+    const activeSessionId = useSessionStore.getState().activeSessionId
+
+    useUIStore.setState({
+      splitRoot: sanitizedSplitRoot,
+      focusedPanelId: nextFocusedPanelId,
+      maximizedPanelId: nextMaximizedPanelId
+    })
+
+    if (sanitizedSplitRoot) {
+      const focusedLeaf = nextFocusedPanelId ? findLeaf(sanitizedSplitRoot, nextFocusedPanelId) : null
+      useSessionStore.setState({
+        activeSessionId: focusedLeaf?.sessionId || findFirstLeafSessionId(sanitizedSplitRoot)
+      })
+    } else if (activeSessionId && !validTarget(activeSessionId)) {
+      useSessionStore.setState({ activeSessionId: null })
+    }
+
+    const validPopouts = Array.from(uiState.poppedOutSessionIds).filter((panelId) =>
+      sessions.some((session) => session.id === panelId) || agents.some((agent) => agent.id === panelId)
+    )
+    useUIStore.setState({ poppedOutSessionIds: new Set(validPopouts) })
+
+    for (const panelId of validPopouts) {
+      const entityName = buildPopoutEntityName(panelId, sessions, agents)
+      if (!entityName) continue
+      void getApi().popout.open('terminal', panelId, entityName)
+    }
+    setLayoutRestored(true)
+  }, [layoutReady, layoutRestored, sessions, agents])
+
+  useEffect(() => {
     // Set platform class on <html> for OS-specific CSS (e.g. macOS traffic lights)
     const platform = getApi().system.platform
     if (platform) document.documentElement.dataset.platform = platform
@@ -61,8 +162,8 @@ export function App() {
     const { loadTeams, loadTasks } = useTeamStore.getState()
 
     // Load all data on mount
-    loadAgents()
-    loadAgentGroups().then(() => {
+    const agentsPromise = loadAgents()
+    const agentGroupsPromise = loadAgentGroups().then(() => {
       const agentGroups = useAgentStore.getState().groups
       const { expandedGroups } = useUIStore.getState()
       // Auto-expand agent groups on first load (if no groups are expanded yet)
@@ -75,7 +176,7 @@ export function App() {
         if (added) useUIStore.setState({ expandedGroups: expanded })
       }
     })
-    loadGroups().then(() => {
+    const groupsPromise = loadGroups().then(() => {
       // Auto-expand all groups on first load
       const groups = useProjectStore.getState().groups
       const { expandedGroups } = useUIStore.getState()
@@ -85,8 +186,8 @@ export function App() {
         useUIStore.setState({ expandedGroups: expanded })
       }
     })
-    useQuickNotesStore.getState().loadNotePanels()
-    loadProjects().then(() => {
+    const quickNotesPromise = useQuickNotesStore.getState().loadNotePanels()
+    const projectsPromise = loadProjects().then(() => {
       // Auto-expand all projects on first load
       const projects = useProjectStore.getState().projects
       const { expandedProjects } = useUIStore.getState()
@@ -108,6 +209,15 @@ export function App() {
         for (const s of withTeams) next.add(s.id)
         useUIStore.setState({ expandedSessions: next })
       }
+      return Promise.all([
+        agentsPromise,
+        agentGroupsPromise,
+        groupsPromise,
+        quickNotesPromise,
+        projectsPromise
+      ])
+    }).then(() => {
+      setLayoutReady(true)
     })
 
     // Subscribe to file watcher for team/task updates

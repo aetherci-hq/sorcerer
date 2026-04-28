@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { persist } from 'zustand/middleware'
 import type { Session } from '../types'
 import { useUIStore, findLeaf, findLeafBySession, clearSessionFromTree } from './useUIStore'
 import { useQuickNotesStore } from './useQuickNotesStore'
@@ -29,7 +30,8 @@ interface SessionState {
   updateSessionInStore: (id: string, updates: Partial<Session>) => void
 }
 
-export const useSessionStore = create<SessionState>((set, get) => ({
+export const useSessionStore = create<SessionState>()(
+  persist((set, get) => ({
   sessions: [],
   activeSessionId: null,
   loading: false,
@@ -286,4 +288,11 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       )
     }))
   }
-}))
+}),
+  {
+    name: 'sorcerer-session-store',
+    partialize: (state) => ({
+      activeSessionId: state.activeSessionId
+    })
+  })
+)
