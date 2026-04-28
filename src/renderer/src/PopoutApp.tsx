@@ -1,10 +1,13 @@
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useEffect, useRef, useState, useCallback, type ReactElement } from 'react'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { getApi } from './api/client'
 import { getAppliedTheme, getThemeById, applyTheme, toXtermTheme } from './themes'
-import { GitBranchIcon } from './components/icons'
+import { GitBranchIcon, TerminalIcon, BotIcon, NotesIcon, SplitHorizontalIcon, SplitVerticalIcon, MaximizeIcon, MinimizeIcon } from './components/icons'
+import { QuickNotesPanel, parseQuickNotesPanelId } from './components/QuickNotesPanel'
+import { useQuickNotesStore } from './stores/useQuickNotesStore'
 import type { SorcererTheme } from './themes'
+import type { Agent, Project, Session, SplitBranch, SplitLeaf, SplitNode } from './types'
 import '@xterm/xterm/css/xterm.css'
 
 interface PopoutParams {
@@ -12,24 +15,173 @@ interface PopoutParams {
   panelId: string
   entityName: string
   themeId: string
+  windowId: string
   projectName?: string
   branch?: string
 }
 
+type EntityMap = {
+  sessions: Session[]
+  agents: Agent[]
+  projects: Project[]
+}
+
+let splitIdCounter = 0
+function nextSplitId(): string { return `pw_${++splitIdCounter}` }
+
 function parsePopoutParams(): PopoutParams | null {
   const params = new URLSearchParams(window.location.search)
   const popout = params.get('popout')
-  if (!popout) return null
+  const windowId = params.get('windowId')
+  if (!popout || !windowId) return null
   const colonIdx = popout.indexOf(':')
   if (colonIdx === -1) return null
   return {
     panelType: popout.slice(0, colonIdx),
     panelId: popout.slice(colonIdx + 1),
+    windowId,
     entityName: params.get('name') || 'Sorcerer',
     themeId: params.get('theme') || 'default',
     projectName: params.get('project') || undefined,
     branch: params.get('branch') || undefined
   }
+}
+
+function findLeaf(node: SplitNode, leafId: string): SplitLeaf | null {
+  if (node.type === 'leaf') return node.id === leafId ? node : null
+  return findLeaf(node.children[0], leafId) || findLeaf(node.children[1], leafId)
+}
+
+function getAllPanelIds(node: SplitNode | null): string[] {
+  if (!node) return []
+  if (node.type === 'leaf') return node.sessionId ? [node.sessionId] : []
+  return getAllPanelIds(node.children[0]).concat(getAllPanelIds(node.children[1]))
+}
+
+function getFirstLeaf(node: SplitNode): SplitLeaf {
+  return node.type === 'leaf' ? node : getFirstLeaf(node.children[0])
+}
+
+function replaceNode(node: SplitNode, targetId: string, replacement: SplitNode): SplitNode {
+  if (node.id === targetId) return replacement
+  if (node.type === 'leaf') return node
+  return {
+    ...node,
+    children: [
+      replaceNode(node.children[0], targetId, replacement),
+      replaceNode(node.children[1], targetId, replacement)
+    ]
+  }
+}
+
+function removeLeaf(node: SplitNode, leafId: string): SplitNode | null {
+  if (node.type === 'leaf') return node.id === leafId ? null : node
+  const [left, right] = node.children
+  if (left.id === leafId) return right
+  if (right.id === leafId) return left
+  const newLeft = removeLeaf(left, leafId)
+  if (newLeft !== left) return newLeft === null ? right : { ...node, children: [newLeft, right] }
+  const newRight = removeLeaf(right, leafId)
+  if (newRight !== right) return newRight === null ? left : { ...node, children: [left, newRight] }
+  return node
+}
+
+function updateNodeRatio(node: SplitNode, targetId: string, ratio: number): SplitNode {
+  if (node.id === targetId && node.type === 'split') {
+    return { ...node, ratio: Math.min(0.8, Math.max(0.2, ratio)) }
+  }
+  if (node.type === 'leaf') return node
+  return {
+    ...node,
+    children: [
+      updateNodeRatio(node.children[0], targetId, ratio),
+      updateNodeRatio(node.children[1], targetId, ratio)
+    ]
+  }
+}
+
+function updateLeafPanel(node: SplitNode, leafId: string, panelId: string | null): SplitNode {
+  if (node.type === 'leaf' && node.id === leafId) return { ...node, sessionId: panelId }
+  if (node.type === 'leaf') return node
+  return {
+    ...node,
+    children: [
+      updateLeafPanel(node.children[0], leafId, panelId),
+      updateLeafPanel(node.children[1], leafId, panelId)
+    ]
+  }
+}
+
+function clearPanelFromTree(node: SplitNode, panelId: string): SplitNode {
+  if (node.type === 'leaf') return node.sessionId === panelId ? { ...node, sessionId: null } : node
+  return {
+    ...node,
+    children: [
+      clearPanelFromTree(node.children[0], panelId),
+      clearPanelFromTree(node.children[1], panelId)
+    ]
+  }
+}
+
+function assignLeafPanel(node: SplitNode, leafId: string, panelId: string | null): SplitNode {
+  if (panelId === null) return updateLeafPanel(node, leafId, null)
+  return updateLeafPanel(clearPanelFromTree(node, panelId), leafId, panelId)
+}
+
+function buildTitleForPanel(panelId: string, data: EntityMap): string {
+  if (panelId.startsWith('quicknotes:')) {
+    const parsed = parseQuickNotesPanelId(panelId)
+    if (!parsed) return 'Notes'
+    if (parsed.parentType === 'session') {
+      const session = data.sessions.find((entry) => entry.id === parsed.parentId)
+      return `Notes: ${session?.name ?? 'Session'}`
+    }
+    const agent = data.agents.find((entry) => entry.id === parsed.parentId)
+    return `Notes: ${agent?.name ?? 'Agent'}`
+  }
+
+  const session = data.sessions.find((entry) => entry.id === panelId)
+  if (session) return session.name
+  const agent = data.agents.find((entry) => entry.id === panelId)
+  if (agent) return agent.name
+  return 'Sorcerer'
+}
+
+function PanelHeaderInfo({ panelId, data }: { panelId: string | null; data: EntityMap }) {
+  if (!panelId) return <span className="split-panel-name">Empty</span>
+  if (panelId.startsWith('quicknotes:')) {
+    return <span className="split-panel-name">{buildTitleForPanel(panelId, data)}</span>
+  }
+
+  const session = data.sessions.find((entry) => entry.id === panelId)
+  if (!session) {
+    const agent = data.agents.find((entry) => entry.id === panelId)
+    return (
+      <span className="split-panel-name">
+        <BotIcon style={{ width: 12, height: 12, opacity: 0.5, flexShrink: 0 }} />
+        {agent?.name ?? 'Unknown'}
+      </span>
+    )
+  }
+
+  const project = data.projects.find((entry) => entry.id === session.project_id)
+  return (
+    <span className="split-panel-name">
+      {project && (
+        <>
+          <span className="split-panel-project">{project.name}</span>
+          <span className="split-panel-sep">/</span>
+        </>
+      )}
+      {session.name}
+      {session.branch && session.type !== 'quick-terminal' && (
+        <span className="split-panel-branch">
+          <GitBranchIcon />
+          {session.branch}
+        </span>
+      )}
+    </span>
+  )
 }
 
 function PopoutTerminal({ sessionId, onExited }: { sessionId: string; onExited: () => void }) {
@@ -40,7 +192,6 @@ function PopoutTerminal({ sessionId, onExited }: { sessionId: string; onExited: 
     if (!containerRef.current) return
 
     const theme = getAppliedTheme()
-
     const terminal = new Terminal({
       cursorBlink: true,
       cursorStyle: 'bar',
@@ -59,7 +210,6 @@ function PopoutTerminal({ sessionId, onExited }: { sessionId: string; onExited: 
     terminal.open(containerRef.current)
     termRef.current = { terminal, fitAddon }
 
-    // Load font size setting
     getApi().settings.get('terminalFontSize').then((v: string | undefined) => {
       const size = v ? Number(v) : 13
       if (size && size !== 13) {
@@ -68,7 +218,6 @@ function PopoutTerminal({ sessionId, onExited }: { sessionId: string; onExited: 
       }
     })
 
-    // Replay scrollback then subscribe to live data
     getApi().popout.getScrollback(sessionId).then((scrollback: string) => {
       if (scrollback) terminal.write(scrollback)
       requestAnimationFrame(() => {
@@ -79,20 +228,15 @@ function PopoutTerminal({ sessionId, onExited }: { sessionId: string; onExited: 
       })
     })
 
-    // Forward keyboard input to PTY
     terminal.onData((data) => {
       getApi().terminal.write(sessionId, data)
     })
 
-    // Copy selection to clipboard on select
     terminal.onSelectionChange(() => {
       const selection = terminal.getSelection()
-      if (selection) {
-        navigator.clipboard.writeText(selection).catch(() => {})
-      }
+      if (selection) navigator.clipboard.writeText(selection).catch(() => {})
     })
 
-    // Handle Ctrl+V paste
     terminal.attachCustomKeyEventHandler((e: KeyboardEvent) => {
       if (e.ctrlKey && e.key === 'v' && e.type === 'keydown') {
         e.preventDefault()
@@ -104,19 +248,15 @@ function PopoutTerminal({ sessionId, onExited }: { sessionId: string; onExited: 
       return true
     })
 
-    // Listen for live PTY output
     const unsubData = getApi().terminal.onData(sessionId, (data: string) => {
       terminal.write(data)
     })
-
     const unsubExit = getApi().terminal.onExit(sessionId, (exitCode: number) => {
       terminal.writeln(`\r\n\x1b[90m[Process exited with code ${exitCode}]\x1b[0m`)
-      // Notify main window so sidebar status dot updates
       getApi().popout.notifySessionUpdated(sessionId, 'idle', null)
       onExited()
     })
 
-    // Fit on resize
     const resizeObserver = new ResizeObserver(() => {
       try {
         fitAddon.fit()
@@ -125,7 +265,6 @@ function PopoutTerminal({ sessionId, onExited }: { sessionId: string; onExited: 
     })
     resizeObserver.observe(containerRef.current)
 
-    // Focus terminal
     requestAnimationFrame(() => terminal.focus())
 
     return () => {
@@ -137,7 +276,6 @@ function PopoutTerminal({ sessionId, onExited }: { sessionId: string; onExited: 
     }
   }, [sessionId, onExited])
 
-  // Listen for theme changes from main window
   useEffect(() => {
     const handler = (e: Event) => {
       const theme = (e as CustomEvent<SorcererTheme>).detail
@@ -155,168 +293,452 @@ function PopoutTerminal({ sessionId, onExited }: { sessionId: string; onExited: 
   )
 }
 
-function PopoutIdleView({ sessionId, entityName, onStarted }: { sessionId: string; entityName: string; onStarted: () => void }) {
-  const [loading, setLoading] = useState(false)
+function SplitDivider({ direction, onDrag }: { direction: 'horizontal' | 'vertical'; onDrag: (ratio: number) => void }) {
+  const isDragging = useRef(false)
+  const containerRef = useRef<HTMLElement | null>(null)
 
-  const handleResume = async () => {
-    setLoading(true)
-    try {
-      const session = await getApi().session.resume(sessionId)
-      // Notify main window so sidebar status dot updates
-      if (session) {
-        getApi().popout.notifySessionUpdated(sessionId, session.status, session.pid ?? null)
-      }
-      onStarted()
-    } catch {
-      setLoading(false)
+  const onMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+    isDragging.current = true
+    containerRef.current = (e.currentTarget as HTMLElement).parentElement
+    document.body.style.cursor = direction === 'horizontal' ? 'col-resize' : 'row-resize'
+    document.body.style.userSelect = 'none'
+  }, [direction])
+
+  useEffect(() => {
+    const onMouseMove = (e: MouseEvent) => {
+      if (!isDragging.current || !containerRef.current) return
+      const rect = containerRef.current.getBoundingClientRect()
+      onDrag(direction === 'horizontal'
+        ? (e.clientX - rect.left) / rect.width
+        : (e.clientY - rect.top) / rect.height)
     }
+    const onMouseUp = () => {
+      if (!isDragging.current) return
+      isDragging.current = false
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+    }
+    window.addEventListener('mousemove', onMouseMove)
+    window.addEventListener('mouseup', onMouseUp)
+    return () => {
+      window.removeEventListener('mousemove', onMouseMove)
+      window.removeEventListener('mouseup', onMouseUp)
+    }
+  }, [direction, onDrag])
+
+  return <div className={`split-divider split-divider--${direction}`} onMouseDown={onMouseDown} />
+}
+
+function PopoutLeafContent({
+  panelId,
+  data,
+  onStarted,
+  onExited,
+}: {
+  panelId: string
+  data: EntityMap
+  onStarted: (panelId: string, status: string, pid: number | null) => void
+  onExited: (panelId: string) => void
+}) {
+  if (panelId.startsWith('quicknotes:')) {
+    return <QuickNotesPanel panelSessionId={panelId} />
   }
 
-  const handleNewSession = async () => {
-    setLoading(true)
-    try {
-      const session = await getApi().session.restart(sessionId)
-      // Notify main window so sidebar status dot updates
-      if (session) {
-        getApi().popout.notifySessionUpdated(sessionId, session.status, session.pid ?? null)
-      }
-      onStarted()
-    } catch {
-      setLoading(false)
-    }
+  const session = data.sessions.find((entry) => entry.id === panelId)
+  const agent = !session ? data.agents.find((entry) => entry.id === panelId) : undefined
+  const activeItem = session || agent
+
+  if (!activeItem) {
+    return (
+      <div className="terminal-placeholder">
+        <TerminalIcon className="terminal-placeholder-icon" />
+        <div className="terminal-placeholder-text">Panel target not found.</div>
+      </div>
+    )
   }
 
+  if (activeItem.status === 'active') {
+    return <PopoutTerminal sessionId={activeItem.id} onExited={() => onExited(activeItem.id)} />
+  }
+
+  if (session?.type === 'quick-terminal') {
+    return (
+      <div className="terminal-placeholder">
+        <TerminalIcon className="terminal-placeholder-icon" />
+        <div className="terminal-placeholder-text">Terminal has ended.</div>
+        <div className="terminal-action-row">
+          <button className="terminal-restart-btn terminal-restart-btn--primary" onClick={async () => {
+            const restarted = await getApi().session.restart(session.id)
+            if (restarted) onStarted(session.id, restarted.status, restarted.pid ?? null)
+          }}>
+            Restart
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  if (session) {
+    return (
+      <div className="terminal-placeholder">
+        <TerminalIcon className="terminal-placeholder-icon" />
+        <div className="terminal-placeholder-text">Session <strong>{session.name}</strong> has ended.</div>
+        <div className="terminal-action-row">
+          <button className="terminal-restart-btn terminal-restart-btn--primary" onClick={async () => {
+            const resumed = await getApi().session.resume(session.id)
+            if (resumed) onStarted(session.id, resumed.status, resumed.pid ?? null)
+          }}>
+            Resume
+          </button>
+          <button className="terminal-restart-btn" onClick={async () => {
+            const restarted = await getApi().session.restart(session.id)
+            if (restarted) onStarted(session.id, restarted.status, restarted.pid ?? null)
+          }}>
+            New Session
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  const isAutonomous = !!agent?.mission
   return (
     <div className="terminal-placeholder">
-      <svg className="terminal-placeholder-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-        <polyline points="4 17 10 11 4 5" />
-        <line x1="12" y1="19" x2="20" y2="19" />
-      </svg>
-      <div className="terminal-placeholder-text">
-        Session <strong>{entityName}</strong> has ended.
-      </div>
+      <BotIcon className="terminal-placeholder-icon" />
+      <div className="terminal-placeholder-text">Agent <strong>{agent?.name}</strong> has {isAutonomous ? 'stopped' : 'ended'}.</div>
       <div className="terminal-action-row">
-        <button className="terminal-restart-btn terminal-restart-btn--primary" onClick={handleResume} disabled={loading}>
-          <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
-            <path d="M6 3.5a.5.5 0 0 1 .795-.404l6 4.5a.5.5 0 0 1 0 .808l-6 4.5A.5.5 0 0 1 6 12.5v-9z" />
-          </svg>
-          Resume
-        </button>
-        <button className="terminal-restart-btn" onClick={handleNewSession} disabled={loading}>
-          <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
-            <path d="M11.534 7h3.932a.25.25 0 0 1 .192.41l-1.966 2.36a.25.25 0 0 1-.384 0l-1.966-2.36a.25.25 0 0 1 .192-.41zm-11 2h3.932a.25.25 0 0 0 .192-.41L2.692 6.23a.25.25 0 0 0-.384 0L.342 8.59A.25.25 0 0 0 .534 9z" />
-            <path fillRule="evenodd" d="M8 3c-1.552 0-2.94.707-3.857 1.818a.5.5 0 1 1-.771-.636A6.002 6.002 0 0 1 13.917 7H12.9A5.002 5.002 0 0 0 8 3zM3.1 9a5.002 5.002 0 0 0 8.757 2.182.5.5 0 1 1 .771.636A6.002 6.002 0 0 1 2.083 9H3.1z" />
-          </svg>
-          New Session
-        </button>
+        {isAutonomous ? (
+          <button className="terminal-restart-btn terminal-restart-btn--primary" onClick={async () => {
+            await getApi().agent.start(agent!.id)
+            onStarted(agent!.id, 'active', null)
+          }}>
+            Restart Mission
+          </button>
+        ) : (
+          <>
+            <button className="terminal-restart-btn terminal-restart-btn--primary" onClick={async () => {
+              await getApi().agent.resume(agent!.id)
+              onStarted(agent!.id, 'active', null)
+            }}>
+              Resume
+            </button>
+            <button className="terminal-restart-btn" onClick={async () => {
+              await getApi().agent.restart(agent!.id)
+              onStarted(agent!.id, 'active', null)
+            }}>
+              New Session
+            </button>
+          </>
+        )}
       </div>
     </div>
   )
 }
 
-function PopoutTerminalView({ sessionId, entityName }: { sessionId: string; entityName: string }) {
-  const [status, setStatus] = useState<'loading' | 'active' | 'idle'>('loading')
+function PopoutWorkspace({ params }: { params: PopoutParams }) {
+  const [data, setData] = useState<EntityMap>({ sessions: [], agents: [], projects: [] })
+  const [splitRoot, setSplitRoot] = useState<SplitNode>({
+    type: 'leaf',
+    id: nextSplitId(),
+    sessionId: params.panelId
+  })
+  const [focusedPanelId, setFocusedPanelId] = useState(splitRoot.id)
+  const [maximizedPanelId, setMaximizedPanelId] = useState<string | null>(null)
 
-  // Check if session is active on mount
+  const loadEntities = useCallback(async () => {
+    const [sessions, agents, projects] = await Promise.all([
+      getApi().session.list(),
+      getApi().agent.list(),
+      getApi().project.list()
+    ])
+    setData({ sessions, agents, projects })
+  }, [])
+
   useEffect(() => {
-    getApi().session.list().then((sessions: any[]) => {
-      const session = sessions.find((s: any) => s.id === sessionId)
-      if (session && session.status === 'active') {
-        setStatus('active')
-      } else {
-        setStatus('idle')
-      }
-    }).catch(() => {
-      setStatus('idle')
+    void loadEntities()
+    const interval = setInterval(() => { void loadEntities() }, 5000)
+    return () => clearInterval(interval)
+  }, [loadEntities])
+
+  useEffect(() => {
+    void getApi().popout.syncPanels(params.windowId, getAllPanelIds(splitRoot))
+  }, [params.windowId, splitRoot])
+
+  useEffect(() => {
+    const focusedLeaf = findLeaf(splitRoot, focusedPanelId)
+    const ready = !!focusedLeaf && focusedLeaf.sessionId === null
+    void getApi().popout.setSelectionTargetReady(params.windowId, ready)
+    return () => {
+      void getApi().popout.setSelectionTargetReady(params.windowId, false)
+    }
+  }, [params.windowId, splitRoot, focusedPanelId])
+
+  useEffect(() => {
+    const unsubAssign = getApi().popout.onAssignPanel((panelId: string) => {
+      setSplitRoot((current) => {
+        const focusedLeaf = findLeaf(current, focusedPanelId)
+        if (!focusedLeaf || focusedLeaf.sessionId !== null) return current
+        return assignLeafPanel(current, focusedLeaf.id, panelId)
+      })
+      void loadEntities()
     })
-  }, [sessionId])
+    const unsubUpdated = getApi().popout.onSessionUpdated((panelId, status, pid) => {
+      setData((current) => ({
+        ...current,
+        sessions: current.sessions.map((entry) => entry.id === panelId ? { ...entry, status: status as any, pid } : entry),
+        agents: current.agents.map((entry) => entry.id === panelId ? { ...entry, status: status as any, pid } : entry)
+      }))
+    })
+    return () => {
+      unsubAssign()
+      unsubUpdated()
+    }
+  }, [focusedPanelId, loadEntities])
 
-  const handleStarted = useCallback(() => {
-    setStatus('active')
-  }, [])
+  useEffect(() => {
+    const title = buildTitleForPanel(getAllPanelIds(splitRoot)[0] || params.panelId, data)
+    document.title = getAllPanelIds(splitRoot).length > 1
+      ? `${title} +${getAllPanelIds(splitRoot).length - 1} — Sorcerer`
+      : `${title} — Sorcerer`
+  }, [data, params.panelId, splitRoot])
 
-  const handleExited = useCallback(() => {
-    setStatus('idle')
-  }, [])
+  const updateSessionState = (panelId: string, status: string, pid: number | null) => {
+    getApi().popout.notifySessionUpdated(panelId, status, pid)
+    void loadEntities()
+  }
 
-  if (status === 'loading') {
+  const splitFocused = (leafId: string, direction: 'horizontal' | 'vertical', panelId: string) => {
+    setFocusedPanelId(leafId)
+    setSplitRoot((current) => {
+      const focused = findLeaf(current, leafId)
+      if (!focused) return current
+      const newLeafId = nextSplitId()
+      const branchId = nextSplitId()
+      const newPanelId = focused.sessionId === panelId ? null : panelId
+      const newBranch: SplitBranch = {
+        type: 'split',
+        id: branchId,
+        direction,
+        ratio: 0.5,
+        children: [
+          { ...focused },
+          { type: 'leaf', id: newLeafId, sessionId: newPanelId }
+        ]
+      }
+      setFocusedPanelId(newLeafId)
+      return replaceNode(current, leafId, newBranch)
+    })
+  }
+
+  const closeLeaf = async (leafId: string, panelId: string | null) => {
+    if (panelId?.startsWith('quicknotes:')) {
+      const parsed = parseQuickNotesPanelId(panelId)
+      if (parsed) useQuickNotesStore.getState().removeNotePanel(parsed.parentId)
+    }
+    const session = panelId ? data.sessions.find((entry) => entry.id === panelId) : null
+    if (session?.type === 'quick-terminal') {
+      await getApi().session.delete(session.id)
+      void loadEntities()
+    }
+
+    setSplitRoot((current) => {
+      const result = removeLeaf(current, leafId)
+      if (!result) {
+        window.close()
+        return current
+      }
+      if (result.type === 'leaf') {
+        setFocusedPanelId(result.id)
+        setMaximizedPanelId(null)
+        return result
+      }
+      if (focusedPanelId === leafId) {
+        setFocusedPanelId(getFirstLeaf(result).id)
+      }
+      if (maximizedPanelId === leafId) {
+        setMaximizedPanelId(null)
+      }
+      return result
+    })
+  }
+
+  const setPanelId = (leafId: string, panelId: string | null) => {
+    setSplitRoot((current) => assignLeafPanel(current, leafId, panelId))
+  }
+
+  const renderNode = (node: SplitNode): ReactElement => {
+    if (node.type === 'leaf') {
+      const isFocused = focusedPanelId === node.id
+      const panelId = node.sessionId
+      const isEmpty = panelId === null
+      const isQuickNotes = !!panelId?.startsWith('quicknotes:')
+      const session = panelId && !isQuickNotes ? data.sessions.find((entry) => entry.id === panelId) : undefined
+      const agent = panelId && !isQuickNotes && !session ? data.agents.find((entry) => entry.id === panelId) : undefined
+
+      const fillEmptyOrSplit = (nextPanelId: string) => {
+        const focusedLeaf = findLeaf(splitRoot, focusedPanelId)
+        if (focusedLeaf && focusedLeaf.sessionId === null) {
+          setPanelId(focusedLeaf.id, nextPanelId)
+          return focusedLeaf.id
+        }
+        splitFocused(node.id, 'horizontal', nextPanelId)
+        return null
+      }
+
+      const openQuickNotes = (parentId: string, parentType: 'session' | 'agent') => {
+        const notePanelId = `quicknotes:${parentType}:${parentId}`
+        useQuickNotesStore.getState().addNotePanel(parentId)
+        const filledLeafId = fillEmptyOrSplit(notePanelId)
+        if (filledLeafId) setFocusedPanelId(filledLeafId)
+      }
+
+      return (
+        <div className={`split-panel ${isFocused ? 'split-panel--focused' : ''}`} onClick={() => setFocusedPanelId(node.id)}>
+          <div className="split-panel-titlebar">
+            <PanelHeaderInfo panelId={panelId} data={data} />
+            <div className="split-panel-actions">
+              {session && session.type !== 'quick-terminal' && (
+                <>
+                  <button className="split-panel-action" title="Open Quick Notes" onClick={(e) => {
+                    e.stopPropagation()
+                    openQuickNotes(session.id, 'session')
+                  }}>
+                    <NotesIcon />
+                  </button>
+                  <button className="split-panel-action" title="Open Quick Terminal" onClick={async (e) => {
+                    e.stopPropagation()
+                    const quickTerminal = await getApi().session.createQuickTerminal(session.id)
+                    if (!quickTerminal) return
+                    await loadEntities()
+                    const leafId = fillEmptyOrSplit(quickTerminal.id)
+                    if (leafId) setFocusedPanelId(leafId)
+                  }}>
+                    <TerminalIcon />
+                  </button>
+                </>
+              )}
+              {agent && (
+                <>
+                  <button className="split-panel-action" title="Open Quick Notes" onClick={(e) => {
+                    e.stopPropagation()
+                    openQuickNotes(agent.id, 'agent')
+                  }}>
+                    <NotesIcon />
+                  </button>
+                  <button className="split-panel-action" title="Open Quick Terminal" onClick={async (e) => {
+                    e.stopPropagation()
+                    const quickTerminal = await getApi().agent.createQuickTerminal(agent.id)
+                    if (!quickTerminal) return
+                    await loadEntities()
+                    const leafId = fillEmptyOrSplit(quickTerminal.id)
+                    if (leafId) setFocusedPanelId(leafId)
+                  }}>
+                    <TerminalIcon />
+                  </button>
+                </>
+              )}
+              {panelId && (
+                <>
+                  <button className="split-panel-action" title="Split Right" onClick={(e) => {
+                    e.stopPropagation()
+                    splitFocused(node.id, 'horizontal', panelId)
+                  }}>
+                    <SplitHorizontalIcon />
+                  </button>
+                  <button className="split-panel-action" title="Split Down" onClick={(e) => {
+                    e.stopPropagation()
+                    splitFocused(node.id, 'vertical', panelId)
+                  }}>
+                    <SplitVerticalIcon />
+                  </button>
+                </>
+              )}
+              <button className="split-panel-action" title={maximizedPanelId === node.id ? 'Restore' : 'Maximize'} onClick={(e) => {
+                e.stopPropagation()
+                setMaximizedPanelId((current) => current === node.id ? null : node.id)
+              }}>
+                {maximizedPanelId === node.id ? <MinimizeIcon /> : <MaximizeIcon />}
+              </button>
+              <button className="split-panel-close" onClick={(e) => {
+                e.stopPropagation()
+                void closeLeaf(node.id, panelId)
+              }}>&times;</button>
+            </div>
+          </div>
+          {isEmpty ? (
+            <div className="terminal-placeholder">
+              <TerminalIcon className="terminal-placeholder-icon" />
+              <div className="terminal-placeholder-text">
+                Click a session, agent, or notes entry in the sidebar to open it here
+              </div>
+            </div>
+          ) : (
+            <PopoutLeafContent
+              panelId={panelId!}
+              data={data}
+              onStarted={updateSessionState}
+              onExited={(id) => updateSessionState(id, 'idle', null)}
+            />
+          )}
+        </div>
+      )
+    }
+
+    const [child1, child2] = node.children
     return (
-      <div className="terminal-placeholder">
-        <div className="terminal-placeholder-text">Connecting...</div>
+      <div className={`split-container split-container--${node.direction}`}>
+        <div className="split-pane" style={node.direction === 'horizontal' ? { width: `${node.ratio * 100}%` } : { height: `${node.ratio * 100}%` }}>
+          {renderNode(child1)}
+        </div>
+        <SplitDivider direction={node.direction} onDrag={(ratio) => setSplitRoot((current) => updateNodeRatio(current, node.id, ratio))} />
+        <div className="split-pane" style={node.direction === 'horizontal' ? { width: `${(1 - node.ratio) * 100}%` } : { height: `${(1 - node.ratio) * 100}%` }}>
+          {renderNode(child2)}
+        </div>
       </div>
     )
   }
 
-  if (status === 'idle') {
-    return <PopoutIdleView sessionId={sessionId} entityName={entityName} onStarted={handleStarted} />
-  }
-
-  return <PopoutTerminal sessionId={sessionId} onExited={handleExited} />
+  const maximizedLeaf = maximizedPanelId ? findLeaf(splitRoot, maximizedPanelId) : null
+  return (
+    <div className="popout-shell">
+      <div className="main-titlebar" />
+      {maximizedLeaf ? (
+        <div className="split-panel--maximized-container">{renderNode(maximizedLeaf)}</div>
+      ) : (
+        renderNode(splitRoot)
+      )}
+    </div>
+  )
 }
 
 export function PopoutApp() {
   const [params] = useState(() => parsePopoutParams())
 
-  // Apply initial theme
   useEffect(() => {
     if (params?.themeId) {
       applyTheme(getThemeById(params.themeId))
     }
   }, [params?.themeId])
 
-  // Listen for theme broadcasts from main window
   useEffect(() => {
     const unsub = getApi().popout.onThemeUpdate((themeId: string) => {
-      const theme = getThemeById(themeId)
-      applyTheme(theme)
+      applyTheme(getThemeById(themeId))
     })
     return () => { unsub() }
   }, [])
-
-  // Set window title
-  useEffect(() => {
-    if (params?.entityName) {
-      const prefix = params.projectName ? `${params.projectName} / ` : ''
-      document.title = `${prefix}${params.entityName} — Sorcerer`
-    }
-  }, [params?.entityName, params?.projectName])
 
   if (!params) {
     return <div className="popout-error">Invalid popout parameters</div>
   }
 
   if (params.panelType === 'terminal') {
-    return (
-      <div className="popout-shell">
-        <div className="main-titlebar" />
-        <div className="split-panel split-panel--focused popout-panel">
-          <div className="split-panel-titlebar">
-            <span className="split-panel-name">
-            {params.projectName && (
-              <>
-                <span className="split-panel-project">{params.projectName}</span>
-                <span className="split-panel-sep">/</span>
-              </>
-            )}
-            {params.entityName}
-            {params.branch && (
-              <span className="split-panel-branch">
-                <GitBranchIcon />
-                {params.branch}
-              </span>
-            )}
-            </span>
-          </div>
-          <PopoutTerminalView sessionId={params.panelId} entityName={params.entityName} />
-        </div>
-      </div>
-    )
+    return <PopoutWorkspace params={params} />
   }
 
   return <div className="popout-error">Unknown panel type: {params.panelType}</div>
 }
 
-/** Check if the current window is a popout */
 export function isPopout(): boolean {
   return new URLSearchParams(window.location.search).has('popout')
 }

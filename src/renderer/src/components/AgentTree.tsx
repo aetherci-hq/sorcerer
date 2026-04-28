@@ -6,6 +6,7 @@ import { BotIcon, ChevronIcon, MoreHorizontalIcon, PlusIcon, ShellPromptIcon, No
 import { useQuickNotesStore } from '../stores/useQuickNotesStore'
 import { StatusDot } from './StatusDot'
 import type { Agent, AgentGroup, Session } from '../types'
+import { assignPanelToPopoutTarget } from '../utils/popoutSelection'
 
 function AgentQTItem({ session, isActive }: { session: Session; isActive: boolean }) {
   const { setActiveSession } = useSessionStore()
@@ -31,7 +32,10 @@ function AgentQTItem({ session, isActive }: { session: Session; isActive: boolea
     <div
       ref={itemRef}
       className={`tree-item tree-item--child-qt ${isActive ? 'tree-item--active' : ''} ${isInSplit ? 'tree-item--split' : ''}`}
-      onClick={() => setActiveSession(session.id)}
+      onClick={async () => {
+        if (await assignPanelToPopoutTarget(session.id)) return
+        setActiveSession(session.id)
+      }}
       onContextMenu={handleContextMenu}
     >
       <ShellPromptIcon className="tree-icon tree-icon--quick-terminal" />
@@ -68,7 +72,8 @@ function AgentNotesItem({ agentId }: { agentId: string }) {
     openContextMenu({ x: rect.right, y: rect.bottom, type: 'quicknotes', targetId: notePanelId })
   }
 
-  const handleClick = () => {
+  const handleClick = async () => {
+    if (await assignPanelToPopoutTarget(notePanelId)) return
     useQuickNotesStore.getState().addNotePanel(agentId)
     if (splitRoot) {
       const leaf = findLeafBySession(splitRoot, notePanelId)
@@ -238,7 +243,11 @@ function AgentItem({ agent, staggerClass }: { agent: Agent; staggerClass?: strin
       <div
         ref={itemRef}
         className={`tree-item ${isActive ? 'tree-item--active' : ''} ${isInSplit ? 'tree-item--split' : ''}`}
-        onClick={() => !isRenaming && setActiveSession(agent.id)}
+        onClick={async () => {
+          if (isRenaming) return
+          if (await assignPanelToPopoutTarget(agent.id)) return
+          setActiveSession(agent.id)
+        }}
         onContextMenu={handleContextMenu}
         draggable={!isRenaming}
         onDragStart={handleDragStart}

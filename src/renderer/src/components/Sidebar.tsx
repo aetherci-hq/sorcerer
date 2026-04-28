@@ -11,6 +11,7 @@ import { useUIStore, getAllSessionIds, AGENT_PANE_MIN } from '../stores/useUISto
 import { useProjectStore } from '../stores/useProjectStore'
 import { useSessionStore } from '../stores/useSessionStore'
 import { useAgentStore } from '../stores/useAgentStore'
+import { assignPanelToPopoutTarget } from '../utils/popoutSelection'
 
 export function Sidebar() {
   const {
@@ -177,7 +178,10 @@ function CollapsedTree() {
             <Tooltip key={a.id} label={a.name} position="right">
               <button
                 className={btnClass(a.id)}
-                onClick={() => setActiveSession(a.id)}
+                onClick={async () => {
+                  if (await assignPanelToPopoutTarget(a.id)) return
+                  setActiveSession(a.id)
+                }}
               >
                 <BotIcon className="collapsed-btn-icon" />
                 <StatusDot status={a.status} />
@@ -196,7 +200,10 @@ function CollapsedTree() {
               <Tooltip key={s.id} label={s.name} position="right">
                 <button
                   className={btnClass(s.id)}
-                  onClick={() => setActiveSession(s.id)}
+                  onClick={async () => {
+                    if (await assignPanelToPopoutTarget(s.id)) return
+                    setActiveSession(s.id)
+                  }}
                 >
                   {s.type === 'quick-terminal'
                     ? <ShellPromptIcon className="collapsed-btn-icon" />

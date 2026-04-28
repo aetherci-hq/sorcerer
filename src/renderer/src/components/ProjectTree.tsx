@@ -10,6 +10,7 @@ import { StatusDot } from './StatusDot'
 import { Tooltip } from './Tooltip'
 import { EmptyState } from './EmptyState'
 import type { Project, ProjectGroup, ProviderSubAgent, Session, SessionResumeHealth, TeamMember, TaskData } from '../types'
+import { assignPanelToPopoutTarget } from '../utils/popoutSelection'
 
 const PROVIDER_SUBAGENT_ACTIVE_MS = 90_000
 const PROVIDER_SUBAGENT_EXPIRE_MS = 2 * 60_000
@@ -148,8 +149,9 @@ function ChildQTItem({
     <div
       ref={itemRef}
       className={`tree-item tree-item--child-qt ${isActive ? 'tree-item--active' : ''} ${isInSplit ? 'tree-item--split' : ''}`}
-      onClick={() => {
+      onClick={async () => {
         setSidebarSelection({ type: 'session', id: session.id })
+        if (await assignPanelToPopoutTarget(session.id)) return
         setActiveSession(session.id)
       }}
       onContextMenu={handleContextMenu}
@@ -197,9 +199,9 @@ function ChildNotesItem({
     openContextMenu({ x: rect.right, y: rect.bottom, type: 'quicknotes', targetId: notePanelId })
   }
 
-  const handleClick = () => {
+  const handleClick = async () => {
+    if (await assignPanelToPopoutTarget(notePanelId)) return
     useQuickNotesStore.getState().addNotePanel(parentId)
-    // Focus the existing panel if already open in split view
     if (splitRoot) {
       const leaf = findLeafBySession(splitRoot, notePanelId)
       if (leaf) {
@@ -212,7 +214,6 @@ function ChildNotesItem({
         return
       }
     }
-    // Otherwise open it
     if (!splitRoot) {
       useSessionStore.setState({ activeSessionId: notePanelId })
       return
@@ -436,9 +437,10 @@ function SessionItem({
       <div
         ref={itemRef}
         className={`tree-item ${isActive ? 'tree-item--active' : ''} ${isInSplit ? 'tree-item--split' : ''} ${session.status === 'archived' ? 'tree-item--archived' : ''}`}
-        onClick={() => {
+        onClick={async () => {
           if (isRenaming) return
           setSidebarSelection({ type: 'session', id: session.id })
+          if (await assignPanelToPopoutTarget(session.id)) return
           setActiveSession(session.id)
         }}
         onContextMenu={handleContextMenu}

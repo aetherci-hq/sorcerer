@@ -542,10 +542,10 @@ ipcMain.handle('popout:open', (_e, panelType: string, panelId: string, entityNam
     if (project) projectName = project.name as string
   }
 
-  const win = popoutService.open({ panelType, panelId, entityName, themeId, projectName, branch })
+  const { win, windowId } = popoutService.open({ panelType, panelId, entityName, themeId, projectName, branch })
 
   // Register the pop-out window as a listener for terminal data
-  if (panelType === 'terminal') {
+  if (panelType === 'terminal' && !panelId.startsWith('quicknotes:')) {
     const wc = win.webContents
     ptyService.addListener(panelId, wc)
     win.on('closed', () => {
@@ -553,7 +553,7 @@ ipcMain.handle('popout:open', (_e, panelType: string, panelId: string, entityNam
     })
   }
 
-  return { opened: true }
+  return { opened: true, windowId }
 })
 
 ipcMain.handle('popout:close', (_e, panelId: string) => {
@@ -591,4 +591,31 @@ ipcMain.on('popout:broadcastTheme', (_e, themeId: string) => {
       }
     } catch { /* window already destroyed */ }
   }
+})
+
+ipcMain.handle('popout:syncPanels', (e, windowId: string, panelIds: string[]) => {
+  const diff = popoutService.updatePanels(windowId, panelIds)
+  const win = popoutService.getWindowByWebContentsId(e.sender.id)
+  if (!win) return diff
+
+  for (const panelId of diff.added) {
+    if (!panelId.startsWith('quicknotes:')) {
+      ptyService.addListener(panelId, win.webContents)
+    }
+  }
+  for (const panelId of diff.removed) {
+    if (!panelId.startsWith('quicknotes:')) {
+      ptyService.removeListener(panelId, win.webContents)
+    }
+  }
+  return diff
+})
+
+ipcMain.handle('popout:setSelectionTargetReady', (_e, windowId: string, ready: boolean) => {
+  popoutService.setSelectionTargetReady(windowId, ready)
+  return { ok: true }
+})
+
+ipcMain.handle('popout:assignToSelectionTarget', (_e, panelId: string) => {
+  return popoutService.assignToSelectionTarget(panelId)
 })

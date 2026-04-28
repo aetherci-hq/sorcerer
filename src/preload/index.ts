@@ -246,13 +246,19 @@ const api = {
 
   popout: {
     open: (panelType: string, panelId: string, entityName: string) =>
-      ipcRenderer.invoke('popout:open', panelType, panelId, entityName) as Promise<{ opened: boolean }>,
+      ipcRenderer.invoke('popout:open', panelType, panelId, entityName) as Promise<{ opened: boolean; windowId: string }>,
     close: (panelId: string) =>
       ipcRenderer.invoke('popout:close', panelId) as Promise<{ closed: boolean }>,
     isOpen: (panelId: string) =>
       ipcRenderer.invoke('popout:isOpen', panelId) as Promise<boolean>,
     getScrollback: (sessionId: string) =>
       ipcRenderer.invoke('popout:getScrollback', sessionId) as Promise<string>,
+    syncPanels: (windowId: string, panelIds: string[]) =>
+      ipcRenderer.invoke('popout:syncPanels', windowId, panelIds) as Promise<{ added: string[]; removed: string[] }>,
+    setSelectionTargetReady: (windowId: string, ready: boolean) =>
+      ipcRenderer.invoke('popout:setSelectionTargetReady', windowId, ready) as Promise<{ ok: boolean }>,
+    assignToSelectionTarget: (panelId: string) =>
+      ipcRenderer.invoke('popout:assignToSelectionTarget', panelId) as Promise<boolean>,
     broadcastTheme: (themeId: string) =>
       ipcRenderer.send('popout:broadcastTheme', themeId),
     onOpened: (callback: (panelId: string) => void) => {
@@ -276,6 +282,11 @@ const api = {
       const handler = (_event: any, sessionId: string, status: string, pid: number | null) => callback(sessionId, status, pid)
       ipcRenderer.on('popout:sessionUpdated', handler)
       return () => ipcRenderer.removeListener('popout:sessionUpdated', handler)
+    },
+    onAssignPanel: (callback: (panelId: string) => void) => {
+      const handler = (_event: any, panelId: string) => callback(panelId)
+      ipcRenderer.on('popout:assign-panel', handler)
+      return () => ipcRenderer.removeListener('popout:assign-panel', handler)
     }
   }
 }
