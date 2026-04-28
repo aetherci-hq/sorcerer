@@ -22,6 +22,7 @@ export interface HandlerServices {
 }
 
 let sqlJsPromise: Promise<any> | null = null
+let lastCodexStateFailureSignature: string | null = null
 
 // ── Helpers ─────────────────────────────────────────────────
 
@@ -792,15 +793,30 @@ async function openReadableCodexStateDb(): Promise<{ stateDb: any; stateDbPath: 
   if (stateDbPaths.length === 0) return null
 
   const SQL = await getSqlJs()
+  const failures: string[] = []
 
   for (const stateDbPath of stateDbPaths) {
     if (!fs.existsSync(stateDbPath)) continue
     try {
       const stateDb = new SQL.Database(fs.readFileSync(stateDbPath))
       stateDb.exec('SELECT 1')
+      lastCodexStateFailureSignature = null
       return { stateDb, stateDbPath }
     } catch (error) {
-      console.warn(`[codex-state] Skipping unreadable state DB: ${stateDbPath}`, error)
+      const message = error instanceof Error
+        ? error.message
+        : typeof error === 'object' && error !== null && 'message' in error
+          ? String((error as { message?: unknown }).message || '')
+          : String(error)
+      failures.push(`${stateDbPath} (${message || 'unknown error'})`)
+    }
+  }
+
+  if (failures.length > 0) {
+    const signature = failures.join(' | ')
+    if (signature !== lastCodexStateFailureSignature) {
+      lastCodexStateFailureSignature = signature
+      console.warn(`[codex-state] No readable Codex state DB found: ${signature}`)
     }
   }
 
