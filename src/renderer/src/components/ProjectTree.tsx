@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { getApi } from '../api/client'
 import { useProjectStore } from '../stores/useProjectStore'
 import { useSessionStore } from '../stores/useSessionStore'
@@ -15,11 +15,26 @@ import { assignPanelToPopoutTarget } from '../utils/popoutSelection'
 const PROVIDER_SUBAGENT_ACTIVE_MS = 90_000
 const PROVIDER_SUBAGENT_EXPIRE_MS = 2 * 60_000
 
-function formatSessionChangeSummary(status: { added: number; deleted: number } | null): string | null {
+function renderSessionChangeSummary(status: { added: number; deleted: number } | null): ReactNode {
   if (!status || (status.added === 0 && status.deleted === 0)) return null
-  const added = status.added > 0 ? `+${status.added}` : ''
-  const deleted = status.deleted > 0 ? `-${status.deleted}` : ''
-  return [added, deleted].filter(Boolean).join(' ')
+  return (
+    <span className="tree-change-summary">
+      {status.added > 0 && <span className="tree-change-summary__add">+{status.added}</span>}
+      {status.deleted > 0 && <span className="tree-change-summary__del">-{status.deleted}</span>}
+    </span>
+  )
+}
+
+function formatSessionChangeSummaryTooltip(status: { added: number; deleted: number } | null): string | null {
+  if (!status || (status.added === 0 && status.deleted === 0)) return null
+  const parts: string[] = []
+  if (status.added > 0) {
+    parts.push(`${status.added} line${status.added !== 1 ? 's' : ''} added`)
+  }
+  if (status.deleted > 0) {
+    parts.push(`${status.deleted} line${status.deleted !== 1 ? 's' : ''} removed`)
+  }
+  return parts.join(', ')
 }
 
 function formatResumeWarning(health: SessionResumeHealth | null | undefined): string | null {
@@ -510,13 +525,16 @@ function SessionItem({
                     </span>
                   </Tooltip>
                 )}
-                {formatSessionChangeSummary(changeSummary) && (
-                  <span className="tree-change-summary">{formatSessionChangeSummary(changeSummary)}</span>
+                {renderSessionChangeSummary(changeSummary) && (
+                  <Tooltip label={formatSessionChangeSummaryTooltip(changeSummary)!}>
+                    {renderSessionChangeSummary(changeSummary)}
+                  </Tooltip>
                 )}
                 {divergence && divergence.behind > 0 && (
                   <Tooltip label={`${divergence.behind} commit${divergence.behind !== 1 ? 's' : ''} behind main${divergence.ahead > 0 ? `, ${divergence.ahead} ahead` : ''}`}>
                     <span className={`tree-divergence ${divergence.behind >= 10 ? 'tree-divergence--danger' : divergence.behind >= 3 ? 'tree-divergence--warning' : ''}`}>
-                      {divergence.behind}
+                      <span className="tree-divergence__label">behind</span>
+                      <span className="tree-divergence__count">{divergence.behind}</span>
                       <svg width="8" height="8" viewBox="0 0 16 16" fill="currentColor"><path fillRule="evenodd" d="M8 4a.5.5 0 0 1 .5.5v5.793l2.146-2.147a.5.5 0 0 1 .708.708l-3 3a.5.5 0 0 1-.708 0l-3-3a.5.5 0 1 1 .708-.708L7.5 10.293V4.5A.5.5 0 0 1 8 4z"/></svg>
                     </span>
                   </Tooltip>
