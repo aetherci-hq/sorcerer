@@ -112,6 +112,7 @@ export function App() {
   useEffect(() => {
     if (!layoutReady || layoutRestored) return
 
+    const isDevRuntime = window.location.protocol === 'http:'
     const validTarget = (id: string) => panelTargetExists(id, sessions, agents)
     const uiState = useUIStore.getState()
     const sanitizedSplitRoot = uiState.splitRoot ? sanitizeSplitNode(uiState.splitRoot, validTarget) : null
@@ -143,10 +144,18 @@ export function App() {
     )
     useUIStore.setState({ poppedOutSessionIds: new Set(validPopouts) })
 
-    for (const panelId of validPopouts) {
+    const restoreDelayMs = isDevRuntime ? 1200 : 0
+    const restoreInitialDelayMs = isDevRuntime ? 1500 : 0
+
+    for (const [index, panelId] of validPopouts.entries()) {
       const entityName = buildPopoutEntityName(panelId, sessions, agents)
       if (!entityName) continue
-      void getApi().popout.open('terminal', panelId, entityName)
+      const open = () => void getApi().popout.open('terminal', panelId, entityName)
+      if (restoreDelayMs > 0) {
+        window.setTimeout(open, restoreInitialDelayMs + (index * restoreDelayMs))
+      } else {
+        open()
+      }
     }
     setLayoutRestored(true)
   }, [layoutReady, layoutRestored, sessions, agents])
