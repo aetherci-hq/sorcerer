@@ -16,6 +16,7 @@ import { DeleteAgentDialog } from './components/dialogs/DeleteAgentDialog'
 import { QuickNotesOverlay } from './components/QuickNotesOverlay'
 import { EditMissionDialog } from './components/dialogs/EditMissionDialog'
 import { BriefingPanel } from './components/BriefingPanel'
+import { MoveToGroupDialog } from './components/dialogs/MoveToGroupDialog'
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts'
 import { useProjectStore } from './stores/useProjectStore'
 import { useSessionStore } from './stores/useSessionStore'
@@ -382,6 +383,7 @@ export function App() {
       <DeleteAgentDialog />
       <QuickNotesOverlay />
       <EditMissionDialog />
+      <MoveToGroupDialog />
       <BriefingPanel open={briefingOpen} onClose={closeBriefing} />
     </div>
   )

@@ -413,6 +413,13 @@ body {
   flex-shrink: 0;
 }
 
+.section-header__actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+
 .section-label {
   font-family: var(--font-mono);
   font-size: 10px;
@@ -429,7 +436,6 @@ body {
   background: var(--bg-hover);
   padding: 1px 6px;
   border-radius: 4px;
-  margin-left: auto;
 }
 
 .section-add-btn {

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useAgentStore } from '../stores/useAgentStore'
 import { useSessionStore } from '../stores/useSessionStore'
 import { useUIStore, getAllSessionIds, findLeafBySession } from '../stores/useUIStore'
-import { BotIcon, ChevronIcon, MoreHorizontalIcon, PlusIcon, ShellPromptIcon, NotesIcon, ChevronsCollapseIcon } from './icons'
+import { BotIcon, ChevronIcon, MoreHorizontalIcon, PlusIcon, ShellPromptIcon, NotesIcon, ChevronsCollapseIcon, FolderPlusIcon } from './icons'
 import { useQuickNotesStore } from '../stores/useQuickNotesStore'
 import { StatusDot } from './StatusDot'
 import type { Agent, AgentGroup, Session } from '../types'
@@ -472,8 +472,8 @@ function AgentGroupItem({
 }
 
 export function AgentTree() {
-  const { agents, groups } = useAgentStore()
-  const { searchQuery, openDialog, expandedGroups, collapseAgents } = useUIStore()
+  const { agents, groups, addAgentGroup } = useAgentStore()
+  const { searchQuery, openDialog, expandedGroups, collapseAgents, setRenamingId, toggleGroup } = useUIStore()
 
   const query = searchQuery.toLowerCase().trim()
 
@@ -498,23 +498,40 @@ export function AgentTree() {
     useUIStore.getState().openContextMenu({ x: e.clientX, y: e.clientY, type: 'agents-header', targetId: '' })
   }
 
+  const handleCreateGroup = async (e: React.MouseEvent) => {
+    e.stopPropagation()
+    const group = await addAgentGroup('New Group')
+    if (!group) return
+    toggleGroup(group.id)
+    requestAnimationFrame(() => setRenamingId(group.id))
+  }
+
   return (
     <div className="agent-tree-section stagger-3">
       <div className="section-header" onContextMenu={handleSectionContextMenu}>
         <span className="section-label">Agents</span>
-        {hasAnyExpanded && (
-          <button className="section-collapse-btn" onClick={(e) => { e.stopPropagation(); collapseAgents(agentGroupIds) }} title="Collapse all">
-            <ChevronsCollapseIcon />
+        <div className="section-header__actions">
+          <span className="section-count">{filteredAgents.length}</span>
+          {hasAnyExpanded && (
+            <button className="section-collapse-btn" onClick={(e) => { e.stopPropagation(); collapseAgents(agentGroupIds) }} title="Collapse all">
+              <ChevronsCollapseIcon />
+            </button>
+          )}
+          <button
+            className="section-add-btn"
+            onClick={handleCreateGroup}
+            title="New Group"
+          >
+            <FolderPlusIcon />
           </button>
-        )}
-        <button
-          className="section-add-btn"
-          onClick={(e) => { e.stopPropagation(); openDialog('add-agent') }}
-          title="Add Agent"
-        >
-          <PlusIcon />
-        </button>
-        <span className="section-count">{filteredAgents.length}</span>
+          <button
+            className="section-add-btn"
+            onClick={(e) => { e.stopPropagation(); openDialog('add-agent') }}
+            title="Add Agent"
+          >
+            <PlusIcon />
+          </button>
+        </div>
       </div>
 
       {(filteredAgents.length > 0 || groups.length > 0) ? (

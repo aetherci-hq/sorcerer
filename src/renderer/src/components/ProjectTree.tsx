@@ -4,7 +4,7 @@ import { useProjectStore } from '../stores/useProjectStore'
 import { useSessionStore } from '../stores/useSessionStore'
 import { useUIStore, getAllSessionIds, findLeafBySession } from '../stores/useUIStore'
 import { useTeamStore } from '../stores/useTeamStore'
-import { ChevronIcon, FolderIcon, TerminalIcon, ShellPromptIcon, UserIcon, MoreHorizontalIcon, NotesIcon, WifiIcon, ChevronsCollapseIcon, PlusIcon, AlertTriangleIcon, BotIcon } from './icons'
+import { ChevronIcon, FolderIcon, TerminalIcon, ShellPromptIcon, UserIcon, MoreHorizontalIcon, NotesIcon, WifiIcon, ChevronsCollapseIcon, PlusIcon, AlertTriangleIcon, BotIcon, FolderPlusIcon } from './icons'
 import { useQuickNotesStore } from '../stores/useQuickNotesStore'
 import { StatusDot } from './StatusDot'
 import { Tooltip } from './Tooltip'
@@ -1068,7 +1068,7 @@ function GroupItem({
 export function ProjectTree() {
   const { projects, groups, reorderProjects, addGroup, moveProjectToGroup } = useProjectStore()
   const { sessions } = useSessionStore()
-  const { searchQuery, expandedProjects, expandedSessions, expandedGroups, collapseProjects, openDialog } = useUIStore()
+  const { searchQuery, expandedProjects, expandedSessions, expandedGroups, collapseProjects, openDialog, setRenamingId, toggleGroup } = useUIStore()
   const [dragIndex, setDragIndex] = useState<number | null>(null)
   const [dropTarget, setDropTarget] = useState<{ index: number; position: 'above' | 'below' } | null>(null)
 
@@ -1174,19 +1174,32 @@ export function ProjectTree() {
     useUIStore.getState().openContextMenu({ x: e.clientX, y: e.clientY, type: 'projects-header', targetId: '' })
   }
 
+  const handleCreateGroup = async (e: React.MouseEvent) => {
+    e.stopPropagation()
+    const group = await addGroup('New Group')
+    if (!group) return
+    toggleGroup(group.id)
+    requestAnimationFrame(() => setRenamingId(group.id))
+  }
+
   return (
     <>
       <div className="section-header stagger-4" onContextMenu={handleSectionContextMenu}>
         <span className="section-label">Projects</span>
-        {hasAnyExpanded && (
-          <button className="section-collapse-btn" onClick={(e) => { e.stopPropagation(); collapseProjects(projects.map((p) => p.id), projectGroupIds) }} title="Collapse all">
-            <ChevronsCollapseIcon />
+        <div className="section-header__actions">
+          <span className="section-count">{totalSessions}</span>
+          {hasAnyExpanded && (
+            <button className="section-collapse-btn" onClick={(e) => { e.stopPropagation(); collapseProjects(projects.map((p) => p.id), projectGroupIds) }} title="Collapse all">
+              <ChevronsCollapseIcon />
+            </button>
+          )}
+          <button className="section-add-btn" onClick={handleCreateGroup} title="New group">
+            <FolderPlusIcon />
           </button>
-        )}
-        <button className="section-add-btn" onClick={(e) => { e.stopPropagation(); openDialog('add-project') }} title="Add project">
-          <PlusIcon />
-        </button>
-        <span className="section-count">{totalSessions}</span>
+          <button className="section-add-btn" onClick={(e) => { e.stopPropagation(); openDialog('add-project') }} title="Add project">
+            <PlusIcon />
+          </button>
+        </div>
       </div>
 
       <div className="tree" onDragLeave={() => setDropTarget(null)}>
