@@ -139,7 +139,7 @@ function AgentCountdown({ agent }: { agent: Agent }) {
   return <span className="agent-countdown">{remaining}</span>
 }
 
-function AgentItem({ agent, staggerClass }: { agent: Agent; staggerClass?: string }) {
+function AgentItem({ agent, staggerClass, nested = false }: { agent: Agent; staggerClass?: string; nested?: boolean }) {
   const { setActiveSession, activeSessionId, sessions } = useSessionStore()
   const { openContextMenu, renamingId, setRenamingId, splitRoot, expandedSessions, toggleSession, poppedOutSessionIds, showProviderBadges } = useUIStore()
   const { renameAgent } = useAgentStore()
@@ -242,7 +242,7 @@ function AgentItem({ agent, staggerClass }: { agent: Agent; staggerClass?: strin
     <div className={`tree-project ${staggerClass || ''}`}>
       <div
         ref={itemRef}
-        className={`tree-item ${isActive ? 'tree-item--active' : ''} ${isInSplit ? 'tree-item--split' : ''}`}
+        className={`tree-item ${!nested ? 'tree-item--root-agent' : ''} ${!hasChildren ? 'tree-item--no-chevron' : ''} ${isActive ? 'tree-item--active' : ''} ${isInSplit ? 'tree-item--split' : ''}`}
         onClick={async () => {
           if (isRenaming) return
           if (await assignPanelToPopoutTarget(agent.id)) return
@@ -447,6 +447,7 @@ function AgentGroupItem({
             <AgentItem
               key={agent.id}
               agent={agent}
+              nested
               staggerClass={`stagger-${Math.min(i + 5, 10)}`}
             />
           ))}
@@ -508,6 +509,7 @@ export function AgentTree() {
             <AgentItem
               key={agent.id}
               agent={agent}
+              nested={false}
               staggerClass={`stagger-${Math.min(i + 4, 10)}`}
             />
           ))}

@@ -589,6 +589,10 @@ body {
   padding-left: 8px;
 }
 
+.tree-item--root-agent.tree-item--no-chevron {
+  padding-left: 8px;
+}
+
 .tree-label--group {
   font-size: 11px;
   font-weight: 600;
