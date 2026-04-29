@@ -721,6 +721,70 @@ body {
   flex: none;
 }
 
+.tree-item--session-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  column-gap: 8px;
+}
+
+.tree-item-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.tree-item-titleline {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tree-item-titleline .tree-label {
+  flex: 1;
+}
+
+.tree-item-meta {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.tree-item-tail {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: flex-end;
+  min-width: 0;
+  margin-left: auto;
+}
+
+.tree-meta-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 16px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  font-size: 9px;
+  font-family: var(--font-mono);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.tree-meta-text {
+  font-size: 10px;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
 .tree-hint {
   font-size: 11px;
   font-family: var(--font-mono);
@@ -959,25 +1023,18 @@ body {
 
 /* Children indent */
 .tree-children {
-  padding-left: 12px;
-  position: relative;
+  padding-left: 0;
 }
 
 .tree-children > .tree-item,
 .tree-children > .tree-project,
 .tree-children > .tree-group,
 .tree-children > .tree-teammate-group {
-  margin-left: 8px;
+  margin-left: 0;
 }
 
-.tree-children::before {
-  content: '';
-  position: absolute;
-  left: 10px;
-  top: 0;
-  bottom: 8px;
-  width: 1px;
-  background: var(--border-subtle);
+.tree-children .tree-item {
+  padding-left: 8px;
 }
 
 /* Teammate sub-items */
@@ -987,7 +1044,7 @@ body {
 }
 
 .tree-teammate {
-  padding-left: 4px;
+  padding-left: 8px;
 }
 
 .teammate-badge {
@@ -1017,7 +1074,7 @@ body {
 }
 
 .tree-teammate-task {
-  padding: 2px 12px 2px 24px;
+  padding: 2px 12px 2px 8px;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -1033,7 +1090,7 @@ body {
 }
 
 .tree-team-summary {
-  padding: 4px 12px 4px 24px;
+  padding: 4px 12px 4px 8px;
   font-size: 11px;
   font-family: var(--font-mono);
   color: var(--text-tertiary);
@@ -1042,7 +1099,7 @@ body {
 
 .tree-subagent {
   min-height: 24px;
-  padding: 2px 12px 2px 4px;
+  padding: 2px 12px 2px 8px;
   gap: 8px;
   cursor: default;
   background: transparent;

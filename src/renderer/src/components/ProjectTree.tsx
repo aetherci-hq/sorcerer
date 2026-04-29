@@ -436,7 +436,7 @@ function SessionItem({
     <div className={`tree-project ${staggerClass || ''}`}>
       <div
         ref={itemRef}
-        className={`tree-item ${isActive ? 'tree-item--active' : ''} ${isInSplit ? 'tree-item--split' : ''} ${session.status === 'archived' ? 'tree-item--archived' : ''}`}
+        className={`tree-item tree-item--session-row ${isActive ? 'tree-item--active' : ''} ${isInSplit ? 'tree-item--split' : ''} ${session.status === 'archived' ? 'tree-item--archived' : ''}`}
         onClick={async () => {
           if (isRenaming) return
           setSidebarSelection({ type: 'session', id: session.id })
@@ -461,74 +461,81 @@ function SessionItem({
           ? <ShellPromptIcon className="tree-icon tree-icon--quick-terminal" />
           : <TerminalIcon className="tree-icon" />
         }
-        <div className="tree-label-group">
-            {isRenaming ? (
-              <input
-                ref={renameInputRef}
-                className="tree-rename-input"
-                value={renameValue}
-                onChange={(e) => setRenameValue(e.target.value)}
-                onKeyDown={handleRenameKeyDown}
-                onBlur={commitRename}
-                onClick={(e) => e.stopPropagation()}
-              />
-            ) : (
-              <span className="tree-label" onDoubleClick={handleDoubleClick}>{session.name}</span>
-            )}
-            {showProviderBadges && session.provider && (
-              <span className="teammate-badge" style={{ fontSize: '9px' }}>{session.provider}</span>
-            )}
-            {isMainRepo && session.branch && !isRenaming && (
-              <span className="teammate-badge" style={{ fontSize: '9px' }}>direct</span>
-            )}
-            {!isRenaming && getResumeStateLabel(session) && (
-              <Tooltip label={getResumeStateLabel(session)!}>
-                <span className="tree-resume-state">{session.resume_status === 'unsupported' ? 'restart only' : 'capturing'}</span>
-              </Tooltip>
-            )}
-            {!isRenaming && visibleProviderSubAgents.length > 0 && (
-              <Tooltip
-                label={
-                  activeProviderSubAgentCount > 0
-                    ? `${activeProviderSubAgentCount} active Codex sub-agent${activeProviderSubAgentCount !== 1 ? 's' : ''}, ${visibleProviderSubAgents.length} visible total`
-                    : `${visibleProviderSubAgents.length} recent Codex sub-agent${visibleProviderSubAgents.length !== 1 ? 's' : ''}`
-                }
-              >
-                <span className={`tree-subagent-summary ${activeProviderSubAgentCount > 0 ? 'tree-subagent-summary--active' : ''}`}>
-                  {activeProviderSubAgentCount > 0 ? `${activeProviderSubAgentCount} active` : `${visibleProviderSubAgents.length} recent`}
-                </span>
-              </Tooltip>
-            )}
-            {!isRenaming && !resumeHealth?.canResume && formatResumeWarning(resumeHealth) && (
-              <Tooltip label={formatResumeWarning(resumeHealth)!}>
-                <span className="tree-resume-warning" aria-label="Resume warning">
-                  <AlertTriangleIcon />
-                </span>
-              </Tooltip>
-            )}
-            {!isRenaming && formatSessionChangeSummary(changeSummary) && (
-              <span className="tree-change-summary">{formatSessionChangeSummary(changeSummary)}</span>
-            )}
-            {!isRenaming && divergence && divergence.behind > 0 && (
-              <Tooltip label={`${divergence.behind} commit${divergence.behind !== 1 ? 's' : ''} behind main${divergence.ahead > 0 ? `, ${divergence.ahead} ahead` : ''}`}>
-                <span className={`tree-divergence ${divergence.behind >= 10 ? 'tree-divergence--danger' : divergence.behind >= 3 ? 'tree-divergence--warning' : ''}`}>
-                  {divergence.behind}
-                  <svg width="8" height="8" viewBox="0 0 16 16" fill="currentColor"><path fillRule="evenodd" d="M8 4a.5.5 0 0 1 .5.5v5.793l2.146-2.147a.5.5 0 0 1 .708.708l-3 3a.5.5 0 0 1-.708 0l-3-3a.5.5 0 1 1 .708-.708L7.5 10.293V4.5A.5.5 0 0 1 8 4z"/></svg>
-                </span>
-              </Tooltip>
-            )}
-            {!isRenaming && hasSavedNotes && <NotesIcon className="tree-icon tree-notes-indicator" />}
-            {!isRenaming && remoteSessionIds.has(session.id) && (
-              <WifiIcon className="tree-icon tree-remote-indicator" />
-            )}
+        <div className="tree-item-main">
+          {isRenaming ? (
+            <input
+              ref={renameInputRef}
+              className="tree-rename-input"
+              value={renameValue}
+              onChange={(e) => setRenameValue(e.target.value)}
+              onKeyDown={handleRenameKeyDown}
+              onBlur={commitRename}
+              onClick={(e) => e.stopPropagation()}
+            />
+          ) : (
+            <>
+              <div className="tree-item-titleline">
+                <span className="tree-label" onDoubleClick={handleDoubleClick}>{session.name}</span>
+              </div>
+              <div className="tree-item-meta">
+                {showProviderBadges && session.provider && (
+                  <span className="tree-meta-badge">{session.provider}</span>
+                )}
+                {isMainRepo && session.branch && (
+                  <span className="tree-meta-badge">direct</span>
+                )}
+                {session.branch && <span className="tree-meta-text">{session.branch}</span>}
+                {getResumeStateLabel(session) && (
+                  <Tooltip label={getResumeStateLabel(session)!}>
+                    <span className="tree-resume-state">{session.resume_status === 'unsupported' ? 'restart only' : 'capturing'}</span>
+                  </Tooltip>
+                )}
+                {visibleProviderSubAgents.length > 0 && (
+                  <Tooltip
+                    label={
+                      activeProviderSubAgentCount > 0
+                        ? `${activeProviderSubAgentCount} active Codex sub-agent${activeProviderSubAgentCount !== 1 ? 's' : ''}, ${visibleProviderSubAgents.length} visible total`
+                        : `${visibleProviderSubAgents.length} recent Codex sub-agent${visibleProviderSubAgents.length !== 1 ? 's' : ''}`
+                    }
+                  >
+                    <span className={`tree-subagent-summary ${activeProviderSubAgentCount > 0 ? 'tree-subagent-summary--active' : ''}`}>
+                      {activeProviderSubAgentCount > 0 ? `${activeProviderSubAgentCount} active` : `${visibleProviderSubAgents.length} recent`}
+                    </span>
+                  </Tooltip>
+                )}
+                {!resumeHealth?.canResume && formatResumeWarning(resumeHealth) && (
+                  <Tooltip label={formatResumeWarning(resumeHealth)!}>
+                    <span className="tree-resume-warning" aria-label="Resume warning">
+                      <AlertTriangleIcon />
+                    </span>
+                  </Tooltip>
+                )}
+                {formatSessionChangeSummary(changeSummary) && (
+                  <span className="tree-change-summary">{formatSessionChangeSummary(changeSummary)}</span>
+                )}
+                {divergence && divergence.behind > 0 && (
+                  <Tooltip label={`${divergence.behind} commit${divergence.behind !== 1 ? 's' : ''} behind main${divergence.ahead > 0 ? `, ${divergence.ahead} ahead` : ''}`}>
+                    <span className={`tree-divergence ${divergence.behind >= 10 ? 'tree-divergence--danger' : divergence.behind >= 3 ? 'tree-divergence--warning' : ''}`}>
+                      {divergence.behind}
+                      <svg width="8" height="8" viewBox="0 0 16 16" fill="currentColor"><path fillRule="evenodd" d="M8 4a.5.5 0 0 1 .5.5v5.793l2.146-2.147a.5.5 0 0 1 .708.708l-3 3a.5.5 0 0 1-.708 0l-3-3a.5.5 0 1 1 .708-.708L7.5 10.293V4.5A.5.5 0 0 1 8 4z"/></svg>
+                    </span>
+                  </Tooltip>
+                )}
+                {hasSavedNotes && <NotesIcon className="tree-icon tree-notes-indicator" />}
+                {remoteSessionIds.has(session.id) && (
+                  <WifiIcon className="tree-icon tree-remote-indicator" />
+                )}
+              </div>
+            </>
+          )}
         </div>
         {!isRenaming && (
-          <>
+          <div className="tree-item-tail">
             <button className="tree-item-actions" onClick={handleMoreClick}>
               <MoreHorizontalIcon />
             </button>
             <StatusDot status={poppedOutSessionIds.has(session.id) && session.status === 'active' ? 'popped-out' : session.status} />
-          </>
+          </div>
         )}
       </div>
 
