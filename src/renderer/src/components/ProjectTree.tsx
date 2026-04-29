@@ -463,15 +463,6 @@ function SessionItem({
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
       >
-        {hasChildren && (
-          <ChevronIcon
-            className={`tree-chevron ${isExpanded ? 'tree-chevron--open' : ''}`}
-            onClick={(e) => {
-              e.stopPropagation()
-              toggleSession(session.id)
-            }}
-          />
-        )}
         {session.type === 'quick-terminal'
           ? <ShellPromptIcon className="tree-icon tree-icon--quick-terminal" />
           : <TerminalIcon className="tree-icon" />
@@ -490,7 +481,7 @@ function SessionItem({
           ) : (
             <>
               <div className="tree-item-titleline">
-                <span className="tree-label" onDoubleClick={handleDoubleClick}>{session.name}</span>
+                <span className="tree-label tree-label--session" onDoubleClick={handleDoubleClick}>{session.name}</span>
               </div>
               <div className="tree-item-meta">
                 {showProviderBadges && session.provider && (
@@ -553,6 +544,15 @@ function SessionItem({
               <MoreHorizontalIcon />
             </button>
             <StatusDot status={poppedOutSessionIds.has(session.id) && session.status === 'active' ? 'popped-out' : session.status} />
+            {hasChildren && (
+              <ChevronIcon
+                className={`tree-chevron ${isExpanded ? 'tree-chevron--open' : ''}`}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  toggleSession(session.id)
+                }}
+              />
+            )}
           </div>
         )}
       </div>
@@ -621,6 +621,7 @@ function ProjectItem({ project, staggerClass, projectIndex, onDragStart: onProje
     }
   }
   const archivedSessions = projectSessions.filter((s) => s.status === 'archived')
+  const hasVisibleChildren = topLevelActive.length > 0 || archivedSessions.length > 0
   const [resumeHealthBySession, setResumeHealthBySession] = useState<Record<string, SessionResumeHealth>>({})
   const [providerSubAgentsBySession, setProviderSubAgentsBySession] = useState<Record<string, ProviderSubAgent[]>>({})
   const [subAgentClock, setSubAgentClock] = useState(() => Date.now())
@@ -787,10 +788,11 @@ function ProjectItem({ project, staggerClass, projectIndex, onDragStart: onProje
     <div className={`tree-project ${staggerClass}`}>
       <div
         ref={headerRef}
-        className={`tree-item ${dropPosition === 'above' ? 'tree-item--drop-above' : ''} ${dropPosition === 'below' ? 'tree-item--drop-below' : ''}`}
+        className={`tree-item tree-item--folder-row ${dropPosition === 'above' ? 'tree-item--drop-above' : ''} ${dropPosition === 'below' ? 'tree-item--drop-below' : ''}`}
         onClick={() => {
           if (isRenaming) return
           setSidebarSelection({ type: 'project', id: project.id })
+          if (!hasVisibleChildren) return
           toggleProject(project.id)
         }}
         onContextMenu={handleContextMenu}
@@ -800,72 +802,82 @@ function ProjectItem({ project, staggerClass, projectIndex, onDragStart: onProje
         onDragEnd={onProjectDragEnd}
         onDrop={(e) => onProjectDrop(e, projectIndex)}
       >
-        <ChevronIcon
-          className={`tree-chevron ${isExpanded ? 'tree-chevron--open' : ''}`}
-        />
-        <FolderIcon className="tree-icon tree-icon--project" />
-        {isRenaming ? (
-          <input
-            ref={renameInputRef}
-            className="tree-rename-input"
-            value={renameValue}
-            onChange={(e) => setRenameValue(e.target.value)}
-            onKeyDown={handleRenameKeyDown}
-            onBlur={() => commitRename()}
-            onClick={(e) => e.stopPropagation()}
-          />
-        ) : (
-          <span className="tree-label" onDoubleClick={handleDoubleClick}>{project.name}</span>
-        )}
-        {!isRenaming && hasResumeWarning && projectWarningLabel && (
-          <Tooltip label={projectWarningLabel}>
-            <span className="tree-resume-warning tree-resume-warning--project" aria-label="Project resume warning">
-              <AlertTriangleIcon />
-            </span>
-          </Tooltip>
-        )}
-        {!isRenaming && (
-          <button className="tree-item-actions" onClick={handleMoreClick}>
-            <MoreHorizontalIcon />
-          </button>
-        )}
-      </div>
-
-      <div className={`tree-children-wrapper ${isExpanded ? 'tree-children-wrapper--open' : ''}`}>
-        <div className="tree-children">
-          {topLevelActive.map((session, i) => (
-            <SessionItem
-              key={session.id}
-              session={session}
-              childQTs={childQTMap.get(session.id) || []}
-              providerSubAgents={providerSubAgentsBySession[session.id] || []}
-              isActive={session.id === activeSessionId}
-              staggerClass={`stagger-${Math.min(i + 6, 10)}`}
-              projectId={project.id}
-              resumeHealth={resumeHealthBySession[session.id] || null}
+        <div className="tree-item-main">
+          <div className="tree-item-titleline">
+            {isRenaming ? (
+              <input
+                ref={renameInputRef}
+                className="tree-rename-input"
+                value={renameValue}
+                onChange={(e) => setRenameValue(e.target.value)}
+                onKeyDown={handleRenameKeyDown}
+                onBlur={() => commitRename()}
+                onClick={(e) => e.stopPropagation()}
+              />
+            ) : (
+              <span className="tree-label" onDoubleClick={handleDoubleClick}>{project.name}</span>
+            )}
+          </div>
+          <div className="tree-item-meta tree-item-meta--empty" aria-hidden="true" />
+        </div>
+        <div className="tree-item-tail">
+          {!isRenaming && hasResumeWarning && projectWarningLabel && (
+            <Tooltip label={projectWarningLabel}>
+              <span className="tree-resume-warning tree-resume-warning--project" aria-label="Project resume warning">
+                <AlertTriangleIcon />
+              </span>
+            </Tooltip>
+          )}
+          {!isRenaming && (
+            <button className="tree-item-actions" onClick={handleMoreClick}>
+              <MoreHorizontalIcon />
+            </button>
+          )}
+          {hasVisibleChildren && (
+            <ChevronIcon
+              className={`tree-chevron ${isExpanded ? 'tree-chevron--open' : ''}`}
             />
-          ))}
-          {archivedSessions.length > 0 && (
-            <>
-              <div className="tree-archived-divider">
-                <span className="tree-archived-label">Archived ({archivedSessions.length})</span>
-              </div>
-              {archivedSessions.map((session, i) => (
-                <SessionItem
-                  key={session.id}
-                  session={session}
-                  childQTs={[]}
-                  providerSubAgents={[]}
-                  isActive={session.id === activeSessionId}
-                  staggerClass={`stagger-${Math.min(i + 8, 10)}`}
-                  projectId={project.id}
-                  resumeHealth={resumeHealthBySession[session.id] || null}
-                />
-              ))}
-            </>
           )}
         </div>
       </div>
+
+      {hasVisibleChildren && (
+        <div className={`tree-children-wrapper ${isExpanded ? 'tree-children-wrapper--open' : ''}`}>
+          <div className="tree-children">
+            {topLevelActive.map((session, i) => (
+              <SessionItem
+                key={session.id}
+                session={session}
+                childQTs={childQTMap.get(session.id) || []}
+                providerSubAgents={providerSubAgentsBySession[session.id] || []}
+                isActive={session.id === activeSessionId}
+                staggerClass={`stagger-${Math.min(i + 6, 10)}`}
+                projectId={project.id}
+                resumeHealth={resumeHealthBySession[session.id] || null}
+              />
+            ))}
+            {archivedSessions.length > 0 && (
+              <>
+                <div className="tree-archived-divider">
+                  <span className="tree-archived-label">Archived ({archivedSessions.length})</span>
+                </div>
+                {archivedSessions.map((session, i) => (
+                  <SessionItem
+                    key={session.id}
+                    session={session}
+                    childQTs={[]}
+                    providerSubAgents={[]}
+                    isActive={session.id === activeSessionId}
+                    staggerClass={`stagger-${Math.min(i + 8, 10)}`}
+                    projectId={project.id}
+                    resumeHealth={resumeHealthBySession[session.id] || null}
+                  />
+                ))}
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -969,6 +981,7 @@ function GroupItem({
 
   // Filter to only show projects that match search
   const visibleProjects = groupProjects.filter((p) => filtered.includes(p))
+  const hasVisibleChildren = visibleProjects.length > 0
 
   // Hide group only when search is active and nothing matches
   const isSearching = filtered.length !== useProjectStore.getState().projects.length
@@ -977,10 +990,11 @@ function GroupItem({
   return (
     <div className={`tree-group ${staggerClass}`}>
       <div
-        className={`tree-item tree-item--group ${dropHighlight ? 'tree-item--drop-inside' : ''}`}
+        className={`tree-item tree-item--group tree-item--folder-row ${dropHighlight ? 'tree-item--drop-inside' : ''}`}
         onClick={() => {
           if (isRenaming) return
           setSidebarSelection({ type: 'project-group', id: group.id })
+          if (!hasVisibleChildren) return
           toggleGroup(group.id)
         }}
         onContextMenu={handleContextMenu}
@@ -988,54 +1002,65 @@ function GroupItem({
         onDragLeave={handleGroupDragLeave}
         onDrop={handleGroupDrop}
       >
-        <ChevronIcon
-          className={`tree-chevron ${isExpanded ? 'tree-chevron--open' : ''}`}
-        />
-        {isRenaming ? (
-          <input
-            ref={renameInputRef}
-            className="tree-rename-input"
-            value={renameValue}
-            onChange={(e) => setRenameValue(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') commitRename()
-              else if (e.key === 'Escape') cancelRename()
-            }}
-            onBlur={() => commitRename()}
-            onClick={(e) => e.stopPropagation()}
-          />
-        ) : (
-          <span className="tree-label tree-label--group">{group.name}</span>
-        )}
-        {!isRenaming && (
-          <button className="tree-item-actions" onClick={handleMoreClick}>
-            <MoreHorizontalIcon />
-          </button>
-        )}
-        <span className="tree-group-count">{visibleProjects.length}</span>
-      </div>
-
-      <div className={`tree-children-wrapper ${isExpanded ? 'tree-children-wrapper--open' : ''}`}>
-        <div className="tree-children">
-          {visibleProjects.map((project, i) => {
-            const globalIndex = allSessions.indexOf(project as any) // We'll use project's index in allProjects
-            const pIdx = useProjectStore.getState().projects.indexOf(project)
-            return (
-              <ProjectItem
-                key={project.id}
-                project={project}
-                staggerClass={`stagger-${Math.min(i + 6, 10)}`}
-                projectIndex={pIdx}
-                onDragStart={projectDragHandlers.onDragStart}
-                onDragOver={projectDragHandlers.onDragOver}
-                onDragEnd={projectDragHandlers.onDragEnd}
-                onDrop={projectDragHandlers.onDrop}
-                dropPosition={dragState.dropTarget?.index === pIdx && dragState.dragIndex !== pIdx ? dragState.dropTarget.position : null}
+        <div className="tree-item-main">
+          <div className="tree-item-titleline">
+            {isRenaming ? (
+              <input
+                ref={renameInputRef}
+                className="tree-rename-input"
+                value={renameValue}
+                onChange={(e) => setRenameValue(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') commitRename()
+                  else if (e.key === 'Escape') cancelRename()
+                }}
+                onBlur={() => commitRename()}
+                onClick={(e) => e.stopPropagation()}
               />
-            )
-          })}
+            ) : (
+              <span className="tree-label tree-label--group">{group.name}</span>
+            )}
+          </div>
+          <div className="tree-item-meta tree-item-meta--empty" aria-hidden="true" />
+        </div>
+        <div className="tree-item-tail">
+          {!isRenaming && (
+            <button className="tree-item-actions" onClick={handleMoreClick}>
+              <MoreHorizontalIcon />
+            </button>
+          )}
+          <span className="tree-group-count">{visibleProjects.length}</span>
+          {hasVisibleChildren && (
+            <ChevronIcon
+              className={`tree-chevron ${isExpanded ? 'tree-chevron--open' : ''}`}
+            />
+          )}
         </div>
       </div>
+
+      {hasVisibleChildren && (
+        <div className={`tree-children-wrapper ${isExpanded ? 'tree-children-wrapper--open' : ''}`}>
+          <div className="tree-children">
+            {visibleProjects.map((project, i) => {
+              const globalIndex = allSessions.indexOf(project as any) // We'll use project's index in allProjects
+              const pIdx = useProjectStore.getState().projects.indexOf(project)
+              return (
+                <ProjectItem
+                  key={project.id}
+                  project={project}
+                  staggerClass={`stagger-${Math.min(i + 6, 10)}`}
+                  projectIndex={pIdx}
+                  onDragStart={projectDragHandlers.onDragStart}
+                  onDragOver={projectDragHandlers.onDragOver}
+                  onDragEnd={projectDragHandlers.onDragEnd}
+                  onDrop={projectDragHandlers.onDrop}
+                  dropPosition={dragState.dropTarget?.index === pIdx && dragState.dragIndex !== pIdx ? dragState.dropTarget.position : null}
+                />
+              )
+            })}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

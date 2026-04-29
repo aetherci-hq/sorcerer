@@ -518,7 +518,7 @@ body {
   flex: 0 0 auto;
   cursor: row-resize;
   position: relative;
-  margin: 0 10px;
+  margin: 0 12px;
   border-radius: 999px;
   -webkit-app-region: no-drag;
 }
@@ -561,7 +561,7 @@ body {
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 0 6px 12px;
+  padding: 0 12px 12px;
   scrollbar-width: thin;
   scrollbar-color: var(--border-medium) transparent;
 }
@@ -589,7 +589,43 @@ body {
   padding-left: 8px;
 }
 
-.tree-item--root-agent.tree-item--no-chevron {
+.tree-item--folder-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 8px;
+  padding-left: 8px;
+  min-height: 40px;
+}
+
+.tree-item--folder-row .tree-chevron {
+  position: static;
+  left: auto;
+  margin-left: 0;
+  flex-shrink: 0;
+}
+
+.tree-item--folder-row .tree-item-main {
+  justify-content: center;
+  gap: 0;
+}
+
+.tree-item--folder-row .tree-item-tail {
+  align-self: center;
+}
+
+.tree-item--agent-row {
+  padding-left: 8px;
+}
+
+.tree-item--agent-row .tree-chevron {
+  position: static;
+  left: auto;
+  margin-left: 0;
+  flex-shrink: 0;
+}
+
+.tree-item--no-chevron {
   padding-left: 8px;
 }
 
@@ -615,7 +651,7 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 8px 6px 28px;
+  padding: 6px 8px;
   margin: 1px 0;
   border-radius: var(--radius-sm);
   cursor: pointer;
@@ -626,6 +662,11 @@ body {
 
 .tree-item:hover {
   background: var(--bg-hover);
+}
+
+.tree-item--folder-row:hover,
+.tree-item--group.tree-item--agent-row:hover {
+  background: transparent;
 }
 
 .tree-item--active {
@@ -660,8 +701,8 @@ body {
 }
 
 .tree-chevron {
-  position: absolute;
-  left: 8px;
+  position: static;
+  left: auto;
   width: 14px;
   height: 14px;
   color: var(--text-muted);
@@ -699,8 +740,18 @@ body {
   transition: color 0.15s;
 }
 
+.tree-label--session,
+.tree-label--agent {
+  color: var(--text-secondary);
+}
+
 .tree-item:hover .tree-label {
   color: var(--text-primary);
+}
+
+.tree-item--group.tree-item--agent-row:hover .tree-label--group,
+.tree-item--folder-row:hover .tree-label--group {
+  color: var(--text-muted);
 }
 
 .tree-item--active .tree-label {
@@ -756,6 +807,14 @@ body {
   align-items: center;
   gap: 6px;
   flex-wrap: wrap;
+}
+
+.tree-item-meta--empty {
+  min-height: 16px;
+}
+
+.tree-item--folder-row .tree-item-meta--empty {
+  display: none;
 }
 
 .tree-item-tail {
@@ -3181,7 +3240,7 @@ button:focus-visible,
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 0;
+  width: 22px;
   height: 22px;
   border: none;
   border-radius: var(--radius-sm);
@@ -3189,8 +3248,9 @@ button:focus-visible,
   color: var(--text-muted);
   cursor: pointer;
   opacity: 0;
+  visibility: hidden;
   overflow: visible;
-  transition: opacity 0.15s var(--ease-out), width 0s, background 0.15s var(--ease-out), color 0.15s var(--ease-out);
+  transition: opacity 0.15s var(--ease-out), visibility 0s linear 0.15s, background 0.15s var(--ease-out), color 0.15s var(--ease-out);
   padding: 0;
   flex-shrink: 0;
 }
@@ -3202,7 +3262,13 @@ button:focus-visible,
 
 .tree-item:hover .tree-item-actions {
   opacity: 1;
-  width: 22px;
+  visibility: visible;
+  transition-delay: 0s, 0s, 0s, 0s;
+}
+
+.tree-item-actions:focus-visible {
+  opacity: 1;
+  visibility: visible;
 }
 
 .tree-item-actions:hover {

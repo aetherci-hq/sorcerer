@@ -242,7 +242,7 @@ function AgentItem({ agent, staggerClass, nested = false }: { agent: Agent; stag
     <div className={`tree-project ${staggerClass || ''}`}>
       <div
         ref={itemRef}
-        className={`tree-item ${!nested ? 'tree-item--root-agent' : ''} ${!hasChildren ? 'tree-item--no-chevron' : ''} ${isActive ? 'tree-item--active' : ''} ${isInSplit ? 'tree-item--split' : ''}`}
+        className={`tree-item tree-item--agent-row ${!nested ? 'tree-item--root-agent' : ''} ${!hasChildren ? 'tree-item--no-chevron' : ''} ${isActive ? 'tree-item--active' : ''} ${isInSplit ? 'tree-item--split' : ''}`}
         onClick={async () => {
           if (isRenaming) return
           if (await assignPanelToPopoutTarget(agent.id)) return
@@ -253,15 +253,6 @@ function AgentItem({ agent, staggerClass, nested = false }: { agent: Agent; stag
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
       >
-        {hasChildren && (
-          <ChevronIcon
-            className={`tree-chevron ${isExpanded ? 'tree-chevron--open' : ''}`}
-            onClick={(e) => {
-              e.stopPropagation()
-              toggleSession(agent.id)
-            }}
-          />
-        )}
         <BotIcon className="tree-icon tree-icon--agent" />
         <div className="tree-label-group">
           {isRenaming ? (
@@ -276,7 +267,7 @@ function AgentItem({ agent, staggerClass, nested = false }: { agent: Agent; stag
             />
           ) : (
             <>
-              <span className="tree-label" onDoubleClick={handleDoubleClick}>{agent.name}</span>
+              <span className="tree-label tree-label--agent" onDoubleClick={handleDoubleClick}>{agent.name}</span>
               {showProviderBadges && agent.provider && (
                 <span className="teammate-badge" style={{ fontSize: '9px' }}>{agent.provider}</span>
               )}
@@ -296,6 +287,15 @@ function AgentItem({ agent, staggerClass, nested = false }: { agent: Agent; stag
             </button>
             <StatusDot status={poppedOutSessionIds.has(agent.id) && agent.status === 'active' ? 'popped-out' : agent.status} />
           </>
+        )}
+        {hasChildren && (
+          <ChevronIcon
+            className={`tree-chevron ${isExpanded ? 'tree-chevron--open' : ''}`}
+            onClick={(e) => {
+              e.stopPropagation()
+              toggleSession(agent.id)
+            }}
+          />
         )}
       </div>
 
@@ -401,58 +401,72 @@ function AgentGroupItem({
   }
 
   const visibleAgents = groupAgents.filter((a) => filteredAgents.includes(a))
+  const hasVisibleChildren = visibleAgents.length > 0
   const isSearching = filteredAgents.length !== useAgentStore.getState().agents.length
   if (visibleAgents.length === 0 && isSearching) return null
 
   return (
     <div className={`tree-group ${staggerClass}`}>
       <div
-        className={`tree-item tree-item--group ${dropHighlight ? 'tree-item--drop-inside' : ''}`}
-        onClick={() => !isRenaming && toggleGroup(group.id)}
+        className={`tree-item tree-item--group tree-item--agent-row tree-item--folder-row ${dropHighlight ? 'tree-item--drop-inside' : ''}`}
+        onClick={() => {
+          if (isRenaming || !hasVisibleChildren) return
+          toggleGroup(group.id)
+        }}
         onContextMenu={handleContextMenu}
         onDragOver={handleGroupDragOver}
         onDragLeave={handleGroupDragLeave}
         onDrop={handleGroupDrop}
       >
-        <ChevronIcon
-          className={`tree-chevron ${isExpanded ? 'tree-chevron--open' : ''}`}
-        />
-        {isRenaming ? (
-          <input
-            ref={renameInputRef}
-            className="tree-rename-input"
-            value={renameValue}
-            onChange={(e) => setRenameValue(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') commitRename()
-              else if (e.key === 'Escape') cancelRename()
-            }}
-            onBlur={() => commitRename()}
-            onClick={(e) => e.stopPropagation()}
-          />
-        ) : (
-          <span className="tree-label tree-label--group">{group.name}</span>
-        )}
-        {!isRenaming && (
-          <button className="tree-item-actions" onClick={handleMoreClick}>
-            <MoreHorizontalIcon />
-          </button>
-        )}
-        <span className="tree-group-count">{visibleAgents.length}</span>
-      </div>
-
-      <div className={`tree-children-wrapper ${isExpanded ? 'tree-children-wrapper--open' : ''}`}>
-        <div className="tree-children">
-          {visibleAgents.map((agent, i) => (
-            <AgentItem
-              key={agent.id}
-              agent={agent}
-              nested
-              staggerClass={`stagger-${Math.min(i + 5, 10)}`}
+        <div className="tree-item-main">
+          <div className="tree-item-titleline">
+            {isRenaming ? (
+              <input
+                ref={renameInputRef}
+                className="tree-rename-input"
+                value={renameValue}
+                onChange={(e) => setRenameValue(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') commitRename()
+                  else if (e.key === 'Escape') cancelRename()
+                }}
+                onBlur={() => commitRename()}
+                onClick={(e) => e.stopPropagation()}
+              />
+            ) : (
+              <span className="tree-label tree-label--group">{group.name}</span>
+            )}
+          </div>
+          <div className="tree-item-meta tree-item-meta--empty" aria-hidden="true" />
+        </div>
+        <div className="tree-item-tail">
+          {!isRenaming && (
+            <button className="tree-item-actions" onClick={handleMoreClick}>
+              <MoreHorizontalIcon />
+            </button>
+          )}
+          {hasVisibleChildren && (
+            <ChevronIcon
+              className={`tree-chevron ${isExpanded ? 'tree-chevron--open' : ''}`}
             />
-          ))}
+          )}
         </div>
       </div>
+
+      {hasVisibleChildren && (
+        <div className={`tree-children-wrapper ${isExpanded ? 'tree-children-wrapper--open' : ''}`}>
+          <div className="tree-children">
+            {visibleAgents.map((agent, i) => (
+              <AgentItem
+                key={agent.id}
+                agent={agent}
+                nested
+                staggerClass={`stagger-${Math.min(i + 5, 10)}`}
+              />
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
