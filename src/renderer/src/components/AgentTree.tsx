@@ -321,14 +321,25 @@ function AgentItem({ agent, staggerClass, nested = false }: { agent: Agent; stag
 
 function AgentGroupItem({
   group,
+  groupIndex,
   groupAgents,
   filteredAgents,
   staggerClass,
+  groupDragHandlers,
+  groupDragState,
 }: {
   group: AgentGroup
+  groupIndex: number
   groupAgents: Agent[]
   filteredAgents: Agent[]
   staggerClass: string
+  groupDragHandlers: {
+    onDragStart: (e: React.DragEvent, index: number) => void
+    onDragOver: (e: React.DragEvent, index: number) => void
+    onDragEnd: () => void
+    onDrop: (e: React.DragEvent, index: number) => void
+  }
+  groupDragState: { dragIndex: number | null; dropTarget: { index: number; position: 'above' | 'below' } | null }
 }) {
   const { expandedGroups, toggleGroup, openContextMenu, renamingId, setRenamingId } = useUIStore()
   const { moveAgentToGroup } = useAgentStore()
@@ -379,6 +390,13 @@ function AgentGroupItem({
   }
 
   const handleGroupDragOver = (e: React.DragEvent) => {
+    if (e.dataTransfer.types.includes('application/x-agent-group-reorder')) {
+      e.preventDefault()
+      e.dataTransfer.dropEffect = 'move'
+      setDropHighlight(false)
+      groupDragHandlers.onDragOver(e, groupIndex)
+      return
+    }
     if (e.dataTransfer.types.includes('application/x-agent-id')) {
       e.preventDefault()
       e.dataTransfer.dropEffect = 'move'
@@ -392,6 +410,12 @@ function AgentGroupItem({
 
   const handleGroupDrop = (e: React.DragEvent) => {
     setDropHighlight(false)
+    if (e.dataTransfer.types.includes('application/x-agent-group-reorder')) {
+      e.preventDefault()
+      e.stopPropagation()
+      groupDragHandlers.onDrop(e, groupIndex)
+      return
+    }
     const agentId = e.dataTransfer.getData('application/x-agent-id')
     if (agentId) {
       e.preventDefault()
@@ -408,12 +432,15 @@ function AgentGroupItem({
   return (
     <div className={`tree-group ${staggerClass}`}>
       <div
-        className={`tree-item tree-item--group tree-item--agent-row tree-item--folder-row ${dropHighlight ? 'tree-item--drop-inside' : ''}`}
+        className={`tree-item tree-item--group tree-item--agent-row tree-item--folder-row ${dropHighlight ? 'tree-item--drop-inside' : ''} ${groupDragState.dropTarget?.index === groupIndex && groupDragState.dragIndex !== groupIndex ? `tree-item--drop-${groupDragState.dropTarget.position}` : ''}`}
         onClick={() => {
           if (isRenaming || !hasVisibleChildren) return
           toggleGroup(group.id)
         }}
         onContextMenu={handleContextMenu}
+        draggable={!isRenaming}
+        onDragStart={(e) => groupDragHandlers.onDragStart(e, groupIndex)}
+        onDragEnd={groupDragHandlers.onDragEnd}
         onDragOver={handleGroupDragOver}
         onDragLeave={handleGroupDragLeave}
         onDrop={handleGroupDrop}
@@ -472,10 +499,13 @@ function AgentGroupItem({
 }
 
 export function AgentTree() {
-  const { agents, groups, addAgentGroup } = useAgentStore()
+  const { agents, groups, addAgentGroup, reorderAgentGroups } = useAgentStore()
   const { searchQuery, openDialog, expandedGroups, collapseAgents, setRenamingId, toggleGroup } = useUIStore()
+  const [groupDragIndex, setGroupDragIndex] = useState<number | null>(null)
+  const [groupDropTarget, setGroupDropTarget] = useState<{ index: number; position: 'above' | 'below' } | null>(null)
 
   const query = searchQuery.toLowerCase().trim()
+  const isDragEnabled = !query
 
   const filteredAgents = query
     ? agents.filter((a) =>
@@ -506,6 +536,56 @@ export function AgentTree() {
     requestAnimationFrame(() => setRenamingId(group.id))
   }
 
+  const handleGroupDragStart = (e: React.DragEvent, index: number) => {
+    if (!isDragEnabled) { e.preventDefault(); return }
+    const group = groups[index]
+    e.dataTransfer.setData('application/x-agent-group-reorder', String(index))
+    e.dataTransfer.setData('application/x-agent-group-id', group.id)
+    e.dataTransfer.effectAllowed = 'move'
+    setGroupDragIndex(index)
+  }
+
+  const handleGroupDragOver = (e: React.DragEvent, index: number) => {
+    if (!isDragEnabled || groupDragIndex === null) return
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+    const midY = rect.top + rect.height / 2
+    const position = e.clientY < midY ? 'above' : 'below'
+    setGroupDropTarget({ index, position })
+  }
+
+  const handleGroupDragEnd = () => {
+    setGroupDragIndex(null)
+    setGroupDropTarget(null)
+  }
+
+  const handleGroupDrop = (_e: React.DragEvent, targetIndex: number) => {
+    if (groupDragIndex === null || groupDragIndex === targetIndex) {
+      handleGroupDragEnd()
+      return
+    }
+    const newGroups = [...groups]
+    const [moved] = newGroups.splice(groupDragIndex, 1)
+    let insertAt = targetIndex
+    if (groupDropTarget?.position === 'below') {
+      insertAt = groupDragIndex < targetIndex ? targetIndex : targetIndex + 1
+    } else {
+      insertAt = groupDragIndex < targetIndex ? targetIndex - 1 : targetIndex
+    }
+    newGroups.splice(insertAt, 0, moved)
+    void reorderAgentGroups(newGroups.map((g) => g.id))
+    handleGroupDragEnd()
+  }
+
+  const groupDragHandlers = {
+    onDragStart: handleGroupDragStart,
+    onDragOver: handleGroupDragOver,
+    onDragEnd: handleGroupDragEnd,
+    onDrop: handleGroupDrop
+  }
+  const groupDragState = { dragIndex: groupDragIndex, dropTarget: groupDropTarget }
+
   return (
     <div className="agent-tree-section stagger-3">
       <div className="section-header" onContextMenu={handleSectionContextMenu}>
@@ -535,7 +615,7 @@ export function AgentTree() {
       </div>
 
       {(filteredAgents.length > 0 || groups.length > 0) ? (
-        <div className="tree">
+        <div className="tree" onDragLeave={() => setGroupDropTarget(null)}>
           {ungroupedAgents.map((agent, i) => (
             <AgentItem
               key={agent.id}
@@ -550,9 +630,12 @@ export function AgentTree() {
               <AgentGroupItem
                 key={group.id}
                 group={group}
+                groupIndex={gi}
                 groupAgents={groupAgents}
                 filteredAgents={filteredAgents}
                 staggerClass={`stagger-${Math.min(gi + 4, 10)}`}
+                groupDragHandlers={groupDragHandlers}
+                groupDragState={groupDragState}
               />
             )
           })}

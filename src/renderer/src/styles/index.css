@@ -588,11 +588,21 @@ body {
 }
 
 .tree-group {
-  margin-bottom: 0;
+  margin: 6px 0;
+  padding: 3px 0;
+  border-top: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.tree-group + .tree-group {
+  margin-top: 0;
+  border-top: none;
 }
 
 .tree-item--group {
   padding-left: 8px;
+  margin: 0;
+  border-radius: 0;
 }
 
 .tree-item--folder-row {
@@ -636,11 +646,10 @@ body {
 }
 
 .tree-label--group {
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.8px;
-  text-transform: uppercase;
-  color: var(--text-muted);
+  font-size: 13.5px;
+  font-weight: 650;
+  letter-spacing: 0.2px;
+  color: var(--text-secondary);
   flex: 1;
 }
 
@@ -758,7 +767,7 @@ body {
 
 .tree-item--group.tree-item--agent-row:hover .tree-label--group,
 .tree-item--folder-row:hover .tree-label--group {
-  color: var(--text-muted);
+  color: var(--text-secondary);
 }
 
 .tree-item--active .tree-label {
@@ -1089,6 +1098,20 @@ body {
 
 .tree-children-wrapper > .tree-children {
   min-height: 0;
+}
+
+.tree-children-wrapper:not(.tree-children-wrapper--open) .tree-item--active,
+.tree-children-wrapper:not(.tree-children-wrapper--open) .tree-item--split {
+  background: transparent;
+}
+
+.tree-children-wrapper:not(.tree-children-wrapper--open) .tree-item--active::before,
+.tree-children-wrapper:not(.tree-children-wrapper--open) .tree-item--split::before {
+  display: none;
+}
+
+.tree-group > .tree-children-wrapper > .tree-children {
+  padding-bottom: 3px;
 }
 
 /* Children indent */

@@ -58,9 +58,11 @@ interface UIState {
   expandedProjects: Set<string>
   expandedSessions: Set<string>
   expandedGroups: Set<string>
+  projectTopLevelOrder: string[]
   toggleProject: (id: string) => void
   toggleSession: (id: string) => void
   toggleGroup: (id: string) => void
+  setProjectTopLevelOrder: (order: string[]) => void
   collapseProjects: (projectIds: string[], groupIds: string[]) => void
   collapseAgents: (agentGroupIds: string[]) => void
   sidebarCollapsed: boolean
@@ -313,6 +315,7 @@ export const useUIStore = create<UIState>()(
       expandedProjects: new Set<string>(),
       expandedSessions: new Set<string>(),
       expandedGroups: new Set<string>(),
+      projectTopLevelOrder: [],
 
       toggleProject: (id) =>
         set((state) => {
@@ -329,6 +332,8 @@ export const useUIStore = create<UIState>()(
           else next.add(id)
           return { expandedGroups: next }
         }),
+
+      setProjectTopLevelOrder: (order) => set({ projectTopLevelOrder: order }),
 
       collapseProjects: (projectIds, groupIds) =>
         set((state) => {
@@ -552,6 +557,7 @@ export const useUIStore = create<UIState>()(
         expandedProjects: state.expandedProjects,
         expandedSessions: state.expandedSessions,
         expandedGroups: state.expandedGroups,
+        projectTopLevelOrder: state.projectTopLevelOrder,
         sidebarCollapsed: state.sidebarCollapsed,
         sidebarWidth: state.sidebarWidth,
         agentPaneHeight: state.agentPaneHeight,

@@ -602,7 +602,35 @@ function SessionItem({
   )
 }
 
-function ProjectItem({ project, staggerClass, projectIndex, onDragStart: onProjectDragStart, onDragOver: onProjectDragOver, onDragEnd: onProjectDragEnd, onDrop: onProjectDrop, dropPosition }: { project: Project; staggerClass: string; projectIndex: number; onDragStart: (e: React.DragEvent, index: number) => void; onDragOver: (e: React.DragEvent, index: number) => void; onDragEnd: () => void; onDrop: (e: React.DragEvent, index: number) => void; dropPosition: 'above' | 'below' | null }) {
+function ProjectItem({
+  project,
+  staggerClass,
+  projectIndex,
+  onDragStart: onProjectDragStart,
+  onDragOver: onProjectDragOver,
+  onDragEnd: onProjectDragEnd,
+  onDrop: onProjectDrop,
+  dropPosition,
+  dragMode = 'project',
+  onTopLevelDragStart,
+  onTopLevelDragOver,
+  onTopLevelDragEnd,
+  onTopLevelDrop,
+}: {
+  project: Project
+  staggerClass: string
+  projectIndex: number
+  onDragStart: (e: React.DragEvent, index: number) => void
+  onDragOver: (e: React.DragEvent, index: number) => void
+  onDragEnd: () => void
+  onDrop: (e: React.DragEvent, index: number) => void
+  dropPosition: 'above' | 'below' | null
+  dragMode?: 'project' | 'top-level'
+  onTopLevelDragStart?: (e: React.DragEvent, key: string) => void
+  onTopLevelDragOver?: (e: React.DragEvent, key: string) => void
+  onTopLevelDragEnd?: () => void
+  onTopLevelDrop?: (e: React.DragEvent, key: string) => void
+}) {
   const { sessions, activeSessionId } = useSessionStore()
   const { expandedProjects, toggleProject, openContextMenu, renamingId, setRenamingId, setSidebarSelection } = useUIStore()
   const isExpanded = expandedProjects.has(project.id)
@@ -797,10 +825,29 @@ function ProjectItem({ project, staggerClass, projectIndex, onDragStart: onProje
         }}
         onContextMenu={handleContextMenu}
         draggable={!isRenaming}
-        onDragStart={(e) => onProjectDragStart(e, projectIndex)}
-        onDragOver={(e) => onProjectDragOver(e, projectIndex)}
-        onDragEnd={onProjectDragEnd}
-        onDrop={(e) => onProjectDrop(e, projectIndex)}
+        onDragStart={(e) => {
+          if (dragMode === 'top-level') onTopLevelDragStart?.(e, `project:${project.id}`)
+          else onProjectDragStart(e, projectIndex)
+        }}
+        onDragOver={(e) => {
+          if (dragMode === 'top-level') {
+            if (
+              e.dataTransfer.types.includes('application/x-project-top-level') ||
+              e.dataTransfer.types.includes('application/x-project-id')
+            ) {
+              onTopLevelDragOver?.(e, `project:${project.id}`)
+            }
+          }
+          else onProjectDragOver(e, projectIndex)
+        }}
+        onDragEnd={() => {
+          if (dragMode === 'top-level') onTopLevelDragEnd?.()
+          else onProjectDragEnd()
+        }}
+        onDrop={(e) => {
+          if (dragMode === 'top-level') onTopLevelDrop?.(e, `project:${project.id}`)
+          else onProjectDrop(e, projectIndex)
+        }}
       >
         <div className="tree-item-main">
           <div className="tree-item-titleline">
@@ -884,14 +931,22 @@ function ProjectItem({ project, staggerClass, projectIndex, onDragStart: onProje
 
 function GroupItem({
   group,
+  groupKey,
   groupProjects,
   filteredProjects: filtered,
   sessions: allSessions,
   staggerClass,
   projectDragHandlers,
+  topLevelDragState,
+  onTopLevelDragStart,
+  onTopLevelDragOver,
+  onTopLevelDragEnd,
+  onTopLevelDrop,
+  clearTopLevelDropTarget,
   dragState,
 }: {
   group: ProjectGroup
+  groupKey: string
   groupProjects: Project[]
   filteredProjects: Project[]
   sessions: Session[]
@@ -902,6 +957,12 @@ function GroupItem({
     onDragEnd: () => void
     onDrop: (e: React.DragEvent, index: number) => void
   }
+  topLevelDragState: { dragKey: string | null; dropTarget: { key: string; position: 'above' | 'below' } | null }
+  onTopLevelDragStart: (e: React.DragEvent, key: string) => void
+  onTopLevelDragOver: (e: React.DragEvent, key: string) => void
+  onTopLevelDragEnd: () => void
+  onTopLevelDrop: (e: React.DragEvent, key: string) => void
+  clearTopLevelDropTarget: () => void
   dragState: { dragIndex: number | null; dropTarget: { index: number; position: 'above' | 'below' } | null }
 }) {
   const { expandedGroups, toggleGroup, openContextMenu, renamingId, setRenamingId, setSidebarSelection } = useUIStore()
@@ -958,10 +1019,26 @@ function GroupItem({
 
   // Accept project drops to assign to this group
   const handleGroupDragOver = (e: React.DragEvent) => {
+    if (e.dataTransfer.types.includes('application/x-project-top-level')) {
+      e.preventDefault()
+      e.dataTransfer.dropEffect = 'move'
+      setDropHighlight(false)
+      onTopLevelDragOver(e, groupKey)
+      return
+    }
     if (e.dataTransfer.types.includes('application/x-project-reorder')) {
       e.preventDefault()
       e.dataTransfer.dropEffect = 'move'
-      setDropHighlight(true)
+      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+      const topBand = rect.top + rect.height * 0.28
+      const bottomBand = rect.bottom - rect.height * 0.28
+      if (e.clientY <= topBand || e.clientY >= bottomBand) {
+        setDropHighlight(false)
+        onTopLevelDragOver(e, groupKey)
+      } else {
+        clearTopLevelDropTarget()
+        setDropHighlight(true)
+      }
     }
   }
 
@@ -970,12 +1047,23 @@ function GroupItem({
   }
 
   const handleGroupDrop = (e: React.DragEvent) => {
-    setDropHighlight(false)
+    if (e.dataTransfer.types.includes('application/x-project-top-level')) {
+      setDropHighlight(false)
+      e.preventDefault()
+      e.stopPropagation()
+      onTopLevelDrop(e, groupKey)
+      return
+    }
     const projectId = e.dataTransfer.getData('application/x-project-id')
     if (projectId) {
       e.preventDefault()
       e.stopPropagation()
-      moveProjectToGroup(projectId, group.id)
+      if (dropHighlight) {
+        setDropHighlight(false)
+        moveProjectToGroup(projectId, group.id)
+      } else {
+        onTopLevelDrop(e, groupKey)
+      }
     }
   }
 
@@ -990,7 +1078,7 @@ function GroupItem({
   return (
     <div className={`tree-group ${staggerClass}`}>
       <div
-        className={`tree-item tree-item--group tree-item--folder-row ${dropHighlight ? 'tree-item--drop-inside' : ''}`}
+        className={`tree-item tree-item--group tree-item--folder-row ${dropHighlight ? 'tree-item--drop-inside' : ''} ${topLevelDragState.dropTarget?.key === groupKey && topLevelDragState.dragKey !== groupKey ? `tree-item--drop-${topLevelDragState.dropTarget.position}` : ''}`}
         onClick={() => {
           if (isRenaming) return
           setSidebarSelection({ type: 'project-group', id: group.id })
@@ -998,6 +1086,9 @@ function GroupItem({
           toggleGroup(group.id)
         }}
         onContextMenu={handleContextMenu}
+        draggable={!isRenaming}
+        onDragStart={(e) => onTopLevelDragStart(e, groupKey)}
+        onDragEnd={onTopLevelDragEnd}
         onDragOver={handleGroupDragOver}
         onDragLeave={handleGroupDragLeave}
         onDrop={handleGroupDrop}
@@ -1068,9 +1159,11 @@ function GroupItem({
 export function ProjectTree() {
   const { projects, groups, reorderProjects, addGroup, moveProjectToGroup } = useProjectStore()
   const { sessions } = useSessionStore()
-  const { searchQuery, expandedProjects, expandedSessions, expandedGroups, collapseProjects, openDialog, setRenamingId, toggleGroup } = useUIStore()
+  const { searchQuery, expandedProjects, expandedSessions, expandedGroups, collapseProjects, openDialog, setRenamingId, toggleGroup, projectTopLevelOrder, setProjectTopLevelOrder } = useUIStore()
   const [dragIndex, setDragIndex] = useState<number | null>(null)
   const [dropTarget, setDropTarget] = useState<{ index: number; position: 'above' | 'below' } | null>(null)
+  const [topLevelDragKey, setTopLevelDragKey] = useState<string | null>(null)
+  const [topLevelDropTarget, setTopLevelDropTarget] = useState<{ key: string; position: 'above' | 'below' } | null>(null)
 
   if (projects.length === 0) {
     return <EmptyState />
@@ -1135,6 +1228,76 @@ export function ProjectTree() {
     handleDragEnd()
   }
 
+  const handleTopLevelDragStart = (e: React.DragEvent, key: string) => {
+    if (!isDragEnabled) { e.preventDefault(); return }
+    e.dataTransfer.setData('application/x-project-top-level', key)
+    e.dataTransfer.effectAllowed = 'move'
+    setTopLevelDragKey(key)
+  }
+
+  const handleTopLevelDragOver = (e: React.DragEvent, key: string) => {
+    if (!isDragEnabled) return
+    const isTopLevelDrag = e.dataTransfer.types.includes('application/x-project-top-level')
+    const isProjectDrag = e.dataTransfer.types.includes('application/x-project-id')
+    if ((isTopLevelDrag && topLevelDragKey === null) || (!isTopLevelDrag && !isProjectDrag)) return
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    setDropTarget(null)
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+    const midY = rect.top + rect.height / 2
+    const position = e.clientY < midY ? 'above' : 'below'
+    setTopLevelDropTarget({ key, position })
+  }
+
+  const handleTopLevelDragEnd = () => {
+    setTopLevelDragKey(null)
+    setTopLevelDropTarget(null)
+  }
+
+  const handleTopLevelDrop = (_e: React.DragEvent, targetKey: string) => {
+    _e.preventDefault()
+    _e.stopPropagation()
+    const reorderTopLevel = (draggedKey: string) => {
+      if (draggedKey === targetKey) {
+        handleTopLevelDragEnd()
+        return
+      }
+      const newOrder = [...orderedTopLevelKeys].filter((key) => key !== draggedKey)
+      const targetIndex = newOrder.indexOf(targetKey)
+      if (targetIndex === -1) {
+        handleTopLevelDragEnd()
+        return
+      }
+      let insertAt = targetIndex
+      if (topLevelDropTarget?.position === 'below') {
+        insertAt = targetIndex + 1
+      }
+      newOrder.splice(insertAt, 0, draggedKey)
+      setProjectTopLevelOrder(newOrder)
+      handleTopLevelDragEnd()
+    }
+
+    if (_e.dataTransfer.types.includes('application/x-project-top-level')) {
+      if (!topLevelDragKey) {
+        handleTopLevelDragEnd()
+        return
+      }
+      reorderTopLevel(topLevelDragKey)
+      return
+    }
+
+    const projectId = _e.dataTransfer.getData('application/x-project-id')
+    if (projectId) {
+      const draggedKey = `project:${projectId}`
+      void moveProjectToGroup(projectId, null)
+      reorderTopLevel(draggedKey)
+      handleDragEnd()
+      return
+    }
+
+    handleTopLevelDragEnd()
+  }
+
   const projectDragHandlers = {
     onDragStart: handleDragStart,
     onDragOver: handleDragOver,
@@ -1142,6 +1305,7 @@ export function ProjectTree() {
     onDrop: handleDrop
   }
   const dragState = { dragIndex, dropTarget }
+  const topLevelDragState = { dragKey: topLevelDragKey, dropTarget: topLevelDropTarget }
 
   if (filteredProjects.length === 0) {
     return (
@@ -1164,6 +1328,23 @@ export function ProjectTree() {
 
   // Split projects into ungrouped and per-group
   const ungroupedProjects = filteredProjects.filter((p) => !p.group_id)
+  const topLevelProjectKeys = ungroupedProjects.map((project) => `project:${project.id}`)
+  const topLevelGroupKeys = groups.map((group) => `group:${group.id}`)
+  const knownTopLevelKeys = new Set([...topLevelProjectKeys, ...topLevelGroupKeys])
+  const legacyTopLevelOrder = [...topLevelProjectKeys, ...topLevelGroupKeys]
+  const seenTopLevelKeys = new Set<string>()
+  const orderedTopLevelKeys = [
+    ...projectTopLevelOrder.filter((key) => {
+      if (!knownTopLevelKeys.has(key) || seenTopLevelKeys.has(key)) return false
+      seenTopLevelKeys.add(key)
+      return true
+    }),
+    ...legacyTopLevelOrder.filter((key) => {
+      if (seenTopLevelKeys.has(key)) return false
+      seenTopLevelKeys.add(key)
+      return true
+    })
+  ]
   const projectGroupIds = groups.map((g) => g.id)
   const hasAnyExpanded = expandedProjects.size > 0 || expandedSessions.size > 0 ||
     projectGroupIds.some((id) => expandedGroups.has(id))
@@ -1202,37 +1383,55 @@ export function ProjectTree() {
         </div>
       </div>
 
-      <div className="tree" onDragLeave={() => setDropTarget(null)}>
-        {/* Ungrouped projects */}
-        {ungroupedProjects.map((project) => {
-          const pIdx = projects.indexOf(project)
-          return (
-            <ProjectItem
-              key={project.id}
-              project={project}
-              staggerClass={`stagger-${Math.min(pIdx + 5, 10)}`}
-              projectIndex={pIdx}
-              onDragStart={handleDragStart}
-              onDragOver={handleDragOver}
-              onDragEnd={handleDragEnd}
-              onDrop={handleDrop}
-              dropPosition={dropTarget?.index === pIdx && dragIndex !== pIdx ? dropTarget.position : null}
-            />
-          )
-        })}
+      <div className="tree" onDragLeave={() => { setDropTarget(null); setTopLevelDropTarget(null) }}>
+        {orderedTopLevelKeys.map((entryKey, index) => {
+          if (entryKey.startsWith('project:')) {
+            const project = ungroupedProjects.find((item) => `project:${item.id}` === entryKey)
+            if (!project) return null
+            const pIdx = projects.indexOf(project)
+            return (
+              <ProjectItem
+                key={project.id}
+                project={project}
+                staggerClass={`stagger-${Math.min(index + 5, 10)}`}
+                projectIndex={pIdx}
+                onDragStart={handleDragStart}
+                onDragOver={handleDragOver}
+                onDragEnd={handleDragEnd}
+                onDrop={handleDrop}
+                dropPosition={topLevelDropTarget?.key === entryKey && topLevelDragKey !== entryKey
+                  ? topLevelDropTarget.position
+                  : dropTarget?.index === pIdx && dragIndex !== pIdx
+                    ? dropTarget.position
+                    : null}
+                dragMode="top-level"
+                onTopLevelDragStart={handleTopLevelDragStart}
+                onTopLevelDragOver={handleTopLevelDragOver}
+                onTopLevelDragEnd={handleTopLevelDragEnd}
+                onTopLevelDrop={handleTopLevelDrop}
+              />
+            )
+          }
 
-        {/* Groups */}
-        {groups.map((group, gi) => {
+          const group = groups.find((item) => `group:${item.id}` === entryKey)
+          if (!group) return null
           const groupProjects = projects.filter((p) => p.group_id === group.id)
           return (
             <GroupItem
               key={group.id}
               group={group}
+              groupKey={entryKey}
               groupProjects={groupProjects}
               filteredProjects={filteredProjects}
               sessions={sessions}
-              staggerClass={`stagger-${Math.min(gi + 5, 10)}`}
+              staggerClass={`stagger-${Math.min(index + 5, 10)}`}
               projectDragHandlers={projectDragHandlers}
+              topLevelDragState={topLevelDragState}
+              onTopLevelDragStart={handleTopLevelDragStart}
+              onTopLevelDragOver={handleTopLevelDragOver}
+              onTopLevelDragEnd={handleTopLevelDragEnd}
+              onTopLevelDrop={handleTopLevelDrop}
+              clearTopLevelDropTarget={() => setTopLevelDropTarget(null)}
               dragState={dragState}
             />
           )
