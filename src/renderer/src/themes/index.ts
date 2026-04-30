@@ -125,6 +125,52 @@ export const DEFAULT_THEME: SorcererTheme = {
   }
 }
 
+const MONOCHROME_DARK_THEME: SorcererTheme = {
+  id: 'monochrome-dark',
+  name: 'Monochrome Dark',
+  colors: {
+    'bg-root': '#050505',
+    'bg-sidebar': '#000000',
+    'bg-titlebar': '#0a0a0a',
+    'bg-hover': '#111111',
+    'bg-active': '#1a1a1a',
+    'bg-elevated': '#101010',
+    'terminal-bg': '#050505',
+    'border-subtle': '#1f1f1f',
+    'border-medium': '#333333',
+    'text-primary': '#f2f2f2',
+    'text-secondary': '#b8b8b8',
+    'text-tertiary': '#7f7f7f',
+    'text-muted': '#575757',
+    'accent': '#d9d9d9',
+    'accent-dim': '#bdbdbd',
+    'accent-glow': 'rgba(255, 255, 255, 0.08)',
+    'accent-glow-strong': 'rgba(255, 255, 255, 0.14)',
+    'danger': '#9a9a9a'
+  },
+  terminal: {
+    foreground: '#e8e8e8',
+    cursor: '#ffffff',
+    selectionBackground: 'rgba(255, 255, 255, 0.16)',
+    black: '#0a0a0a',
+    red: '#7a7a7a',
+    green: '#a6a6a6',
+    yellow: '#b8b8b8',
+    blue: '#8d8d8d',
+    magenta: '#c2c2c2',
+    cyan: '#9f9f9f',
+    white: '#e6e6e6',
+    brightBlack: '#4d4d4d',
+    brightRed: '#8c8c8c',
+    brightGreen: '#bfbfbf',
+    brightYellow: '#d0d0d0',
+    brightBlue: '#a8a8a8',
+    brightMagenta: '#dadada',
+    brightCyan: '#c8c8c8',
+    brightWhite: '#ffffff'
+  }
+}
+
 const AETHERCI_THEME: SorcererTheme = {
   id: 'aetherci',
   name: 'AetherCI',
@@ -541,6 +587,7 @@ const GRUVBOX_DARK_THEME: SorcererTheme = {
 
 export const THEMES: Record<string, SorcererTheme> = {
   default: DEFAULT_THEME,
+  'monochrome-dark': MONOCHROME_DARK_THEME,
   aetherci: AETHERCI_THEME,
   'aetherci-light': AETHERCI_LIGHT_THEME,
   'kimbie-dark': KIMBIE_DARK_THEME,

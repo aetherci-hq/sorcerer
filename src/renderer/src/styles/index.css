@@ -44,13 +44,30 @@
   --accent-shadow-medium: color-mix(in srgb, var(--accent) 10%, transparent);
 
   /* Status */
-  --status-active:   #5ec269;
-  --status-idle:     #e2a445;
-  --status-archived: #6b6a68;
-  --status-waiting:  #5ba4e6;
+  --status-active:   var(--accent);
+  --status-idle:     color-mix(in srgb, var(--accent) 72%, var(--text-secondary) 28%);
+  --status-archived: var(--text-tertiary);
+  --status-waiting:  color-mix(in srgb, var(--accent) 38%, var(--text-secondary) 62%);
+  --status-active-surface: color-mix(in srgb, var(--status-active) 8%, transparent);
+  --status-active-surface-strong: color-mix(in srgb, var(--status-active) 12%, transparent);
+  --status-active-border: color-mix(in srgb, var(--status-active) 22%, transparent);
+  --status-active-border-strong: color-mix(in srgb, var(--status-active) 34%, transparent);
+  --status-idle-surface: color-mix(in srgb, var(--status-idle) 10%, transparent);
+  --status-idle-border: color-mix(in srgb, var(--status-idle) 26%, transparent);
+  --status-waiting-surface: color-mix(in srgb, var(--status-waiting) 8%, transparent);
+  --status-waiting-surface-strong: color-mix(in srgb, var(--status-waiting) 12%, transparent);
+  --status-waiting-border: color-mix(in srgb, var(--status-waiting) 20%, transparent);
+  --status-waiting-border-strong: color-mix(in srgb, var(--status-waiting) 32%, transparent);
 
   /* Danger */
   --danger:          #e25555;
+  --danger-surface: color-mix(in srgb, var(--danger) 10%, transparent);
+  --danger-surface-strong: color-mix(in srgb, var(--danger) 14%, transparent);
+  --danger-surface-heavy: color-mix(in srgb, var(--danger) 20%, transparent);
+  --danger-border: color-mix(in srgb, var(--danger) 24%, transparent);
+  --danger-border-strong: color-mix(in srgb, var(--danger) 40%, transparent);
+  --danger-shadow: color-mix(in srgb, var(--danger) 8%, transparent);
+  --danger-text-soft: color-mix(in srgb, var(--danger) 70%, var(--text-primary) 30%);
 
   /* Spacing */
   --sidebar-width:        260px;
@@ -900,7 +917,7 @@ body {
 }
 
 .git-stat--del {
-  color: color-mix(in srgb, #b96b4a 62%, var(--text-secondary) 38%);
+  color: color-mix(in srgb, var(--danger) 62%, var(--text-secondary) 38%);
 }
 
 /* ── Signal Status Indicators ──
@@ -1213,20 +1230,20 @@ body {
 }
 
 .tree-subagent-dot--active {
-  background: #4cc9f0;
-  box-shadow: 0 0 10px rgba(76, 201, 240, 0.45);
+  background: var(--status-waiting);
+  box-shadow: 0 0 10px var(--status-waiting-border-strong);
   animation: tree-subagent-pulse 1.6s ease-in-out infinite;
 }
 
 .tree-subagent-dot--done {
-  background: rgba(76, 201, 240, 0.24);
+  background: var(--status-waiting-surface-strong);
   box-shadow: none;
 }
 
 .tree-icon--subagent {
   width: 12px;
   height: 12px;
-  color: rgba(76, 201, 240, 0.72);
+  color: color-mix(in srgb, var(--status-waiting) 72%, var(--text-secondary) 28%);
 }
 
 .tree-subagent-copy {
@@ -1255,7 +1272,7 @@ body {
 }
 
 .tree-subagent-provider {
-  color: rgba(76, 201, 240, 0.82);
+  color: var(--status-waiting);
 }
 
 .tree-subagent-state {
@@ -1286,15 +1303,15 @@ body {
   line-height: 1.4;
   font-family: var(--font-mono);
   color: var(--text-tertiary);
-  background: rgba(76, 201, 240, 0.08);
-  border: 1px solid rgba(76, 201, 240, 0.12);
+  background: var(--status-waiting-surface);
+  border: 1px solid var(--status-waiting-border);
   flex-shrink: 0;
 }
 
 .tree-subagent-summary--active {
-  color: rgba(76, 201, 240, 0.95);
-  border-color: rgba(76, 201, 240, 0.26);
-  background: rgba(76, 201, 240, 0.12);
+  color: var(--status-waiting);
+  border-color: var(--status-waiting-border-strong);
+  background: var(--status-waiting-surface-strong);
 }
 
 .tree-item--active .tree-subagent-summary {
@@ -2148,7 +2165,7 @@ body {
 }
 
 .context-menu-item--danger:hover {
-  background: rgba(226, 85, 85, 0.1);
+  background: var(--danger-surface);
   color: var(--danger);
 }
 
@@ -2243,7 +2260,7 @@ body {
 }
 
 .dialog--danger {
-  border-color: rgba(226, 85, 85, 0.3);
+  border-color: var(--danger-border);
 }
 
 @keyframes dialog-in {
@@ -2809,11 +2826,11 @@ select.dialog-input option {
 }
 
 .import-session-card__provider--claude {
-  color: #d97706;
+  color: var(--status-idle);
 }
 
 .import-session-card__provider--codex {
-  color: #0f766e;
+  color: var(--status-waiting);
 }
 
 .import-session-card__meta-row,
@@ -2887,15 +2904,15 @@ select.dialog-input option {
 }
 
 .dialog-btn--danger {
-  background: rgba(226, 85, 85, 0.15);
-  border-color: rgba(226, 85, 85, 0.3);
+  background: var(--danger-surface-strong);
+  border-color: var(--danger-border);
   color: var(--danger);
 }
 
 .dialog-btn--danger:hover {
-  background: rgba(226, 85, 85, 0.22);
-  border-color: rgba(226, 85, 85, 0.45);
-  box-shadow: 0 0 16px rgba(226, 85, 85, 0.08);
+  background: var(--danger-surface-heavy);
+  border-color: var(--danger-border-strong);
+  box-shadow: 0 0 16px var(--danger-shadow);
 }
 
 .dialog-btn:disabled {
@@ -2928,7 +2945,7 @@ select.dialog-input option {
 }
 
 .dialog-confirm-icon--danger {
-  background: rgba(226, 85, 85, 0.12);
+  background: var(--danger-surface);
   color: var(--danger);
 }
 
@@ -2958,10 +2975,10 @@ select.dialog-input option {
 .dialog-error {
   margin-top: 12px;
   padding: 10px 12px;
-  background: rgba(239, 68, 68, 0.1);
-  border: 1px solid rgba(239, 68, 68, 0.3);
+  background: var(--danger-surface);
+  border: 1px solid var(--danger-border);
   border-radius: var(--radius-sm);
-  color: #fca5a5;
+  color: var(--danger-text-soft);
   font-size: 12.5px;
   line-height: 1.5;
 }
@@ -2969,7 +2986,7 @@ select.dialog-input option {
 .dialog-error strong {
   display: block;
   margin-bottom: 4px;
-  color: #fca5a5;
+  color: var(--danger-text-soft);
   font-size: 13px;
 }
 
@@ -2991,9 +3008,9 @@ select.dialog-input option {
 }
 
 .land-health--clean {
-  color: #86efac;
-  background: rgba(134, 239, 172, 0.08);
-  border: 1px solid rgba(134, 239, 172, 0.2);
+  color: var(--status-active);
+  background: var(--status-active-surface);
+  border: 1px solid var(--status-active-border);
 }
 
 .land-health--info {
@@ -3003,15 +3020,15 @@ select.dialog-input option {
 }
 
 .land-health--warning {
-  color: #e0af68;
-  background: rgba(224, 175, 104, 0.08);
-  border: 1px solid rgba(224, 175, 104, 0.2);
+  color: var(--status-idle);
+  background: var(--status-idle-surface);
+  border: 1px solid var(--status-idle-border);
 }
 
 .land-health--danger {
-  color: #f7768e;
-  background: rgba(247, 118, 142, 0.08);
-  border: 1px solid rgba(247, 118, 142, 0.2);
+  color: var(--danger);
+  background: var(--danger-surface);
+  border: 1px solid var(--danger-border);
 }
 
 .land-health-icon {
@@ -4014,13 +4031,13 @@ button:focus-visible,
 }
 
 .settings-action-btn--danger {
-  border-color: rgba(226, 85, 85, 0.25);
+  border-color: var(--danger-border);
   color: var(--danger);
 }
 
 .settings-action-btn--danger:hover {
-  background: rgba(226, 85, 85, 0.1);
-  border-color: rgba(226, 85, 85, 0.4);
+  background: var(--danger-surface);
+  border-color: var(--danger-border-strong);
 }
 
 .providers-list {
@@ -4075,16 +4092,16 @@ button:focus-visible,
   height: 20px;
   padding: 0 7px;
   border-radius: 999px;
-  border: 1px solid rgba(94, 194, 105, 0.25);
-  background: rgba(94, 194, 105, 0.08);
-  color: var(--green);
+  border: 1px solid var(--status-active-border);
+  background: var(--status-active-surface);
+  color: var(--status-active);
   font-size: 11px;
   font-weight: 600;
 }
 
 .provider-status-badge--missing {
-  border-color: rgba(226, 85, 85, 0.2);
-  background: rgba(226, 85, 85, 0.08);
+  border-color: var(--danger-border);
+  background: var(--danger-surface);
   color: var(--danger);
 }
 
@@ -4169,8 +4186,8 @@ button:focus-visible,
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: #34d399;
-  box-shadow: 0 0 6px rgba(52, 211, 153, 0.5);
+  background: var(--status-active);
+  box-shadow: 0 0 6px var(--status-active-border-strong);
   flex-shrink: 0;
 }
 
@@ -4582,7 +4599,7 @@ button:focus-visible,
 }
 
 .tree-change-summary__del {
-  color: color-mix(in srgb, #b96b4a 62%, var(--text-secondary) 38%);
+  color: color-mix(in srgb, var(--danger) 62%, var(--text-secondary) 38%);
 }
 
 .tree-resume-state {
@@ -4606,9 +4623,9 @@ button:focus-visible,
   justify-content: center;
   width: 16px;
   height: 16px;
-  color: #f5a524;
-  background: rgba(245, 165, 36, 0.12);
-  border: 1px solid rgba(245, 165, 36, 0.28);
+  color: var(--status-idle);
+  background: var(--status-idle-surface);
+  border: 1px solid var(--status-idle-border);
   border-radius: 999px;
   flex-shrink: 0;
 }
@@ -4788,9 +4805,9 @@ button:focus-visible,
 }
 
 .orphan-banner-delete {
-  border: 1px solid rgba(239, 68, 68, 0.25);
+  border: 1px solid var(--danger-border);
   background: transparent;
-  color: #ef4444;
+  color: var(--danger);
   font-family: var(--font-sans);
   font-size: 11.5px;
   font-weight: 500;
@@ -4801,8 +4818,8 @@ button:focus-visible,
 }
 
 .orphan-banner-delete:hover {
-  background: rgba(239, 68, 68, 0.12);
-  border-color: rgba(239, 68, 68, 0.4);
+  background: var(--danger-surface-strong);
+  border-color: var(--danger-border-strong);
 }
 
 .orphan-banner-delete:disabled {
@@ -4892,7 +4909,7 @@ button:focus-visible,
 }
 
 .quick-notes-delete-btn:hover {
-  color: #ef4444;
+  color: var(--danger);
 }
 
 .quick-notes-textarea {
@@ -5519,7 +5536,7 @@ button:focus-visible,
 }
 
 .mission-run-status--ok {
-  background: #5ec269;
+  background: var(--status-active);
 }
 
 .mission-run-status--error {
