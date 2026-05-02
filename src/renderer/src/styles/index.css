@@ -723,13 +723,13 @@ body {
 
 .tree-item--active {
   background: var(--accent-glow-strong);
-  border-radius: 0;
+  border-radius: var(--radius-sm);
 }
 
 /* Non-focused split session — subtle secondary highlight */
 .tree-item--split {
   background: var(--bg-hover);
-  border-radius: 0;
+  border-radius: var(--radius-sm);
 }
 
 .tree-item--split::before {
