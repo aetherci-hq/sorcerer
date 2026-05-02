@@ -75,12 +75,19 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
 /** Helper to load a setting with a fallback */
 function useSetting(key: string, fallback: string) {
   const [value, setValue] = useState(fallback)
+  const requestVersionRef = useRef(0)
   useEffect(() => {
+    let cancelled = false
+    const requestVersion = requestVersionRef.current
     getApi().settings.get(key).then((v: string | undefined) => {
-      if (v !== undefined) setValue(v)
+      if (!cancelled && requestVersionRef.current === requestVersion && v !== undefined) {
+        setValue(v)
+      }
     })
+    return () => { cancelled = true }
   }, [key])
   const save = (v: string) => {
+    requestVersionRef.current += 1
     setValue(v)
     getApi().settings.set(key, v)
   }

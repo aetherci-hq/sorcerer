@@ -28,6 +28,7 @@
   --accent-dim:     #c48a2a;
   --accent-glow:    rgba(226, 164, 69, 0.12);
   --accent-glow-strong: rgba(226, 164, 69, 0.22);
+  --accent-contrast: #0f0e0c;
   --accent-line-faint: color-mix(in srgb, var(--accent) 3%, transparent);
   --accent-line-soft: color-mix(in srgb, var(--accent) 6%, transparent);
   --accent-surface-subtle: color-mix(in srgb, var(--accent) 10%, transparent);
@@ -44,10 +45,10 @@
   --accent-shadow-medium: color-mix(in srgb, var(--accent) 10%, transparent);
 
   /* Status */
-  --status-active:   var(--accent);
-  --status-idle:     color-mix(in srgb, var(--accent) 72%, var(--text-secondary) 28%);
+  --status-active:   #5ec269;
+  --status-idle:     #e2a445;
   --status-archived: var(--text-tertiary);
-  --status-waiting:  color-mix(in srgb, var(--accent) 38%, var(--text-secondary) 62%);
+  --status-waiting:  #5ba4e6;
   --status-active-surface: color-mix(in srgb, var(--status-active) 8%, transparent);
   --status-active-surface-strong: color-mix(in srgb, var(--status-active) 12%, transparent);
   --status-active-border: color-mix(in srgb, var(--status-active) 22%, transparent);
@@ -934,7 +935,7 @@ body {
 }
 
 .git-stat--add {
-  color: color-mix(in srgb, var(--accent-dim) 58%, var(--text-secondary) 42%);
+  color: color-mix(in srgb, var(--status-active) 58%, var(--text-secondary) 42%);
 }
 
 .git-stat--del {
@@ -1210,7 +1211,7 @@ body {
 /* Invert badge when tree item is active (focused panel) */
 .tree-item--active .teammate-badge {
   background: var(--accent);
-  color: var(--bg-root);
+  color: var(--accent-contrast);
   border-color: var(--accent);
 }
 
@@ -1437,7 +1438,7 @@ body {
   justify-content: center;
   font-size: 12.5px;
   font-weight: 600;
-  color: var(--bg-root);
+  color: var(--accent-contrast);
   flex-shrink: 0;
 }
 
@@ -4374,7 +4375,7 @@ button:focus-visible,
 .profile-avatar-initial {
   font-size: 20px;
   font-weight: 600;
-  color: var(--bg-root);
+  color: var(--accent-contrast);
 }
 
 .profile-avatar-info {
@@ -4701,7 +4702,7 @@ button:focus-visible,
 }
 
 .tree-change-summary__add {
-  color: color-mix(in srgb, var(--accent-dim) 58%, var(--text-secondary) 42%);
+  color: color-mix(in srgb, var(--status-active) 58%, var(--text-secondary) 42%);
 }
 
 .tree-change-summary__del {
@@ -4750,9 +4751,9 @@ button:focus-visible,
 }
 
 .tree-divergence--warning {
-  color: color-mix(in srgb, var(--accent-dim) 52%, var(--text-secondary) 48%);
-  background: color-mix(in srgb, var(--accent-dim) 7%, transparent);
-  border-color: color-mix(in srgb, var(--accent-dim) 18%, var(--border-subtle) 82%);
+  color: color-mix(in srgb, var(--status-idle) 52%, var(--text-secondary) 48%);
+  background: color-mix(in srgb, var(--status-idle) 7%, transparent);
+  border-color: color-mix(in srgb, var(--status-idle) 18%, var(--border-subtle) 82%);
 }
 
 .tree-divergence--danger {

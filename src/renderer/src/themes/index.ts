@@ -19,6 +19,9 @@ export interface SorcererThemeColors {
   'accent-dim': string
   'accent-glow': string
   'accent-glow-strong': string
+  'status-active'?: string
+  'status-idle'?: string
+  'status-waiting'?: string
   'danger': string
 }
 
@@ -49,6 +52,45 @@ export interface SorcererTheme {
   name: string
   colors: SorcererThemeColors
   terminal: SorcererTerminalColors
+}
+
+function getHexRgb(value: string): { r: number; g: number; b: number } | null {
+  const match = value.trim().match(/^#([0-9a-f]{6})$/i)
+  if (!match) return null
+  const hex = match[1]
+  return {
+    r: parseInt(hex.slice(0, 2), 16),
+    g: parseInt(hex.slice(2, 4), 16),
+    b: parseInt(hex.slice(4, 6), 16)
+  }
+}
+
+function getRelativeLuminance(value: string): number | null {
+  const rgb = getHexRgb(value)
+  if (!rgb) return null
+  const channels = [rgb.r, rgb.g, rgb.b].map((channel) => {
+    const normalized = channel / 255
+    return normalized <= 0.03928
+      ? normalized / 12.92
+      : ((normalized + 0.055) / 1.055) ** 2.4
+  })
+  return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2]
+}
+
+function getContrastRatio(a: number, b: number): number {
+  const lighter = Math.max(a, b)
+  const darker = Math.min(a, b)
+  return (lighter + 0.05) / (darker + 0.05)
+}
+
+function getAccentContrastColor(accent: string, root: string, text: string): string {
+  const accentLum = getRelativeLuminance(accent)
+  const rootLum = getRelativeLuminance(root)
+  const textLum = getRelativeLuminance(text)
+  if (accentLum === null || rootLum === null || textLum === null) {
+    return text
+  }
+  return getContrastRatio(accentLum, textLum) >= getContrastRatio(accentLum, rootLum) ? text : root
 }
 
 export function toXtermTheme(theme: SorcererTheme) {
@@ -189,9 +231,12 @@ const MONOCHROME_STATUS_THEME: SorcererTheme = {
     'text-tertiary': '#7f7f7f',
     'text-muted': '#5b5b5b',
     'accent': '#d8d8d8',
-    'accent-dim': '#7ccf8a',
+    'accent-dim': '#bcbcbc',
     'accent-glow': 'rgba(255, 255, 255, 0.08)',
     'accent-glow-strong': 'rgba(255, 255, 255, 0.14)',
+    'status-active': '#7ccf8a',
+    'status-idle': '#d9b25f',
+    'status-waiting': '#b4b4b4',
     'danger': '#d86b6b'
   },
   terminal: {
@@ -844,19 +889,22 @@ export function getAppliedTheme(): SorcererTheme {
   return getThemeById(themeId)
 }
 
-export function applyTheme(theme: SorcererTheme): void {
+export function applyTheme(theme: SorcererTheme, options?: { broadcast?: boolean }): void {
   const root = document.documentElement
   root.dataset.themeId = theme.id
   for (const [key, value] of Object.entries(theme.colors)) {
     root.style.setProperty(`--${key}`, value)
   }
+  root.style.setProperty('--status-active', theme.colors['status-active'] ?? theme.terminal.green)
+  root.style.setProperty('--status-idle', theme.colors['status-idle'] ?? theme.terminal.yellow)
+  root.style.setProperty('--status-waiting', theme.colors['status-waiting'] ?? theme.terminal.blue)
+  root.style.setProperty(
+    '--accent-contrast',
+    getAccentContrastColor(theme.colors.accent, theme.colors['bg-root'], theme.colors['text-primary'])
+  )
   const bgRoot = theme.colors['bg-root']
-  if (/^#([0-9a-f]{6})$/i.test(bgRoot)) {
-    const hex = bgRoot.slice(1)
-    const r = parseInt(hex.slice(0, 2), 16)
-    const g = parseInt(hex.slice(2, 4), 16)
-    const b = parseInt(hex.slice(4, 6), 16)
-    const luminance = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255
+  const luminance = getRelativeLuminance(bgRoot)
+  if (luminance !== null) {
     root.style.colorScheme = luminance > 0.62 ? 'light' : 'dark'
   }
   // Update native title bar buttons to match the theme (Windows/Linux)
@@ -865,6 +913,8 @@ export function applyTheme(theme: SorcererTheme): void {
     symbolColor: theme.colors['text-secondary']
   })
   // Broadcast theme to pop-out windows
-  window.sorcerer?.popout.broadcastTheme(theme.id)
+  if (options?.broadcast !== false) {
+    window.sorcerer?.popout.broadcastTheme(theme.id)
+  }
   window.dispatchEvent(new CustomEvent('sorcerer:themeChange', { detail: theme }))
 }

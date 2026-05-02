@@ -13,7 +13,7 @@ async function boot() {
     const token = params.get('token')
     if (!token) {
       document.getElementById('root')!.innerHTML =
-        '<div style="padding:2rem;font-family:system-ui;color:#ccc">' +
+        '<div style="padding:2rem;font-family:var(--font-sans, system-ui);color:var(--text-secondary);background:var(--bg-root);min-height:100vh">' +
         '<h2>Remote Access</h2>' +
         '<p>Append <code>?token=YOUR_TOKEN</code> to the URL to connect.</p>' +
         '</div>'
@@ -37,7 +37,7 @@ async function boot() {
   // Apply persisted theme before first render to avoid color flash
   const { getApi } = await import('./api/client')
   const themeId = await getApi().settings.get('theme')
-  if (themeId) applyTheme(getThemeById(themeId))
+  applyTheme(getThemeById(themeId || 'default'))
 
   ReactDOM.createRoot(document.getElementById('root')!).render(
     <React.StrictMode>

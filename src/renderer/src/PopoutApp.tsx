@@ -717,13 +717,13 @@ export function PopoutApp() {
 
   useEffect(() => {
     if (params?.themeId) {
-      applyTheme(getThemeById(params.themeId))
+      applyTheme(getThemeById(params.themeId), { broadcast: false })
     }
   }, [params?.themeId])
 
   useEffect(() => {
     const unsub = getApi().popout.onThemeUpdate((themeId: string) => {
-      applyTheme(getThemeById(themeId))
+      applyTheme(getThemeById(themeId), { broadcast: false })
     })
     return () => { unsub() }
   }, [])
