@@ -49,8 +49,13 @@ let dbService: DatabaseService
 let worktreeService: WorktreeService
 let fileWatcherService: FileWatcherService
 let popoutService: PopoutService
+let agentOrchestrator: AgentOrchestrator | null = null
 let saveWindowBoundsTimer: NodeJS.Timeout | null = null
+let rateLimitsWatcher: fs.FSWatcher | null = null
+let rateLimitsDebounceTimer: ReturnType<typeof setTimeout> | null = null
 const pendingExitPersistence = new Set<Promise<void>>()
+const pendingStartupTasks = new Set<Promise<void>>()
+let isShuttingDown = false
 
 function getWindowBounds(): { x?: number; y?: number; width: number; height: number; maximized: boolean } {
   const defaults = { width: 1200, height: 800, maximized: false }
@@ -111,6 +116,22 @@ async function waitForExitPersistence(timeoutMs = 2000): Promise<void> {
 
   await Promise.race([
     Promise.allSettled(Array.from(pendingExitPersistence)).then(() => undefined),
+    new Promise<void>((resolve) => setTimeout(resolve, timeoutMs))
+  ])
+}
+
+function trackStartupTask(task: Promise<void>): void {
+  pendingStartupTasks.add(task)
+  void task.finally(() => {
+    pendingStartupTasks.delete(task)
+  })
+}
+
+async function waitForStartupTasks(timeoutMs = 3000): Promise<void> {
+  if (pendingStartupTasks.size === 0) return
+
+  await Promise.race([
+    Promise.allSettled(Array.from(pendingStartupTasks)).then(() => undefined),
     new Promise<void>((resolve) => setTimeout(resolve, timeoutMs))
   ])
 }
@@ -186,14 +207,21 @@ async function createWindow(): Promise<void> {
     }
   } catch (err) {
     console.error('[startup] Service initialization failed:', err)
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.destroy()
+      mainWindow = null
+    }
+    throw err
   }
 
   // Register IPC handlers
   registerIPC(ptyService, dbService, worktreeService, fileWatcherService)
 
   // Start the agent orchestrator — handles scheduled runs, output capture, decisions
-  const orchestrator = new AgentOrchestrator(dbService, ptyService, mainWindow)
-  orchestrator.start()
+  if (!agentOrchestrator) {
+    agentOrchestrator = new AgentOrchestrator(dbService, ptyService, mainWindow)
+    agentOrchestrator.start()
+  }
 
   // Capture Codex thread IDs from live PTY output as soon as Codex prints them.
   ptyService.onOutput((sessionId, data) => {
@@ -304,7 +332,8 @@ async function createWindow(): Promise<void> {
   })
 
   setImmediate(() => {
-    void (async () => {
+    const startupTask = (async () => {
+      if (isShuttingDown) return
       try {
         refreshProviderRegistry(dbService)
         if (mainWindow && !mainWindow.isDestroyed()) {
@@ -314,6 +343,8 @@ async function createWindow(): Promise<void> {
         console.error('[providers] Startup refresh failed (non-fatal):', err)
       }
 
+      if (isShuttingDown) return
+
       try {
         const result = await reconcileCodexSessions(dbService)
         if (result.updated > 0) {
@@ -322,6 +353,8 @@ async function createWindow(): Promise<void> {
       } catch (err) {
         console.error('[codex-reconcile] Startup reconciliation failed (non-fatal):', err)
       }
+
+      if (isShuttingDown) return
 
       // One-time cleanup: clear mock team_name values from sessions
       try {
@@ -337,6 +370,8 @@ async function createWindow(): Promise<void> {
       } catch (err) {
         console.error('[startup] Team cleanup failed:', err)
       }
+
+      if (isShuttingDown) return
 
       // Crash recovery: auto-commit orphaned worktrees
       try {
@@ -373,6 +408,8 @@ async function createWindow(): Promise<void> {
         console.error('[crash-recovery] Failed:', err)
       }
 
+      if (isShuttingDown) return
+
       // Recover orphaned worktree directories that lack DB session records
       try {
         const services = { db: dbService, pty: ptyService, worktree: worktreeService, fileWatcher: fileWatcherService }
@@ -391,13 +428,15 @@ async function createWindow(): Promise<void> {
         console.error('[startup-sync] Failed:', err)
       }
 
+      if (isShuttingDown) return
+
       // Auto-start agents configured for auto_start (immediate, outside of schedule)
       try {
         const autoStartAgents = dbService.listAgents().filter((a: any) => a.auto_start === 1 && a.mission)
         if (autoStartAgents.length > 0) {
           for (const agent of autoStartAgents) {
             try {
-              orchestrator.runNow(agent.id)
+              agentOrchestrator?.runNow(agent.id)
               console.log(`[startup] Auto-started agent: ${agent.name}`)
             } catch (err) {
               console.error(`[startup] Failed to auto-start agent ${agent.name}:`, err)
@@ -407,6 +446,8 @@ async function createWindow(): Promise<void> {
       } catch (err) {
         console.error('[startup] Auto-start agent scan failed:', err)
       }
+
+      if (isShuttingDown) return
 
       // Auto-start remote access if previously enabled
       try {
@@ -437,7 +478,12 @@ async function createWindow(): Promise<void> {
               { db: dbService, pty: ptyService, worktree: worktreeService, fileWatcher: fileWatcherService },
               { port, bindAddress, authToken }
             )
+            if (isShuttingDown) return
             await server.start()
+            if (isShuttingDown) {
+              server.stop()
+              return
+            }
             setGlobalApiServer(server)
             console.log(`[remote-access] Auto-started on ${bindAddress}:${port}`)
           }).catch((err) => {
@@ -493,10 +539,10 @@ async function createWindow(): Promise<void> {
       const rateLimitsPath = path.join(sorcererDir, 'rate-limits.json')
       try {
         if (!fs.existsSync(rateLimitsPath)) fs.writeFileSync(rateLimitsPath, '{}')
-        let debounce: ReturnType<typeof setTimeout> | null = null
-        fs.watch(rateLimitsPath, () => {
-          if (debounce) clearTimeout(debounce)
-          debounce = setTimeout(() => {
+        rateLimitsWatcher?.close()
+        rateLimitsWatcher = fs.watch(rateLimitsPath, () => {
+          if (rateLimitsDebounceTimer) clearTimeout(rateLimitsDebounceTimer)
+          rateLimitsDebounceTimer = setTimeout(() => {
             try {
               const data = JSON.parse(fs.readFileSync(rateLimitsPath, 'utf8'))
               if (mainWindow && !mainWindow.isDestroyed()) {
@@ -509,33 +555,59 @@ async function createWindow(): Promise<void> {
         console.log('[statusline] Rate limit watcher failed (non-fatal):', err)
       }
     })()
+    trackStartupTask(startupTask)
   })
 }
 
 app.whenReady().then(() => {
-  createWindow()
+  void createWindow().catch((err) => {
+    console.error('[startup] Window creation failed:', err)
+    if (process.platform !== 'darwin') {
+      app.quit()
+    }
+  })
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow()
+      isShuttingDown = false
+      void createWindow().catch((err) => {
+        console.error('[startup] Window recreation failed:', err)
+      })
     }
   })
 })
 
+app.on('before-quit', () => {
+  isShuttingDown = true
+})
+
 app.on('window-all-closed', () => {
   void (async () => {
+    isShuttingDown = true
     flushWindowBounds()
     // Give PTY exit handlers a brief chance to persist final state before the DB closes.
     if (ptyService) await ptyService.killAllAndWait()
     await waitForExitPersistence()
+    await waitForStartupTasks()
+    agentOrchestrator?.stop()
+    agentOrchestrator = null
+    if (rateLimitsDebounceTimer) {
+      clearTimeout(rateLimitsDebounceTimer)
+      rateLimitsDebounceTimer = null
+    }
+    if (rateLimitsWatcher) {
+      rateLimitsWatcher.close()
+      rateLimitsWatcher = null
+    }
     if (fileWatcherService) fileWatcherService.close()
-    if (dbService) dbService.close()
 
     // Stop remote access server
     import('./ipc/handlers').then(({ getGlobalApiServer }) => {
       const server = getGlobalApiServer()
       if (server) server.stop()
     }).catch(() => {})
+
+    if (dbService) dbService.close()
 
     if (process.platform !== 'darwin') {
       app.quit()
