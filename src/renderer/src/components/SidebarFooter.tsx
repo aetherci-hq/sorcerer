@@ -65,6 +65,7 @@ export function useUserProfile() {
 
   useEffect(() => {
     async function load() {
+      setAvatarSrc(null)
       const custom = await getApi().settings.get('display_name')
       if (custom) {
         setDisplayName(custom)
@@ -83,12 +84,12 @@ export function useUserProfile() {
         img.onload = () => setAvatarSrc(url)
         img.onerror = async () => {
           const sysPic = await getApi().system.accountPicture()
-          if (sysPic) setAvatarSrc(sysPic)
+          setAvatarSrc(sysPic || null)
         }
         img.src = url
       } else {
         const sysPic = await getApi().system.accountPicture()
-        if (sysPic) setAvatarSrc(sysPic)
+        setAvatarSrc(sysPic || null)
       }
     }
     load()

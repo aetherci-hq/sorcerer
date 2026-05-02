@@ -210,6 +210,12 @@ const api = {
     userInfo: () => ipcRenderer.invoke('system:userInfo'),
     accountPicture: () => ipcRenderer.invoke('system:accountPicture'),
     networkIp: () => ipcRenderer.invoke('system:networkIp') as Promise<string>,
+    workspacesRoot: () => ipcRenderer.invoke('system:workspaces-root') as Promise<string>,
+    pickPath: (options?: {
+      title?: string
+      mode?: 'file' | 'directory'
+      filters?: Array<{ name: string; extensions: string[] }>
+    }) => ipcRenderer.invoke('system:pick-path', options) as Promise<string | null>,
     memoryUsage: () => ipcRenderer.invoke('system:memoryUsage') as Promise<{
       totalMB: number
       breakdown: { type: string; pid: number; mb: number }[]

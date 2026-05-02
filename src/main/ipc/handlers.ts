@@ -114,6 +114,25 @@ export function registerIPC(
     return dbService.addProject(id, name, projectPath)
   })
 
+  ipcMain.handle('system:pick-path', async (_event, options?: {
+    title?: string
+    mode?: 'file' | 'directory'
+    filters?: Array<{ name: string; extensions: string[] }>
+  }) => {
+    const mode = options?.mode === 'file' ? 'file' : 'directory'
+    const result = await dialog.showOpenDialog({
+      title: options?.title || (mode === 'file' ? 'Select a File' : 'Select a Folder'),
+      properties: mode === 'file' ? ['openFile'] : ['openDirectory'],
+      filters: options?.filters
+    })
+
+    if (result.canceled || result.filePaths.length === 0) {
+      return null
+    }
+
+    return result.filePaths[0]
+  })
+
   ipcMain.handle('project:addPath', (_event, projectPath: string, customName?: string) => {
     return addProjectByPath(services, projectPath, customName)
   })
@@ -807,6 +826,10 @@ export function registerIPC(
 
   ipcMain.handle('system:networkIp', () => {
     return getNetworkIp()
+  })
+
+  ipcMain.handle('system:workspaces-root', () => {
+    return worktreeService.getWorkspacesRoot()
   })
 
   ipcMain.handle('system:memoryUsage', () => {

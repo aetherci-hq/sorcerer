@@ -5,22 +5,13 @@ Deferred findings from release review that are real, but broader than the curren
 ## Settings / UX
 
 - `src/renderer/src/components/dialogs/SettingsDialog.tsx`
-  `Browse` in `Custom shell` and `Worktree base directory` currently calls `getApi().project.add()`, which opens the add-project directory flow instead of a generic filesystem picker.
+  `Clear local UI state` resets browser-side preferences, but there is still no true “clear app data” flow for DB-backed projects, sessions, agents, and persisted settings. If a destructive reset is desired later, it should be implemented explicitly instead of overloading the current UI-state reset.
 
 - `src/renderer/src/components/dialogs/SettingsDialog.tsx`
-  `Clear all data` only clears browser `localStorage`. It does not remove DB-backed projects, sessions, agents, or persisted settings, so the label and description are misleading.
-
-- `src/renderer/src/components/dialogs/SettingsDialog.tsx`
-  `Worktree base directory` is component-local only. It is not persisted and does not appear to drive any worktree creation path.
-
-- `src/renderer/src/components/dialogs/SettingsDialog.tsx`
-  Remote access URL derivation is inconsistent when bound to `0.0.0.0`. One path uses `localhost`, another uses the LAN IP.
+  The worktree path surface is now truthful and read-only, but there is still no user-configurable workspace-root setting. If that capability is wanted later, it needs a real backend setting and migration path, not just a UI control.
 
 - `src/renderer/src/components/dialogs/FeedbackDialog.tsx`
-  Feedback draft state is cleared only on successful submit. Cancel, Escape, and backdrop close leave the previous draft in memory.
-
-- `src/renderer/src/components/dialogs/SettingsDialog.tsx`
-  Profile avatar preview can keep showing a stale Gravatar after the email is cleared, depending on the last resolved image path.
+  Consider pre-filling the contact email from the profile email, if present. Current behavior is correct, but the form is still slightly repetitive for users who already configured profile identity.
 
 ## Main Process / Lifecycle
 

@@ -42,12 +42,15 @@ const SHORTCUTS = [
   { keys: 'Ctrl + Shift + B', action: 'Toggle briefing panel' }
 ]
 
-function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
+function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label: string }) {
   return (
     <button
       className={`settings-toggle ${checked ? 'settings-toggle--on' : ''}`}
       onClick={() => onChange(!checked)}
       type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
     >
       <span className="settings-toggle-dot" />
     </button>
@@ -114,6 +117,8 @@ function ProfileTab() {
 
   // Resolve avatar preview whenever email or system picture changes
   useEffect(() => {
+    setAvatarPreview(null)
+    setAvatarSource(systemPicture ? 'system' : 'initial')
     if (email) {
       const url = gravatarUrl(email, 128)
       const img = new Image()
@@ -220,9 +225,12 @@ function SessionsTab() {
               className="settings-browse-btn"
               type="button"
               onClick={async () => {
-                const result = await getApi().project.add()
-                if (result) {
-                  setShell(result.path)
+                const selectedPath = await getApi().system.pickPath({
+                  title: 'Select Shell Executable',
+                  mode: 'file'
+                })
+                if (selectedPath) {
+                  setShell(selectedPath)
                 }
               }}
             >
@@ -266,7 +274,7 @@ function SessionsTab() {
 
       <SectionTitle>Lifecycle</SectionTitle>
       <SettingRow label="Auto-archive idle sessions" description="Automatically archive sessions after idle timeout">
-        <Toggle checked={autoArchive === 'true'} onChange={(v) => setAutoArchive(v ? 'true' : 'false')} />
+        <Toggle checked={autoArchive === 'true'} onChange={(v) => setAutoArchive(v ? 'true' : 'false')} label="Auto-archive idle sessions" />
       </SettingRow>
       <SettingRow label="Idle timeout" description="How long before a session is considered idle">
         <DialogSelect
@@ -283,7 +291,7 @@ function SessionsTab() {
         />
       </SettingRow>
       <SettingRow label="Confirm before delete" description="Show confirmation dialog when deleting sessions">
-        <Toggle checked={confirmDelete === 'true'} onChange={(v) => setConfirmDelete(v ? 'true' : 'false')} />
+        <Toggle checked={confirmDelete === 'true'} onChange={(v) => setConfirmDelete(v ? 'true' : 'false')} label="Confirm before delete" />
       </SettingRow>
 
       <SectionTitle>Sidebar</SectionTitle>
@@ -291,6 +299,7 @@ function SessionsTab() {
         <Toggle
           checked={showProviderBadges}
           onChange={setShowProviderBadges}
+          label="Show provider badges"
         />
       </SettingRow>
     </>
@@ -300,7 +309,11 @@ function SessionsTab() {
 function GitTab() {
   const [defaultRemote, setDefaultRemote] = useSetting('defaultRemote', 'origin')
   const [autoPush, setAutoPush] = useSetting('autoPush', 'false')
-  const [worktreeBase, setWorktreeBase] = useState('~/.sorcerer/workspaces')
+  const [workspacesRoot, setWorkspacesRoot] = useState('')
+
+  useEffect(() => {
+    getApi().system.workspacesRoot().then(setWorkspacesRoot).catch(() => {})
+  }, [])
 
   return (
     <>
@@ -313,25 +326,16 @@ function GitTab() {
         />
       </SettingRow>
       <SettingRow label="Auto-push on create" description="Push branch to remote when creating a session">
-        <Toggle checked={autoPush === 'true'} onChange={(v) => setAutoPush(v ? 'true' : 'false')} />
+        <Toggle checked={autoPush === 'true'} onChange={(v) => setAutoPush(v ? 'true' : 'false')} label="Auto-push on create" />
       </SettingRow>
 
       <SectionTitle>Worktrees</SectionTitle>
-      <SettingRow label="Worktree base directory" description="Where git worktrees are created on disk">
-        <div className="settings-path-row">
-          <input
-            className="settings-input settings-input--path"
-            value={worktreeBase}
-            onChange={(e) => setWorktreeBase(e.target.value)}
-            readOnly
-          />
-          {isElectron && (
-            <button className="settings-browse-btn" type="button" onClick={async () => {
-              const result = await getApi().project.add()
-              if (result) setWorktreeBase(result.path)
-            }}>Browse</button>
-          )}
-        </div>
+      <SettingRow label="Workspace root" description="Current on-disk root used for Sorcerer worktrees">
+        <input
+          className="settings-input settings-input--path"
+          value={workspacesRoot}
+          readOnly
+        />
       </SettingRow>
     </>
   )
@@ -415,9 +419,9 @@ function RemoteTab() {
     })
   }
 
-  const host = bindAddress === '0.0.0.0' ? 'localhost' : bindAddress
+  const host = bindAddress === '0.0.0.0' ? lanIp : bindAddress
   const accessUrl = `http://${host}:${port}?token=${token}`
-  const rcHost = bindAddress === '0.0.0.0' ? lanIp : bindAddress
+  const rcHost = host
   const rcUrl = `http://${rcHost}:${port}/rc?token=${token}`
 
   const handleCopyUrl = () => {
@@ -437,7 +441,7 @@ function RemoteTab() {
       <SectionTitle>Server</SectionTitle>
 
       <SettingRow label="Enable remote desktop" description="Start an HTTP API server for full browser-based access to Sorcerer">
-        <Toggle checked={running} onChange={handleToggle} />
+        <Toggle checked={running} onChange={handleToggle} label="Enable remote desktop" />
       </SettingRow>
 
       {running && (
@@ -571,7 +575,7 @@ function GeneralTab() {
         <span className="settings-version">{__APP_VERSION__}</span>
       </SettingRow>
       <SettingRow label="Check for updates" description="Periodically check GitHub for new releases">
-        <Toggle checked={checkUpdates !== 'false'} onChange={(v) => setCheckUpdates(v ? 'true' : 'false')} />
+        <Toggle checked={checkUpdates !== 'false'} onChange={(v) => setCheckUpdates(v ? 'true' : 'false')} label="Check for updates" />
       </SettingRow>
       {update && (
         <SettingRow label="Update available" description={`Version ${update.version} is available`}>
@@ -590,6 +594,7 @@ function GeneralTab() {
         <Toggle
           checked={showFeedbackIcon}
           onChange={setShowFeedbackIcon}
+          label="Show feedback button"
         />
       </SettingRow>
 
@@ -619,15 +624,16 @@ function GeneralTab() {
           Reset
         </button>
       </SettingRow>
-      <SettingRow label="Clear all data" description="Remove all projects, sessions, and settings">
+      <SettingRow label="Clear local UI state" description="Clear locally stored UI preferences and cached window state">
         <button
           className="settings-action-btn settings-action-btn--danger"
           type="button"
           onClick={() => {
-            localStorage.clear()
+            localStorage.removeItem('sorcerer-ui-store')
+            localStorage.removeItem('sorcerer-stats-pinned')
           }}
         >
-          Clear Data
+          Clear UI State
         </button>
       </SettingRow>
 
@@ -872,7 +878,7 @@ function AppearanceTab() {
 
       <SectionTitle>Particles</SectionTitle>
       <SettingRow label="Particle animation" description="Show rising particle effect in the titlebar and empty panels">
-        <Toggle checked={particlesEnabled !== 'false'} onChange={(v) => { setParticlesEnabled(v ? 'true' : 'false'); notifyParticles() }} />
+        <Toggle checked={particlesEnabled !== 'false'} onChange={(v) => { setParticlesEnabled(v ? 'true' : 'false'); notifyParticles() }} label="Particle animation" />
       </SettingRow>
       {particlesEnabled !== 'false' && (
         <SettingRow label="Titlebar intensity" description="Brightness of particles in the titlebar">
@@ -959,10 +965,10 @@ function BriefingTab() {
 
       <SectionTitle>Behavior</SectionTitle>
       <SettingRow label="Show on startup" description="Auto-generate a briefing when Sorcerer launches">
-        <Toggle checked={autoLoadOnStartup === 'true'} onChange={(v) => setAutoLoadOnStartup(v ? 'true' : 'false')} />
+        <Toggle checked={autoLoadOnStartup === 'true'} onChange={(v) => setAutoLoadOnStartup(v ? 'true' : 'false')} label="Show on startup" />
       </SettingRow>
       <SettingRow label="Show on return from idle" description="Refresh briefing when you come back after being away">
-        <Toggle checked={autoLoadOnIdle === 'true'} onChange={(v) => setAutoLoadOnIdle(v ? 'true' : 'false')} />
+        <Toggle checked={autoLoadOnIdle === 'true'} onChange={(v) => setAutoLoadOnIdle(v ? 'true' : 'false')} label="Show on return from idle" />
       </SettingRow>
       {autoLoadOnIdle === 'true' && (
         <SettingRow label="Idle timeout (minutes)" description="How long before you're considered idle">

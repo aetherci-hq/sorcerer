@@ -35,8 +35,14 @@ export function FeedbackDialog() {
 
   const canSubmit = useMemo(() => feedback.trim().length > 0 && !submitting, [feedback, submitting])
 
+  const resetDraft = () => {
+    setFeedback('')
+    setContactEmail('')
+  }
+
   const handleClose = () => {
     if (submitting) return
+    resetDraft()
     closeDialog()
   }
 
@@ -52,8 +58,7 @@ export function FeedbackDialog() {
       const url = `${FEEDBACK_ISSUE_URL}?title=${encodeURIComponent(title)}&body=${encodeURIComponent(body)}`
       await getApi().window.openExternal(url)
       addToast('Opened GitHub issue draft for your feedback.', 'success')
-      setFeedback('')
-      setContactEmail('')
+      resetDraft()
       closeDialog()
     } catch (error) {
       console.error('[feedback-dialog] failed to open issue draft:', error)
