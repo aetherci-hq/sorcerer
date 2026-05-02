@@ -24,12 +24,17 @@ export function ParticleCanvas({ count, color, brightness = 1, className }: Part
 
     let raf: number
     let particles: Particle[] = []
-    let activeColor = color || getComputedStyle(canvas).getPropertyValue('--accent').trim() || getComputedStyle(canvas).getPropertyValue('--text-primary').trim() || '#ffffff'
+    const getThemeColor = () =>
+      getComputedStyle(canvas).getPropertyValue('--accent').trim() ||
+      getComputedStyle(canvas).getPropertyValue('--text-primary').trim() ||
+      getComputedStyle(document.documentElement).getPropertyValue('--text-primary').trim() ||
+      'currentColor'
+    let activeColor = color || getThemeColor()
 
     // Re-read --accent when the theme changes
     const onThemeChange = () => {
       if (!color) {
-        activeColor = getComputedStyle(canvas).getPropertyValue('--accent').trim() || getComputedStyle(canvas).getPropertyValue('--text-primary').trim() || '#ffffff'
+        activeColor = getThemeColor()
       }
     }
     window.addEventListener('sorcerer:themeChange', onThemeChange)

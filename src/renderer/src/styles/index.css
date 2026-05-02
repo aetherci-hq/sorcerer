@@ -43,6 +43,20 @@
   --accent-shadow-faint: color-mix(in srgb, var(--accent) 6%, transparent);
   --accent-shadow-soft: color-mix(in srgb, var(--accent) 8%, transparent);
   --accent-shadow-medium: color-mix(in srgb, var(--accent) 10%, transparent);
+  --surface-glass-ghost: color-mix(in srgb, var(--text-primary) 2%, transparent);
+  --surface-glass-faint: color-mix(in srgb, var(--text-primary) 4%, transparent);
+  --surface-glass-soft: color-mix(in srgb, var(--text-primary) 8%, transparent);
+  --surface-glass-medium: color-mix(in srgb, var(--text-primary) 12%, transparent);
+  --surface-glass-strong: color-mix(in srgb, var(--text-primary) 18%, transparent);
+  --surface-glass-border: color-mix(in srgb, var(--text-primary) 22%, transparent);
+  --scrim-soft: color-mix(in srgb, var(--bg-root) 30%, transparent);
+  --scrim-medium: color-mix(in srgb, var(--bg-root) 40%, transparent);
+  --scrim-strong: color-mix(in srgb, var(--bg-root) 52%, transparent);
+  --scrim-heavy: color-mix(in srgb, var(--bg-root) 65%, transparent);
+  --shadow-soft: color-mix(in srgb, var(--bg-root) 20%, transparent);
+  --shadow-medium: color-mix(in srgb, var(--bg-root) 30%, transparent);
+  --shadow-strong: color-mix(in srgb, var(--bg-root) 42%, transparent);
+  --shadow-heavy: color-mix(in srgb, var(--bg-root) 50%, transparent);
 
   /* Status */
   --status-active:   #5ec269;
@@ -887,7 +901,7 @@ body {
   min-height: 16px;
   padding: 1px 6px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--surface-glass-faint);
   border: 1px solid var(--border-subtle);
   color: var(--text-secondary);
   font-size: 9px;
@@ -1257,7 +1271,7 @@ body {
 }
 
 .tree-subagent:hover {
-  background: rgba(255, 255, 255, 0.02);
+  background: var(--surface-glass-ghost);
 }
 
 .tree-subagent-dot {
@@ -1265,7 +1279,7 @@ body {
   height: 5px;
   border-radius: 999px;
   flex-shrink: 0;
-  background: rgba(255, 255, 255, 0.18);
+  background: var(--surface-glass-strong);
 }
 
 .tree-subagent-dot--active {
@@ -1354,8 +1368,8 @@ body {
 }
 
 .tree-item--active .tree-subagent-summary {
-  background: rgba(255, 255, 255, 0.12);
-  border-color: rgba(255, 255, 255, 0.22);
+  background: var(--surface-glass-medium);
+  border-color: var(--surface-glass-border);
   color: inherit;
 }
 
@@ -1458,7 +1472,7 @@ body {
   border: 1px solid var(--border-medium);
   border-radius: var(--radius-lg);
   padding: 12px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 8px 24px var(--shadow-strong), 0 2px 8px var(--shadow-soft);
   z-index: 100;
   animation: stats-popover-in 0.2s var(--ease-out);
 }
@@ -2206,8 +2220,8 @@ body {
   border-radius: var(--radius-md);
   padding: 4px;
   box-shadow:
-    0 4px 16px rgba(0, 0, 0, 0.4),
-    0 1px 4px rgba(0, 0, 0, 0.3);
+    0 4px 16px var(--shadow-strong),
+    0 1px 4px var(--shadow-medium);
   animation: context-menu-in 0.12s var(--ease-out) both;
 }
 
@@ -2328,7 +2342,7 @@ body {
   position: fixed;
   inset: 0;
   z-index: 2000;
-  background: rgba(0, 0, 0, 0.55);
+  background: var(--scrim-heavy);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2356,8 +2370,8 @@ body {
   border: 1px solid var(--border-medium);
   border-radius: var(--radius-lg);
   box-shadow:
-    0 16px 48px rgba(0, 0, 0, 0.5),
-    0 4px 12px rgba(0, 0, 0, 0.3);
+    0 16px 48px var(--shadow-heavy),
+    0 4px 12px var(--shadow-medium);
   animation: dialog-in 0.25s var(--ease-out) both;
   overflow: hidden;
 }
@@ -2535,8 +2549,8 @@ body {
   border: 1px solid var(--border-medium);
   border-radius: var(--radius-md);
   box-shadow:
-    0 18px 40px rgba(0, 0, 0, 0.42),
-    0 6px 18px rgba(0, 0, 0, 0.24);
+    0 18px 40px var(--shadow-strong),
+    0 6px 18px var(--shadow-soft);
   overflow-y: auto;
   box-sizing: border-box;
   scrollbar-width: thin;
@@ -2831,7 +2845,7 @@ select.dialog-input option {
 
 .import-sessions-toolbar__filter-label {
   font-size: 11px;
-  color: var(--text-dim);
+  color: var(--text-tertiary);
   line-height: 1;
 }
 
@@ -2854,10 +2868,10 @@ select.dialog-input option {
   align-items: center;
   justify-content: center;
   gap: 10px;
-  color: var(--text-dim);
-  border: 1px dashed var(--border);
+  color: var(--text-tertiary);
+  border: 1px dashed var(--border-subtle);
   border-radius: 12px;
-  background: var(--panel-elevated);
+  background: var(--bg-elevated);
 }
 
 .import-session-card {
@@ -2866,16 +2880,16 @@ select.dialog-input option {
   gap: 12px;
   align-items: start;
   padding: 12px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-subtle);
   border-radius: 12px;
-  background: var(--panel-elevated);
+  background: var(--bg-elevated);
   cursor: pointer;
   transition: border-color 120ms ease, transform 120ms ease, background 120ms ease;
 }
 
 .import-session-card:hover {
   border-color: var(--accent);
-  background: color-mix(in srgb, var(--panel-elevated) 84%, var(--accent) 16%);
+  background: color-mix(in srgb, var(--bg-elevated) 84%, var(--accent) 16%);
 }
 
 .import-session-card input[type="checkbox"] {
@@ -2928,8 +2942,8 @@ select.dialog-input option {
   line-height: 1.4;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  background: var(--surface);
-  color: var(--text-dim);
+  background: var(--bg-elevated);
+  color: var(--text-tertiary);
 }
 
 .import-session-card__provider--claude {
@@ -2948,7 +2962,7 @@ select.dialog-input option {
 }
 
 .import-session-card__meta-row--timestamps {
-  color: var(--text-dim);
+  color: var(--text-tertiary);
 }
 
 .import-session-card__path,
@@ -3328,8 +3342,8 @@ button:focus-visible,
   border: 1px solid var(--border-medium);
   border-radius: var(--radius-md);
   box-shadow:
-    0 4px 16px rgba(0, 0, 0, 0.4),
-    0 1px 4px rgba(0, 0, 0, 0.3);
+    0 4px 16px var(--shadow-strong),
+    0 1px 4px var(--shadow-medium);
   animation: toast-in 0.25s var(--ease-out) both;
   pointer-events: auto;
   cursor: pointer;
@@ -3378,8 +3392,8 @@ button:focus-visible,
 .toast:hover {
   border-color: var(--border-medium);
   box-shadow:
-    0 6px 20px rgba(0, 0, 0, 0.5),
-    0 2px 6px rgba(0, 0, 0, 0.3);
+    0 6px 20px var(--shadow-heavy),
+    0 2px 6px var(--shadow-medium);
 }
 
 .toast-message {
@@ -3707,7 +3721,7 @@ button:focus-visible,
   align-items: center;
   justify-content: center;
   padding: 28px;
-  background: rgba(7, 7, 8, 0.52);
+  background: var(--scrim-strong);
   backdrop-filter: blur(10px) saturate(0.82);
 }
 
@@ -3720,7 +3734,7 @@ button:focus-visible,
   border-radius: 0;
   overflow: hidden;
   background: var(--bg-root);
-  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.42);
+  box-shadow: 0 28px 80px var(--shadow-strong);
 }
 
 .focus-mode-shell--wide {
@@ -3804,8 +3818,8 @@ button:focus-visible,
   border: 1px solid var(--border-medium);
   border-radius: var(--radius-lg);
   box-shadow:
-    0 16px 48px rgba(0, 0, 0, 0.5),
-    0 4px 12px rgba(0, 0, 0, 0.3);
+    0 16px 48px var(--shadow-heavy),
+    0 4px 12px var(--shadow-medium);
   animation: dialog-in 0.25s var(--ease-out) both;
   overflow: hidden;
   display: flex;
@@ -4441,7 +4455,7 @@ button:focus-visible,
   align-items: flex-start;
   justify-content: center;
   padding-top: 20%;
-  background: rgba(0, 0, 0, 0.4);
+  background: var(--scrim-medium);
   animation: fadeIn 0.12s var(--ease-out);
 }
 
@@ -4463,7 +4477,7 @@ button:focus-visible,
   font-family: var(--font-mono);
   color: var(--text-primary);
   outline: none;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 8px 32px var(--shadow-strong);
   transition: border-color 0.15s var(--ease-out);
 }
 
@@ -4517,7 +4531,7 @@ button:focus-visible,
   font-size: 13px;
   font-weight: 500;
   background: var(--bg-elevated);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-subtle);
   color: var(--text-secondary);
   border-radius: var(--radius-md);
   cursor: pointer;
@@ -4670,7 +4684,7 @@ button:focus-visible,
   font-weight: 400;
   font-family: var(--font-mono);
   color: var(--text-secondary);
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--surface-glass-faint);
   border: 1px solid var(--border-subtle);
   padding: 0 4px;
   border-radius: var(--radius-sm);
@@ -5065,7 +5079,7 @@ button:focus-visible,
   position: fixed;
   inset: 0;
   z-index: 1500;
-  background: rgba(0, 0, 0, 0.3);
+  background: var(--scrim-soft);
   animation: dialog-overlay-in 0.15s ease-out;
 }
 
@@ -5209,7 +5223,7 @@ button:focus-visible,
   position: fixed;
   inset: 0;
   z-index: 1500;
-  background: rgba(0, 0, 0, 0.5);
+  background: var(--scrim-heavy);
   backdrop-filter: blur(4px);
   -webkit-backdrop-filter: blur(4px);
   animation: dialog-overlay-in 0.15s ease-out;
@@ -5228,7 +5242,7 @@ button:focus-visible,
   display: flex;
   flex-direction: column;
   animation: dialog-in 0.2s var(--ease-out);
-  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 24px 80px var(--shadow-heavy);
 }
 
 .briefing-header {
