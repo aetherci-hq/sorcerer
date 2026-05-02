@@ -3401,9 +3401,9 @@ button:focus-visible,
   color: var(--text-muted);
   cursor: pointer;
   opacity: 0;
-  visibility: hidden;
   overflow: visible;
-  transition: opacity 0.15s var(--ease-out), visibility 0s linear 0.15s, background 0.15s var(--ease-out), color 0.15s var(--ease-out);
+  pointer-events: none;
+  transition: opacity 0.15s var(--ease-out), background 0.15s var(--ease-out), color 0.15s var(--ease-out);
   padding: 0;
   flex-shrink: 0;
 }
@@ -3413,15 +3413,15 @@ button:focus-visible,
   height: 14px;
 }
 
-.tree-item:hover .tree-item-actions {
+.tree-item:hover .tree-item-actions,
+.tree-item:focus-within .tree-item-actions {
   opacity: 1;
-  visibility: visible;
-  transition-delay: 0s, 0s, 0s, 0s;
+  pointer-events: auto;
 }
 
 .tree-item-actions:focus-visible {
   opacity: 1;
-  visibility: visible;
+  pointer-events: auto;
 }
 
 .tree-item-actions:hover {
@@ -4750,15 +4750,15 @@ button:focus-visible,
 }
 
 .tree-divergence--warning {
-  color: var(--text-secondary);
-  background: rgba(255, 255, 255, 0.04);
-  border-color: var(--border-subtle);
+  color: color-mix(in srgb, var(--accent-dim) 52%, var(--text-secondary) 48%);
+  background: color-mix(in srgb, var(--accent-dim) 7%, transparent);
+  border-color: color-mix(in srgb, var(--accent-dim) 18%, var(--border-subtle) 82%);
 }
 
 .tree-divergence--danger {
-  color: var(--text-secondary);
-  background: rgba(255, 255, 255, 0.04);
-  border-color: var(--border-subtle);
+  color: color-mix(in srgb, var(--danger) 38%, var(--text-secondary) 62%);
+  background: color-mix(in srgb, var(--danger) 7%, transparent);
+  border-color: color-mix(in srgb, var(--danger) 16%, var(--border-subtle) 84%);
 }
 
 /* ============================

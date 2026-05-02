@@ -49,6 +49,8 @@ let dbService: DatabaseService
 let worktreeService: WorktreeService
 let fileWatcherService: FileWatcherService
 let popoutService: PopoutService
+let saveWindowBoundsTimer: NodeJS.Timeout | null = null
+const pendingExitPersistence = new Set<Promise<void>>()
 
 function getWindowBounds(): { x?: number; y?: number; width: number; height: number; maximized: boolean } {
   const defaults = { width: 1200, height: 800, maximized: false }
@@ -77,6 +79,40 @@ function saveWindowBounds(): void {
       dbService.setSetting('windowBounds', JSON.stringify({ width: 1200, height: 800, maximized: true }))
     }
   }
+}
+
+function scheduleSaveWindowBounds(): void {
+  if (saveWindowBoundsTimer) {
+    clearTimeout(saveWindowBoundsTimer)
+  }
+  saveWindowBoundsTimer = setTimeout(() => {
+    saveWindowBoundsTimer = null
+    saveWindowBounds()
+  }, 150)
+}
+
+function flushWindowBounds(): void {
+  if (saveWindowBoundsTimer) {
+    clearTimeout(saveWindowBoundsTimer)
+    saveWindowBoundsTimer = null
+  }
+  saveWindowBounds()
+}
+
+function trackExitPersistence(task: Promise<void>): void {
+  pendingExitPersistence.add(task)
+  void task.finally(() => {
+    pendingExitPersistence.delete(task)
+  })
+}
+
+async function waitForExitPersistence(timeoutMs = 2000): Promise<void> {
+  if (pendingExitPersistence.size === 0) return
+
+  await Promise.race([
+    Promise.allSettled(Array.from(pendingExitPersistence)).then(() => undefined),
+    new Promise<void>((resolve) => setTimeout(resolve, timeoutMs))
+  ])
 }
 
 async function createWindow(): Promise<void> {
@@ -186,13 +222,21 @@ async function createWindow(): Promise<void> {
   ptyService.onExit((sessionId, exitCode) => {
     const scrollbackText = ptyService.scrollback.getScrollback(sessionId)
     const session = dbService.getSession(sessionId)
+    const agent = session ? null : dbService.getAgent(sessionId)
+
+    if (session) {
+      dbService.updateSession(sessionId, { status: 'idle', pid: null })
+    } else if (agent) {
+      dbService.updateAgent(sessionId, { status: 'idle', pid: null })
+    }
+
     if (session) {
       persistSessionExitSummary(dbService, sessionId, scrollbackText, exitCode)
     }
     if (session && session.provider === 'codex' && session.type !== 'quick-terminal') {
       const cwd = resolveSessionWorkingDirectory(dbService, session, { allowProjectFallback: true })
       const allowCwdRecovery = canRecoverSessionByCwd(dbService, session)
-      void (async () => {
+      const persistenceTask = (async () => {
         const { providerSessionId, source } = await resolveCodexExitThreadIdentity(session, scrollbackText, {
           cwd,
           allowCwdRecovery
@@ -208,7 +252,10 @@ async function createWindow(): Promise<void> {
             'Codex thread identity was never captured for this session.'
           )
         }
-      })()
+      })().catch((err) => {
+        console.error(`[codex-thread] ${sessionId}: failed to persist exit identity`, err)
+      })
+      trackExitPersistence(persistenceTask)
     }
 
     const reason = checkResumeFailed(sessionId, scrollbackText)
@@ -218,15 +265,6 @@ async function createWindow(): Promise<void> {
         console.log(
           `[resume-failed] details provider=${session.provider} claude_session_id=${session.claude_session_id || ''} provider_session_id=${session.provider_session_id || ''} cwd=${session.worktree_path || ''}`
         )
-      }
-      // Update DB status back to idle
-      if (session) {
-        dbService.updateSession(sessionId, { status: 'idle', pid: null })
-      } else {
-        const agent = dbService.getAgent(sessionId)
-        if (agent) {
-          dbService.updateAgent(sessionId, { status: 'idle', pid: null })
-        }
       }
       // Notify renderer
       if (mainWindow && !mainWindow.isDestroyed()) {
@@ -239,10 +277,10 @@ async function createWindow(): Promise<void> {
   // The old auto-restart handler was removed — orchestrator handles all scheduling.
 
   // Save window bounds on resize/move
-  mainWindow.on('resize', saveWindowBounds)
-  mainWindow.on('move', saveWindowBounds)
-  mainWindow.on('maximize', saveWindowBounds)
-  mainWindow.on('unmaximize', saveWindowBounds)
+  mainWindow.on('resize', scheduleSaveWindowBounds)
+  mainWindow.on('move', scheduleSaveWindowBounds)
+  mainWindow.on('maximize', scheduleSaveWindowBounds)
+  mainWindow.on('unmaximize', scheduleSaveWindowBounds)
 
   // Load the renderer
   if (process.env.ELECTRON_RENDERER_URL) {
@@ -251,7 +289,10 @@ async function createWindow(): Promise<void> {
     mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'))
   }
 
+  mainWindow.on('close', flushWindowBounds)
+
   mainWindow.on('closed', () => {
+    flushWindowBounds()
     popoutService.closeAll()
     mainWindow = null
   })
@@ -483,8 +524,10 @@ app.whenReady().then(() => {
 
 app.on('window-all-closed', () => {
   void (async () => {
+    flushWindowBounds()
     // Give PTY exit handlers a brief chance to persist final state before the DB closes.
     if (ptyService) await ptyService.killAllAndWait()
+    await waitForExitPersistence()
     if (fileWatcherService) fileWatcherService.close()
     if (dbService) dbService.close()
 

@@ -554,6 +554,7 @@ function useUpdateCheck() {
 
 function GeneralTab() {
   const [checkUpdates, setCheckUpdates] = useSetting('checkForUpdates', 'true')
+  const { showFeedbackIcon, setShowFeedbackIcon, resetSidebarLayout } = useUIStore()
   const update = useUpdateCheck()
 
   return (
@@ -577,13 +578,21 @@ function GeneralTab() {
         </SettingRow>
       )}
 
+      <SectionTitle>Interface</SectionTitle>
+      <SettingRow label="Show feedback button" description="Display the Give feedback shortcut in the sidebar footer">
+        <Toggle
+          checked={showFeedbackIcon}
+          onChange={setShowFeedbackIcon}
+        />
+      </SettingRow>
+
       <SectionTitle>Data</SectionTitle>
       <SettingRow label="Reset sidebar layout" description="Restore default sidebar width, agent/projects split, and expanded state">
         <button
           className="settings-action-btn"
           type="button"
           onClick={() => {
-            localStorage.removeItem('sorcerer-ui-store')
+            resetSidebarLayout()
           }}
         >
           Reset

@@ -12,6 +12,7 @@ import { useProjectStore } from '../stores/useProjectStore'
 import { useSessionStore } from '../stores/useSessionStore'
 import { useAgentStore } from '../stores/useAgentStore'
 import { assignPanelToPopoutTarget } from '../utils/popoutSelection'
+import { getProjectsInSidebarOrder } from '../utils/projectOrdering'
 
 export function Sidebar() {
   const {
@@ -158,10 +159,13 @@ export function Sidebar() {
 /** Collapsed view: just status dots for active sessions + agents */
 function CollapsedTree() {
   const { projects } = useProjectStore()
+  const projectGroups = useProjectStore((s) => s.groups)
   const { sessions, activeSessionId, setActiveSession } = useSessionStore()
   const { agents } = useAgentStore()
   const splitRoot = useUIStore((s) => s.splitRoot)
+  const projectTopLevelOrder = useUIStore((s) => s.projectTopLevelOrder)
   const splitIds = splitRoot ? getAllSessionIds(splitRoot) : []
+  const orderedProjects = getProjectsInSidebarOrder(projects, projectGroups, projectTopLevelOrder)
 
   const btnClass = (id: string) => {
     const isActive = id === activeSessionId
@@ -191,7 +195,7 @@ function CollapsedTree() {
         </div>
       )}
       {/* Projects */}
-      {projects.map((p) => {
+      {orderedProjects.map((p) => {
         const projectSessions = sessions.filter((s) => s.project_id === p.id && s.status !== 'deleted' && s.status !== 'archived')
         if (projectSessions.length === 0) return null
         return (

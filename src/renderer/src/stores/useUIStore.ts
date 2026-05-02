@@ -64,6 +64,7 @@ interface UIState {
   toggleSession: (id: string) => void
   toggleGroup: (id: string) => void
   setProjectTopLevelOrder: (order: string[]) => void
+  resetSidebarLayout: () => void
   collapseProjects: (projectIds: string[], groupIds: string[]) => void
   collapseAgents: (agentGroupIds: string[]) => void
   sidebarCollapsed: boolean
@@ -106,6 +107,8 @@ interface UIState {
   // Display preferences
   showProviderBadges: boolean
   setShowProviderBadges: (v: boolean) => void
+  showFeedbackIcon: boolean
+  setShowFeedbackIcon: (v: boolean) => void
 }
 
 // --- Split tree helpers ---
@@ -336,6 +339,19 @@ export const useUIStore = create<UIState>()(
 
       setProjectTopLevelOrder: (order) => set({ projectTopLevelOrder: order }),
 
+      resetSidebarLayout: () => set({
+        expandedProjects: new Set<string>(),
+        expandedSessions: new Set<string>(),
+        expandedGroups: new Set<string>(),
+        projectTopLevelOrder: [],
+        sidebarCollapsed: false,
+        sidebarHidden: false,
+        sidebarWidth: SIDEBAR_DEFAULT,
+        agentPaneHeight: AGENT_PANE_DEFAULT,
+        searchQuery: '',
+        sidebarSelection: null
+      }),
+
       collapseProjects: (projectIds, groupIds) =>
         set((state) => {
           const nextProjects = new Set(state.expandedProjects)
@@ -549,7 +565,9 @@ export const useUIStore = create<UIState>()(
       }),
 
       showProviderBadges: true,
-      setShowProviderBadges: (v) => set({ showProviderBadges: v })
+      setShowProviderBadges: (v) => set({ showProviderBadges: v }),
+      showFeedbackIcon: true,
+      setShowFeedbackIcon: (v) => set({ showFeedbackIcon: v })
     }),
     {
       name: 'sorcerer-ui-store',
@@ -563,6 +581,7 @@ export const useUIStore = create<UIState>()(
         sidebarWidth: state.sidebarWidth,
         agentPaneHeight: state.agentPaneHeight,
         showProviderBadges: state.showProviderBadges,
+        showFeedbackIcon: state.showFeedbackIcon,
         sidebarSelection: state.sidebarSelection,
         splitRoot: state.splitRoot,
         focusedPanelId: state.focusedPanelId,

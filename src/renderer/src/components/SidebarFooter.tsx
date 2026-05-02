@@ -373,6 +373,7 @@ export function useStatsPinned() {
 export function SidebarFooter({ collapsed, width = 260, pinned, togglePin }: { collapsed: boolean; width?: number; pinned: boolean; togglePin: () => void }) {
   const sessions = useSessionStore((s) => s.sessions)
   const openDialog = useUIStore((s) => s.openDialog)
+  const showFeedbackIcon = useUIStore((s) => s.showFeedbackIcon)
   const { displayName, initial, avatarSrc } = useUserProfile()
   const { time, date } = useClock()
   const [showStats, setShowStats] = useState(false)
@@ -393,9 +394,11 @@ export function SidebarFooter({ collapsed, width = 260, pinned, togglePin }: { c
   if (collapsed) {
     return (
       <div className="sidebar-footer sidebar-footer--collapsed stagger-10">
-        <button className="footer-icon-btn" onClick={() => openDialog('feedback')} title="Give feedback">
-          <MessageSquareIcon />
-        </button>
+        {showFeedbackIcon && (
+          <button className="footer-icon-btn" onClick={() => openDialog('feedback')} title="Give feedback">
+            <MessageSquareIcon />
+          </button>
+        )}
         <button className="footer-settings-btn" onClick={() => openDialog('settings')}>
           <SettingsIcon />
         </button>
@@ -424,9 +427,11 @@ export function SidebarFooter({ collapsed, width = 260, pinned, togglePin }: { c
       <div className="user-info">
         <div className="user-info-row">
           <div className="user-name">{displayName}</div>
-          <button className="footer-icon-btn footer-icon-btn--inline" onClick={() => openDialog('feedback')} title="Give feedback">
-            <MessageSquareIcon />
-          </button>
+          {showFeedbackIcon && (
+            <button className="footer-icon-btn footer-icon-btn--inline" onClick={() => openDialog('feedback')} title="Give feedback">
+              <MessageSquareIcon />
+            </button>
+          )}
         </div>
       </div>
       {showClock && (

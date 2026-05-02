@@ -11,6 +11,7 @@ import { Tooltip } from './Tooltip'
 import { EmptyState } from './EmptyState'
 import type { Project, ProjectGroup, ProviderSubAgent, Session, SessionResumeHealth, TeamMember, TaskData } from '../types'
 import { assignPanelToPopoutTarget } from '../utils/popoutSelection'
+import { getOrderedTopLevelKeys } from '../utils/projectOrdering'
 
 const PROVIDER_SUBAGENT_ACTIVE_MS = 90_000
 const PROVIDER_SUBAGENT_EXPIRE_MS = 2 * 60_000
@@ -967,7 +968,6 @@ function GroupItem({
 }) {
   const { expandedGroups, toggleGroup, openContextMenu, renamingId, setRenamingId, setSidebarSelection } = useUIStore()
   const { moveProjectToGroup } = useProjectStore()
-  const { sessions } = useSessionStore()
   const isExpanded = expandedGroups.has(group.id)
   const [isRenaming, setIsRenaming] = useState(false)
   const [renameValue, setRenameValue] = useState('')
@@ -1022,8 +1022,23 @@ function GroupItem({
     if (e.dataTransfer.types.includes('application/x-project-top-level')) {
       e.preventDefault()
       e.dataTransfer.dropEffect = 'move'
-      setDropHighlight(false)
-      onTopLevelDragOver(e, groupKey)
+      const isProjectDrag = topLevelDragState.dragKey?.startsWith('project:') ?? false
+      if (!isProjectDrag) {
+        setDropHighlight(false)
+        onTopLevelDragOver(e, groupKey)
+        return
+      }
+
+      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+      const topBand = rect.top + rect.height * 0.28
+      const bottomBand = rect.bottom - rect.height * 0.28
+      if (e.clientY <= topBand || e.clientY >= bottomBand) {
+        setDropHighlight(false)
+        onTopLevelDragOver(e, groupKey)
+      } else {
+        clearTopLevelDropTarget()
+        setDropHighlight(true)
+      }
       return
     }
     if (e.dataTransfer.types.includes('application/x-project-reorder')) {
@@ -1048,10 +1063,16 @@ function GroupItem({
 
   const handleGroupDrop = (e: React.DragEvent) => {
     if (e.dataTransfer.types.includes('application/x-project-top-level')) {
-      setDropHighlight(false)
       e.preventDefault()
       e.stopPropagation()
-      onTopLevelDrop(e, groupKey)
+      const draggedKey = topLevelDragState.dragKey
+      if (dropHighlight && draggedKey?.startsWith('project:')) {
+        setDropHighlight(false)
+        void moveProjectToGroup(draggedKey.slice('project:'.length), group.id)
+      } else {
+        setDropHighlight(false)
+        onTopLevelDrop(e, groupKey)
+      }
       return
     }
     const projectId = e.dataTransfer.getData('application/x-project-id')
@@ -1136,8 +1157,7 @@ function GroupItem({
         <div className={`tree-children-wrapper ${isExpanded ? 'tree-children-wrapper--open' : ''}`}>
           <div className="tree-children">
             {visibleProjects.map((project, i) => {
-              const globalIndex = allSessions.indexOf(project as any) // We'll use project's index in allProjects
-              const pIdx = useProjectStore.getState().projects.indexOf(project)
+              const pIdx = useProjectStore.getState().projects.findIndex((item) => item.id === project.id)
               return (
                 <ProjectItem
                   key={project.id}
@@ -1234,6 +1254,9 @@ export function ProjectTree() {
   const handleTopLevelDragStart = (e: React.DragEvent, key: string) => {
     if (!isDragEnabled) { e.preventDefault(); return }
     e.dataTransfer.setData('application/x-project-top-level', key)
+    if (key.startsWith('project:')) {
+      e.dataTransfer.setData('application/x-project-id', key.slice('project:'.length))
+    }
     e.dataTransfer.effectAllowed = 'move'
     setTopLevelDragKey(key)
   }
@@ -1331,23 +1354,10 @@ export function ProjectTree() {
 
   // Split projects into ungrouped and per-group
   const ungroupedProjects = filteredProjects.filter((p) => !p.group_id)
-  const topLevelProjectKeys = ungroupedProjects.map((project) => `project:${project.id}`)
-  const topLevelGroupKeys = groups.map((group) => `group:${group.id}`)
-  const knownTopLevelKeys = new Set([...topLevelProjectKeys, ...topLevelGroupKeys])
-  const legacyTopLevelOrder = [...topLevelProjectKeys, ...topLevelGroupKeys]
-  const seenTopLevelKeys = new Set<string>()
-  const orderedTopLevelKeys = [
-    ...projectTopLevelOrder.filter((key) => {
-      if (!knownTopLevelKeys.has(key) || seenTopLevelKeys.has(key)) return false
-      seenTopLevelKeys.add(key)
-      return true
-    }),
-    ...legacyTopLevelOrder.filter((key) => {
-      if (seenTopLevelKeys.has(key)) return false
-      seenTopLevelKeys.add(key)
-      return true
-    })
-  ]
+  const orderedTopLevelKeys = getOrderedTopLevelKeys(ungroupedProjects, groups, projectTopLevelOrder)
+  const ungroupedProjectByKey = new Map(ungroupedProjects.map((project) => [`project:${project.id}`, project]))
+  const groupByKey = new Map(groups.map((group) => [`group:${group.id}`, group]))
+  const projectIndexById = new Map(projects.map((project, index) => [project.id, index]))
   const projectGroupIds = groups.map((g) => g.id)
   const hasAnyExpanded = expandedProjects.size > 0 || expandedSessions.size > 0 ||
     projectGroupIds.some((id) => expandedGroups.has(id))
@@ -1389,9 +1399,9 @@ export function ProjectTree() {
       <div className="tree" onDragLeave={() => { setDropTarget(null); setTopLevelDropTarget(null) }}>
         {orderedTopLevelKeys.map((entryKey, index) => {
           if (entryKey.startsWith('project:')) {
-            const project = ungroupedProjects.find((item) => `project:${item.id}` === entryKey)
+            const project = ungroupedProjectByKey.get(entryKey)
             if (!project) return null
-            const pIdx = projects.indexOf(project)
+            const pIdx = projectIndexById.get(project.id) ?? -1
             return (
               <ProjectItem
                 key={project.id}
@@ -1416,7 +1426,7 @@ export function ProjectTree() {
             )
           }
 
-          const group = groups.find((item) => `group:${item.id}` === entryKey)
+          const group = groupByKey.get(entryKey)
           if (!group) return null
           const groupProjects = projects.filter((p) => p.group_id === group.id)
           return (
