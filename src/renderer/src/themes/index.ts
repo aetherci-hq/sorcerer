@@ -171,6 +171,190 @@ const MONOCHROME_DARK_THEME: SorcererTheme = {
   }
 }
 
+const MONOCHROME_STATUS_THEME: SorcererTheme = {
+  id: 'monochrome-status',
+  name: 'Monochrome Status',
+  colors: {
+    'bg-root': '#060606',
+    'bg-sidebar': '#020202',
+    'bg-titlebar': '#0a0a0a',
+    'bg-hover': '#131313',
+    'bg-active': '#1d1d1d',
+    'bg-elevated': '#111111',
+    'terminal-bg': '#060606',
+    'border-subtle': '#1f1f1f',
+    'border-medium': '#343434',
+    'text-primary': '#f1f1f1',
+    'text-secondary': '#bbbbbb',
+    'text-tertiary': '#7f7f7f',
+    'text-muted': '#5b5b5b',
+    'accent': '#d8d8d8',
+    'accent-dim': '#7ccf8a',
+    'accent-glow': 'rgba(255, 255, 255, 0.08)',
+    'accent-glow-strong': 'rgba(255, 255, 255, 0.14)',
+    'danger': '#d86b6b'
+  },
+  terminal: {
+    foreground: '#e8e8e8',
+    cursor: '#ffffff',
+    selectionBackground: 'rgba(255, 255, 255, 0.14)',
+    black: '#0a0a0a',
+    red: '#d86b6b',
+    green: '#7ccf8a',
+    yellow: '#d9b25f',
+    blue: '#9d9d9d',
+    magenta: '#c4c4c4',
+    cyan: '#b4b4b4',
+    white: '#e6e6e6',
+    brightBlack: '#4f4f4f',
+    brightRed: '#e28a8a',
+    brightGreen: '#98dd9f',
+    brightYellow: '#e2c77f',
+    brightBlue: '#b3b3b3',
+    brightMagenta: '#d8d8d8',
+    brightCyan: '#cdcdcd',
+    brightWhite: '#ffffff'
+  }
+}
+
+const ONE_DARK_THEME: SorcererTheme = {
+  id: 'one-dark',
+  name: 'One Dark',
+  colors: {
+    'bg-root': '#282c34',
+    'bg-sidebar': '#21252b',
+    'bg-titlebar': '#21252b',
+    'bg-hover': '#2c313a',
+    'bg-active': '#313640',
+    'bg-elevated': '#2b3038',
+    'terminal-bg': '#282c34',
+    'border-subtle': '#2f3440',
+    'border-medium': '#3b4048',
+    'text-primary': '#abb2bf',
+    'text-secondary': '#8b93a3',
+    'text-tertiary': '#5c6370',
+    'text-muted': '#4b5263',
+    'accent': '#61afef',
+    'accent-dim': '#4f98d7',
+    'accent-glow': 'rgba(97, 175, 239, 0.10)',
+    'accent-glow-strong': 'rgba(97, 175, 239, 0.20)',
+    'danger': '#e06c75'
+  },
+  terminal: {
+    foreground: '#abb2bf',
+    cursor: '#61afef',
+    selectionBackground: '#3e44514d',
+    black: '#282c34',
+    red: '#e06c75',
+    green: '#98c379',
+    yellow: '#e5c07b',
+    blue: '#61afef',
+    magenta: '#c678dd',
+    cyan: '#56b6c2',
+    white: '#dcdfe4',
+    brightBlack: '#5c6370',
+    brightRed: '#e06c75',
+    brightGreen: '#98c379',
+    brightYellow: '#d19a66',
+    brightBlue: '#61afef',
+    brightMagenta: '#c678dd',
+    brightCyan: '#56b6c2',
+    brightWhite: '#ffffff'
+  }
+}
+
+const SOLARIZED_DARK_THEME: SorcererTheme = {
+  id: 'solarized-dark',
+  name: 'Solarized Dark',
+  colors: {
+    'bg-root': '#002b36',
+    'bg-sidebar': '#00212b',
+    'bg-titlebar': '#073642',
+    'bg-hover': '#0a3a46',
+    'bg-active': '#114a58',
+    'bg-elevated': '#073642',
+    'terminal-bg': '#002b36',
+    'border-subtle': '#17424d',
+    'border-medium': '#275866',
+    'text-primary': '#93a1a1',
+    'text-secondary': '#839496',
+    'text-tertiary': '#586e75',
+    'text-muted': '#44565c',
+    'accent': '#2aa198',
+    'accent-dim': '#228c84',
+    'accent-glow': 'rgba(42, 161, 152, 0.12)',
+    'accent-glow-strong': 'rgba(42, 161, 152, 0.22)',
+    'danger': '#dc322f'
+  },
+  terminal: {
+    foreground: '#839496',
+    cursor: '#93a1a1',
+    selectionBackground: '#07364299',
+    black: '#073642',
+    red: '#dc322f',
+    green: '#859900',
+    yellow: '#b58900',
+    blue: '#268bd2',
+    magenta: '#d33682',
+    cyan: '#2aa198',
+    white: '#eee8d5',
+    brightBlack: '#586e75',
+    brightRed: '#cb4b16',
+    brightGreen: '#586e75',
+    brightYellow: '#657b83',
+    brightBlue: '#839496',
+    brightMagenta: '#6c71c4',
+    brightCyan: '#93a1a1',
+    brightWhite: '#fdf6e3'
+  }
+}
+
+const MONOKAI_THEME: SorcererTheme = {
+  id: 'monokai',
+  name: 'Monokai',
+  colors: {
+    'bg-root': '#272822',
+    'bg-sidebar': '#1f201b',
+    'bg-titlebar': '#1f201b',
+    'bg-hover': '#33352c',
+    'bg-active': '#3b3d32',
+    'bg-elevated': '#2d2f26',
+    'terminal-bg': '#272822',
+    'border-subtle': '#3a3c32',
+    'border-medium': '#494c40',
+    'text-primary': '#f8f8f2',
+    'text-secondary': '#c6c7bf',
+    'text-tertiary': '#909287',
+    'text-muted': '#6b6d63',
+    'accent': '#a6e22e',
+    'accent-dim': '#8fc425',
+    'accent-glow': 'rgba(166, 226, 46, 0.11)',
+    'accent-glow-strong': 'rgba(166, 226, 46, 0.21)',
+    'danger': '#f92672'
+  },
+  terminal: {
+    foreground: '#f8f8f2',
+    cursor: '#f8f8f0',
+    selectionBackground: '#49483e99',
+    black: '#272822',
+    red: '#f92672',
+    green: '#a6e22e',
+    yellow: '#e6db74',
+    blue: '#66d9ef',
+    magenta: '#ae81ff',
+    cyan: '#a1efe4',
+    white: '#f8f8f2',
+    brightBlack: '#75715e',
+    brightRed: '#f92672',
+    brightGreen: '#a6e22e',
+    brightYellow: '#e6db74',
+    brightBlue: '#66d9ef',
+    brightMagenta: '#ae81ff',
+    brightCyan: '#a1efe4',
+    brightWhite: '#f9f8f5'
+  }
+}
+
 const AETHERCI_THEME: SorcererTheme = {
   id: 'aetherci',
   name: 'AetherCI',
@@ -447,6 +631,52 @@ const NORD_THEME: SorcererTheme = {
   }
 }
 
+const NORD_DARK_THEME: SorcererTheme = {
+  id: 'nord-dark',
+  name: 'Nord Dark',
+  colors: {
+    'bg-root': '#1b1f27',
+    'bg-sidebar': '#161a21',
+    'bg-titlebar': '#161a21',
+    'bg-hover': '#222833',
+    'bg-active': '#2a3140',
+    'bg-elevated': '#202631',
+    'terminal-bg': '#1b1f27',
+    'border-subtle': '#2a3140',
+    'border-medium': '#353d4d',
+    'text-primary': '#e5e9f0',
+    'text-secondary': '#c8d0dd',
+    'text-tertiary': '#7b88a1',
+    'text-muted': '#556075',
+    'accent': '#88c0d0',
+    'accent-dim': '#6eaab9',
+    'accent-glow': 'rgba(136, 192, 208, 0.12)',
+    'accent-glow-strong': 'rgba(136, 192, 208, 0.22)',
+    'danger': '#bf616a'
+  },
+  terminal: {
+    foreground: '#d8dee9',
+    cursor: '#eceff4',
+    selectionBackground: '#434c5e99',
+    black: '#2e3440',
+    red: '#bf616a',
+    green: '#a3be8c',
+    yellow: '#ebcb8b',
+    blue: '#81a1c1',
+    magenta: '#b48ead',
+    cyan: '#88c0d0',
+    white: '#e5e9f0',
+    brightBlack: '#4c566a',
+    brightRed: '#bf616a',
+    brightGreen: '#a3be8c',
+    brightYellow: '#ebcb8b',
+    brightBlue: '#81a1c1',
+    brightMagenta: '#b48ead',
+    brightCyan: '#8fbcbb',
+    brightWhite: '#eceff4'
+  }
+}
+
 const DRACULA_THEME: SorcererTheme = {
   id: 'dracula',
   name: 'Dracula',
@@ -588,12 +818,17 @@ const GRUVBOX_DARK_THEME: SorcererTheme = {
 export const THEMES: Record<string, SorcererTheme> = {
   default: DEFAULT_THEME,
   'monochrome-dark': MONOCHROME_DARK_THEME,
+  'monochrome-status': MONOCHROME_STATUS_THEME,
+  'one-dark': ONE_DARK_THEME,
+  'solarized-dark': SOLARIZED_DARK_THEME,
+  monokai: MONOKAI_THEME,
   aetherci: AETHERCI_THEME,
   'aetherci-light': AETHERCI_LIGHT_THEME,
   'kimbie-dark': KIMBIE_DARK_THEME,
   'night-owl': NIGHT_OWL_THEME,
   'tokyo-night': TOKYO_NIGHT_THEME,
   nord: NORD_THEME,
+  'nord-dark': NORD_DARK_THEME,
   dracula: DRACULA_THEME,
   'catppuccin-mocha': CATPPUCCIN_MOCHA_THEME,
   'gruvbox-dark': GRUVBOX_DARK_THEME
