@@ -114,32 +114,22 @@ function AgentNotesItem({ agentId }: { agentId: string }) {
   )
 }
 
-function AgentCountdown({ agent }: { agent: Agent }) {
-  const [remaining, setRemaining] = useState('')
-
-  useEffect(() => {
-    const calc = () => {
-      const lastRun = agent.last_run_at || 0
-      const intervalSec = agent.schedule_minutes * 60
-      const nextRunAt = lastRun + intervalSec
-      const diff = nextRunAt - Math.floor(Date.now() / 1000)
-      if (diff <= 0) {
-        setRemaining('due')
-        return
-      }
-      if (diff < 60) { setRemaining(`${diff}s`); return }
-      if (diff < 3600) { setRemaining(`${Math.floor(diff / 60)}m`); return }
-      setRemaining(`${Math.floor(diff / 3600)}h ${Math.floor((diff % 3600) / 60)}m`)
-    }
-    calc()
-    const interval = setInterval(calc, 1000)
-    return () => clearInterval(interval)
-  }, [agent.last_run_at, agent.schedule_minutes])
-
-  return <span className="agent-countdown">{remaining}</span>
+function formatAgentCountdown(agent: Agent, nowSeconds: number): string {
+  const lastRun = agent.last_run_at || 0
+  const intervalSec = agent.schedule_minutes * 60
+  const nextRunAt = lastRun + intervalSec
+  const diff = nextRunAt - nowSeconds
+  if (diff <= 0) return 'due'
+  if (diff < 60) return `${diff}s`
+  if (diff < 3600) return `${Math.floor(diff / 60)}m`
+  return `${Math.floor(diff / 3600)}h ${Math.floor((diff % 3600) / 60)}m`
 }
 
-function AgentItem({ agent, staggerClass, nested = false }: { agent: Agent; staggerClass?: string; nested?: boolean }) {
+function AgentCountdown({ agent, nowSeconds }: { agent: Agent; nowSeconds: number }) {
+  return <span className="agent-countdown">{formatAgentCountdown(agent, nowSeconds)}</span>
+}
+
+function AgentItem({ agent, staggerClass, nested = false, nowSeconds }: { agent: Agent; staggerClass?: string; nested?: boolean; nowSeconds: number }) {
   const { setActiveSession, activeSessionId, sessions } = useSessionStore()
   const { openContextMenu, renamingId, setRenamingId, splitRoot, expandedSessions, toggleSession, poppedOutSessionIds, showProviderBadges } = useUIStore()
   const { renameAgent } = useAgentStore()
@@ -280,7 +270,7 @@ function AgentItem({ agent, staggerClass, nested = false }: { agent: Agent; stag
         {!isRenaming && (
           <>
             {agent.mission && agent.schedule_minutes > 0 && agent.status !== 'active' && (
-              <AgentCountdown agent={agent} />
+              <AgentCountdown agent={agent} nowSeconds={nowSeconds} />
             )}
             <button className="tree-item-actions" onClick={handleMoreClick}>
               <MoreHorizontalIcon />
@@ -327,12 +317,14 @@ function AgentGroupItem({
   staggerClass,
   groupDragHandlers,
   groupDragState,
+  nowSeconds,
 }: {
   group: AgentGroup
   groupIndex: number
   groupAgents: Agent[]
   filteredAgents: Agent[]
   staggerClass: string
+  nowSeconds: number
   groupDragHandlers: {
     onDragStart: (e: React.DragEvent, index: number) => void
     onDragOver: (e: React.DragEvent, index: number) => void
@@ -491,6 +483,7 @@ function AgentGroupItem({
                 key={agent.id}
                 agent={agent}
                 nested
+                nowSeconds={nowSeconds}
                 staggerClass={`stagger-${Math.min(i + 5, 10)}`}
               />
             ))}
@@ -506,6 +499,7 @@ export function AgentTree() {
   const { searchQuery, openDialog, expandedGroups, collapseAgents, setRenamingId, toggleGroup } = useUIStore()
   const [groupDragIndex, setGroupDragIndex] = useState<number | null>(null)
   const [groupDropTarget, setGroupDropTarget] = useState<{ index: number; position: 'above' | 'below' } | null>(null)
+  const [nowSeconds, setNowSeconds] = useState(() => Math.floor(Date.now() / 1000))
 
   const query = searchQuery.toLowerCase().trim()
   const isDragEnabled = !query
@@ -516,6 +510,13 @@ export function AgentTree() {
         a.description.toLowerCase().includes(query)
       )
     : agents
+
+  useEffect(() => {
+    const hasCountdowns = filteredAgents.some((agent) => agent.mission && agent.schedule_minutes > 0 && agent.status !== 'active')
+    if (!hasCountdowns) return
+    const interval = setInterval(() => setNowSeconds(Math.floor(Date.now() / 1000)), 1000)
+    return () => clearInterval(interval)
+  }, [filteredAgents])
 
   if (agents.length === 0 && groups.length === 0 && !query) {
     return null
@@ -624,6 +625,7 @@ export function AgentTree() {
               key={agent.id}
               agent={agent}
               nested={false}
+              nowSeconds={nowSeconds}
               staggerClass={`stagger-${Math.min(i + 4, 10)}`}
             />
           ))}
@@ -639,6 +641,7 @@ export function AgentTree() {
                 staggerClass={`stagger-${Math.min(gi + 4, 10)}`}
                 groupDragHandlers={groupDragHandlers}
                 groupDragState={groupDragState}
+                nowSeconds={nowSeconds}
               />
             )
           })}

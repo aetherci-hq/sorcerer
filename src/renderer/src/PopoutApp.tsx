@@ -445,20 +445,52 @@ function PopoutWorkspace({ params }: { params: PopoutParams }) {
   })
   const [focusedPanelId, setFocusedPanelId] = useState(splitRoot.id)
   const [maximizedPanelId, setMaximizedPanelId] = useState<string | null>(null)
+  const loadInFlightRef = useRef(false)
+  const reloadQueuedRef = useRef(false)
 
   const loadEntities = useCallback(async () => {
-    const [sessions, agents, projects] = await Promise.all([
-      getApi().session.list(),
-      getApi().agent.list(),
-      getApi().project.list()
-    ])
-    setData({ sessions, agents, projects })
+    if (loadInFlightRef.current) {
+      reloadQueuedRef.current = true
+      return
+    }
+
+    loadInFlightRef.current = true
+    try {
+      const [sessions, agents, projects] = await Promise.all([
+        getApi().session.list(),
+        getApi().agent.list(),
+        getApi().project.list()
+      ])
+      setData({ sessions, agents, projects })
+    } finally {
+      loadInFlightRef.current = false
+      if (reloadQueuedRef.current) {
+        reloadQueuedRef.current = false
+        void loadEntities()
+      }
+    }
   }, [])
 
   useEffect(() => {
     void loadEntities()
-    const interval = setInterval(() => { void loadEntities() }, 5000)
-    return () => clearInterval(interval)
+    const interval = setInterval(() => {
+      if (!document.hidden) {
+        void loadEntities()
+      }
+    }, 5000)
+    const handleWindowFocus = () => { void loadEntities() }
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        void loadEntities()
+      }
+    }
+    window.addEventListener('focus', handleWindowFocus)
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    return () => {
+      clearInterval(interval)
+      window.removeEventListener('focus', handleWindowFocus)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
   }, [loadEntities])
 
   useEffect(() => {
