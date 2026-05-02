@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { getApi } from '../api/client'
-import { SettingsIcon } from './icons'
+import { MessageSquareIcon, SettingsIcon } from './icons'
 import { useSessionStore } from '../stores/useSessionStore'
 import { useUIStore } from '../stores/useUIStore'
 
@@ -393,6 +393,9 @@ export function SidebarFooter({ collapsed, width = 260, pinned, togglePin }: { c
   if (collapsed) {
     return (
       <div className="sidebar-footer sidebar-footer--collapsed stagger-10">
+        <button className="footer-icon-btn" onClick={() => openDialog('feedback')} title="Give feedback">
+          <MessageSquareIcon />
+        </button>
         <button className="footer-settings-btn" onClick={() => openDialog('settings')}>
           <SettingsIcon />
         </button>
@@ -419,7 +422,12 @@ export function SidebarFooter({ collapsed, width = 260, pinned, togglePin }: { c
         </button>
       </div>
       <div className="user-info">
-        <div className="user-name">{displayName}</div>
+        <div className="user-info-row">
+          <div className="user-name">{displayName}</div>
+          <button className="footer-icon-btn footer-icon-btn--inline" onClick={() => openDialog('feedback')} title="Give feedback">
+            <MessageSquareIcon />
+          </button>
+        </div>
       </div>
       {showClock && (
         <div className="footer-clock">

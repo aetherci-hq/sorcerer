@@ -7,6 +7,7 @@ type DialogType =
   | 'new-session'
   | 'add-project'
   | 'import-sessions'
+  | 'feedback'
   | 'delete-session'
   | 'archive-session'
   | 'land-session'

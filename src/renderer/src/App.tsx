@@ -17,6 +17,7 @@ import { QuickNotesOverlay } from './components/QuickNotesOverlay'
 import { EditMissionDialog } from './components/dialogs/EditMissionDialog'
 import { BriefingPanel } from './components/BriefingPanel'
 import { MoveToGroupDialog } from './components/dialogs/MoveToGroupDialog'
+import { FeedbackDialog } from './components/dialogs/FeedbackDialog'
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts'
 import { useProjectStore } from './stores/useProjectStore'
 import { useSessionStore } from './stores/useSessionStore'
@@ -384,6 +385,7 @@ export function App() {
       <QuickNotesOverlay />
       <EditMissionDialog />
       <MoveToGroupDialog />
+      <FeedbackDialog />
       <BriefingPanel open={briefingOpen} onClose={closeBriefing} />
     </div>
   )

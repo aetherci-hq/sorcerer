@@ -1695,6 +1695,13 @@ body {
   min-width: 0;
 }
 
+.user-info-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
 .user-name {
   font-size: 13.5px;
   font-weight: 500;
@@ -1757,6 +1764,53 @@ body {
   outline: none;
   text-decoration: none;
   box-shadow: none;
+}
+
+.footer-icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  transition: background 0.2s var(--ease-out), color 0.2s var(--ease-out);
+  flex-shrink: 0;
+  outline: none;
+  text-decoration: none;
+  box-shadow: none;
+}
+
+.footer-icon-btn svg {
+  width: 18px;
+  height: 18px;
+}
+
+.footer-icon-btn--inline {
+  width: 24px;
+  height: 24px;
+  margin-left: auto;
+}
+
+.footer-icon-btn--inline svg {
+  width: 14px;
+  height: 14px;
+}
+
+.footer-icon-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-secondary);
+  border: none;
+  outline: none;
+}
+
+.footer-icon-btn:focus,
+.footer-icon-btn:active {
+  border: none;
+  outline: none;
 }
 
 .footer-settings-btn svg {
@@ -2096,7 +2150,17 @@ body {
   height: 26px;
 }
 
+.sidebar-footer--compact .footer-icon-btn {
+  width: 26px;
+  height: 26px;
+}
+
 .sidebar-footer--compact .footer-settings-btn svg {
+  width: 15px;
+  height: 15px;
+}
+
+.sidebar-footer--compact .footer-icon-btn svg {
   width: 15px;
   height: 15px;
 }
@@ -2627,6 +2691,10 @@ select.dialog-input option {
   resize: vertical;
   min-height: 80px;
   line-height: 1.5;
+}
+
+.feedback-dialog-textarea {
+  min-height: 132px;
 }
 
 /* Agent mode picker */
