@@ -259,7 +259,7 @@ function AgentItem({ agent, staggerClass, nested = false, nowSeconds }: { agent:
             <>
               <span className="tree-label tree-label--agent" onDoubleClick={handleDoubleClick}>{agent.name}</span>
               {showProviderBadges && agent.provider && (
-                <span className="teammate-badge" style={{ fontSize: '9px' }}>{agent.provider}</span>
+                <span className="teammate-badge">{agent.provider}</span>
               )}
               {agent.description && (
                 <span className="tree-hint tree-hint--inline">{agent.description}</span>
