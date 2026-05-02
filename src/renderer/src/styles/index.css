@@ -49,6 +49,8 @@
   --surface-glass-medium: color-mix(in srgb, var(--text-primary) 12%, transparent);
   --surface-glass-strong: color-mix(in srgb, var(--text-primary) 18%, transparent);
   --surface-glass-border: color-mix(in srgb, var(--text-primary) 22%, transparent);
+  --text-primary-glow: color-mix(in srgb, var(--text-primary) 30%, transparent);
+  --text-primary-faint: color-mix(in srgb, var(--text-primary) 15%, transparent);
   --scrim-soft: color-mix(in srgb, var(--bg-root) 30%, transparent);
   --scrim-medium: color-mix(in srgb, var(--bg-root) 40%, transparent);
   --scrim-strong: color-mix(in srgb, var(--bg-root) 52%, transparent);
@@ -977,7 +979,7 @@ body {
   height: 6px;
   border-radius: 50%;
   background: var(--text-primary);
-  box-shadow: 0 0 8px rgba(232, 230, 227, 0.3);
+  box-shadow: 0 0 8px var(--text-primary-glow);
 }
 
 .signal--active .signal-ring {
@@ -1018,7 +1020,7 @@ body {
   border-radius: 50%;
   border: 1.5px solid transparent;
   border-top-color: var(--text-primary);
-  border-right-color: rgba(232, 230, 227, 0.15);
+  border-right-color: var(--text-primary-faint);
   animation: signal-spin 1.2s linear infinite;
   box-sizing: border-box;
 }
