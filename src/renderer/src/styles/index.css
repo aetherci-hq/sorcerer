@@ -605,21 +605,28 @@ body {
 }
 
 .tree-group {
-  margin: 6px 0;
-  padding: 3px 0;
+  margin: 0;
+  padding: 0;
   border-top: 1px solid var(--border-subtle);
   border-bottom: 1px solid var(--border-subtle);
+  border-radius: 0;
 }
 
 .tree-group + .tree-group {
   margin-top: 0;
-  border-top: none;
+}
+
+.tree-project:has(> .tree-children-wrapper--open) + .tree-group {
+  margin-top: 12px;
 }
 
 .tree-item--group {
   padding-left: 8px;
   margin: 0;
   border-radius: 0;
+  background: transparent;
+  border: none;
+  box-shadow: none;
 }
 
 .tree-item--folder-row {
@@ -664,10 +671,18 @@ body {
 
 .tree-label--group {
   font-size: 13.5px;
-  font-weight: 650;
-  letter-spacing: 0.2px;
-  color: var(--text-secondary);
+  font-weight: 700;
+  letter-spacing: 0.08px;
+  color: var(--text-primary);
   flex: 1;
+}
+
+.tree-group-marker {
+  width: 12px;
+  height: 12px;
+  color: var(--text-muted);
+  opacity: 0.6;
+  flex-shrink: 0;
 }
 
 .tree-group-count {
@@ -702,13 +717,19 @@ body {
   background: transparent;
 }
 
+.tree-item--group:hover {
+  background: transparent;
+}
+
 .tree-item--active {
   background: var(--accent-glow-strong);
+  border-radius: 0;
 }
 
 /* Non-focused split session — subtle secondary highlight */
 .tree-item--split {
   background: var(--bg-hover);
+  border-radius: 0;
 }
 
 .tree-item--split::before {
@@ -1127,8 +1148,25 @@ body {
   display: none;
 }
 
+.tree-group > .tree-children-wrapper {
+  margin-top: 0;
+}
+
 .tree-group > .tree-children-wrapper > .tree-children {
-  padding-bottom: 3px;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+.tree-group > .tree-children-wrapper--open > .tree-children {
+  padding-bottom: 12px;
+}
+
+.tree-group > .tree-children-wrapper > .tree-children > :first-child {
+  margin-top: 1px;
+}
+
+.tree-group > .tree-children-wrapper > .tree-children > :last-child {
+  margin-bottom: 1px;
 }
 
 /* Children indent */

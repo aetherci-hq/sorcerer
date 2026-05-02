@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useAgentStore } from '../stores/useAgentStore'
 import { useSessionStore } from '../stores/useSessionStore'
 import { useUIStore, getAllSessionIds, findLeafBySession } from '../stores/useUIStore'
-import { BotIcon, ChevronIcon, MoreHorizontalIcon, PlusIcon, ShellPromptIcon, NotesIcon, ChevronsCollapseIcon, FolderPlusIcon } from './icons'
+import { BotIcon, ChevronIcon, MoreHorizontalIcon, PlusIcon, ShellPromptIcon, NotesIcon, ChevronsCollapseIcon, FolderPlusIcon, GroupIcon } from './icons'
 import { useQuickNotesStore } from '../stores/useQuickNotesStore'
 import { StatusDot } from './StatusDot'
 import type { Agent, AgentGroup, Session } from '../types'
@@ -461,7 +461,10 @@ function AgentGroupItem({
                 onClick={(e) => e.stopPropagation()}
               />
             ) : (
-              <span className="tree-label tree-label--group">{group.name}</span>
+              <>
+                <GroupIcon className="tree-group-marker" />
+                <span className="tree-label tree-label--group">{group.name}</span>
+              </>
             )}
           </div>
           <div className="tree-item-meta tree-item-meta--empty" aria-hidden="true" />

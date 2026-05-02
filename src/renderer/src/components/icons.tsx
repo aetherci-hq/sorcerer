@@ -29,6 +29,16 @@ export function FolderIcon(props: IconProps) {
   )
 }
 
+export function GroupIcon(props: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <rect x="5" y="5" width="10" height="10" rx="1.5" />
+      <path d="M9 19h8a2 2 0 0 0 2-2V9" />
+      <path d="M15 5h2a2 2 0 0 1 2 2v2" />
+    </svg>
+  )
+}
+
 export function TerminalIcon(props: IconProps) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...props}>

@@ -4,7 +4,7 @@ import { useProjectStore } from '../stores/useProjectStore'
 import { useSessionStore } from '../stores/useSessionStore'
 import { useUIStore, getAllSessionIds, findLeafBySession } from '../stores/useUIStore'
 import { useTeamStore } from '../stores/useTeamStore'
-import { ChevronIcon, FolderIcon, TerminalIcon, ShellPromptIcon, UserIcon, MoreHorizontalIcon, NotesIcon, WifiIcon, ChevronsCollapseIcon, PlusIcon, AlertTriangleIcon, BotIcon, FolderPlusIcon } from './icons'
+import { ChevronIcon, GroupIcon, TerminalIcon, ShellPromptIcon, UserIcon, MoreHorizontalIcon, NotesIcon, WifiIcon, ChevronsCollapseIcon, PlusIcon, AlertTriangleIcon, BotIcon, FolderPlusIcon } from './icons'
 import { useQuickNotesStore } from '../stores/useQuickNotesStore'
 import { StatusDot } from './StatusDot'
 import { Tooltip } from './Tooltip'
@@ -1109,7 +1109,10 @@ function GroupItem({
                 onClick={(e) => e.stopPropagation()}
               />
             ) : (
-              <span className="tree-label tree-label--group">{group.name}</span>
+              <>
+                <GroupIcon className="tree-group-marker" />
+                <span className="tree-label tree-label--group">{group.name}</span>
+              </>
             )}
           </div>
           <div className="tree-item-meta tree-item-meta--empty" aria-hidden="true" />
