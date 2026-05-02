@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { getApi } from '../../api/client'
 import { useUIStore } from '../../stores/useUIStore'
 import { useToastStore } from '../../stores/useToastStore'
@@ -34,6 +34,13 @@ export function FeedbackDialog() {
   const [submitting, setSubmitting] = useState(false)
 
   const canSubmit = useMemo(() => feedback.trim().length > 0 && !submitting, [feedback, submitting])
+
+  useEffect(() => {
+    if (!open) return
+    getApi().settings.get('gravatar_email').then((email: string | undefined) => {
+      setContactEmail(email || '')
+    }).catch(() => {})
+  }, [open])
 
   const resetDraft = () => {
     setFeedback('')
