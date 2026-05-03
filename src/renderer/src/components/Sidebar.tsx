@@ -1,4 +1,4 @@
-import { useCallback, useRef, useEffect } from 'react'
+import { useCallback, useRef, useEffect, useState } from 'react'
 import { ActionBar } from './ActionBar'
 import { SearchBar } from './SearchBar'
 import { AgentTree } from './AgentTree'
@@ -19,6 +19,8 @@ export function Sidebar() {
     sidebarCollapsed, sidebarHidden, toggleSidebarCollapse,
     sidebarWidth, setSidebarWidth, agentPaneHeight, setAgentPaneHeight, searchQuery
   } = useUIStore()
+  const [liveSidebarWidth, setLiveSidebarWidth] = useState(sidebarWidth)
+  const [liveAgentPaneHeight, setLiveAgentPaneHeight] = useState(agentPaneHeight)
   const { pinned, togglePin } = useStatsPinned()
   const agents = useAgentStore((s) => s.agents)
   const agentGroups = useAgentStore((s) => s.groups)
@@ -32,6 +34,18 @@ export function Sidebar() {
   const isAgentPaneResizing = useRef(false)
   const sidebarRef = useRef<HTMLElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!isResizing.current) {
+      setLiveSidebarWidth(sidebarWidth)
+    }
+  }, [sidebarWidth])
+
+  useEffect(() => {
+    if (!isAgentPaneResizing.current) {
+      setLiveAgentPaneHeight(agentPaneHeight)
+    }
+  }, [agentPaneHeight])
 
   const getSidebarWidthWithSnap = useCallback((width: number, bypassSnap: boolean) => {
     if (!bypassSnap && Math.abs(width - SIDEBAR_DEFAULT) <= DEFAULT_WIDTH_SNAP) {
@@ -59,14 +73,14 @@ export function Sidebar() {
           if (sidebarRef.current) {
             sidebarRef.current.style.opacity = ''
           }
-          setSidebarWidth(getSidebarWidthWithSnap(e.clientX, e.altKey))
+          setLiveSidebarWidth(getSidebarWidthWithSnap(e.clientX, e.altKey))
         }
       }
       if (isAgentPaneResizing.current && contentRef.current) {
         const contentRect = contentRef.current.getBoundingClientRect()
         const maxHeight = Math.max(AGENT_PANE_MIN, contentRect.height - 160)
         const nextHeight = Math.min(maxHeight, Math.max(AGENT_PANE_MIN, e.clientY - contentRect.top))
-        setAgentPaneHeight(nextHeight)
+        setLiveAgentPaneHeight(nextHeight)
       }
     }
     const onMouseUp = (e: MouseEvent) => {
@@ -84,6 +98,9 @@ export function Sidebar() {
           setSidebarWidth(getSidebarWidthWithSnap(e.clientX, e.altKey))
         }
       }
+      if (wasAgentPaneResizing) {
+        setAgentPaneHeight(liveAgentPaneHeight)
+      }
       isAgentPaneResizing.current = false
       document.body.style.cursor = ''
       document.body.style.userSelect = ''
@@ -94,7 +111,7 @@ export function Sidebar() {
       window.removeEventListener('mousemove', onMouseMove)
       window.removeEventListener('mouseup', onMouseUp)
     }
-  }, [getSidebarWidthWithSnap, setSidebarWidth, sidebarCollapsed, toggleSidebarCollapse, setAgentPaneHeight])
+  }, [getSidebarWidthWithSnap, setSidebarWidth, sidebarCollapsed, toggleSidebarCollapse, setAgentPaneHeight, liveAgentPaneHeight])
 
   const onAgentPaneMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
@@ -134,7 +151,7 @@ export function Sidebar() {
     <aside
       className="sidebar"
       ref={sidebarRef}
-      style={{ width: sidebarWidth, minWidth: sidebarWidth }}
+      style={{ width: liveSidebarWidth, minWidth: liveSidebarWidth }}
     >
       <div className="titlebar stagger-1">
         <div className="titlebar-logo" />
@@ -148,7 +165,7 @@ export function Sidebar() {
       <SearchBar />
       <div className="sidebar-content" ref={contentRef}>
         {showAgentPane && (
-          <div className="sidebar-pane sidebar-pane--agents" style={{ height: agentPaneHeight, minHeight: AGENT_PANE_MIN }}>
+          <div className="sidebar-pane sidebar-pane--agents" style={{ height: liveAgentPaneHeight, minHeight: AGENT_PANE_MIN }}>
             <AgentTree />
           </div>
         )}
@@ -158,7 +175,7 @@ export function Sidebar() {
         </div>
       </div>
       {pinned && <PinnedStats />}
-      <SidebarFooter collapsed={false} width={sidebarWidth} pinned={pinned} togglePin={togglePin} />
+      <SidebarFooter collapsed={false} width={liveSidebarWidth} pinned={pinned} togglePin={togglePin} />
 
       {/* Resize handle */}
       <div className="sidebar-resize-handle" onMouseDown={onMouseDown} />
