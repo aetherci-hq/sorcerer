@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { getApi } from './api/client'
 import { Sidebar } from './components/Sidebar'
 import { MainContent } from './components/MainContent'
@@ -95,6 +95,7 @@ export function App() {
   const closeBriefing = useCallback(() => setBriefingOpen(false), [])
   const sessions = useSessionStore((s) => s.sessions)
   const agents = useAgentStore((s) => s.agents)
+  const briefingConfigRef = useRef({ autoIdle: false, idleMinutes: 15, provider: 'anthropic' })
   const needsResumeRefresh = sessions.some((session) =>
     session.type !== 'quick-terminal' &&
     session.provider === 'codex' &&
@@ -318,12 +319,27 @@ export function App() {
     window.addEventListener('mousemove', activityHandler, { passive: true })
     window.addEventListener('keydown', activityHandler, { passive: true })
 
-    const idleCheckInterval = setInterval(async () => {
-      const autoIdle = await getApi().settings.get('briefingAutoIdle')
-      if (autoIdle !== 'true') return
+    const loadBriefingConfig = async () => {
+      const [autoIdle, idleMinutesStr, provider] = await Promise.all([
+        getApi().settings.get('briefingAutoIdle'),
+        getApi().settings.get('briefingIdleMinutes'),
+        getApi().settings.get('briefingProvider')
+      ])
 
-      const idleMinutesStr = await getApi().settings.get('briefingIdleMinutes')
-      const idleThreshold = (parseInt(idleMinutesStr || '15') || 15) * 60 * 1000
+      briefingConfigRef.current = {
+        autoIdle: autoIdle === 'true',
+        idleMinutes: parseInt(idleMinutesStr || '15') || 15,
+        provider: provider || 'anthropic'
+      }
+    }
+
+    void loadBriefingConfig()
+
+    const idleCheckInterval = setInterval(async () => {
+      const briefingConfig = briefingConfigRef.current
+      if (!briefingConfig.autoIdle) return
+
+      const idleThreshold = briefingConfig.idleMinutes * 60 * 1000
       const elapsed = Date.now() - lastActivity
 
       if (elapsed >= idleThreshold) {
@@ -331,11 +347,15 @@ export function App() {
       } else if (wasIdle) {
         // User just came back from idle
         wasIdle = false
-        const providerId = await getApi().settings.get('briefingProvider') || 'anthropic'
-        const key = await getApi().settings.get(`apiKey_${providerId}`)
+        const key = await getApi().settings.get(`apiKey_${briefingConfig.provider}`)
         if (key) setBriefingOpen(true)
       }
     }, 30000) // Check every 30 seconds
+
+    const handleBriefingSettingsUpdated = () => {
+      void loadBriefingConfig()
+    }
+    window.addEventListener('sorcerer:briefing-settings-updated', handleBriefingSettingsUpdated)
 
     // Briefing keyboard shortcut: Ctrl+Shift+B
     const briefingKeyHandler = (e: KeyboardEvent) => {
@@ -403,6 +423,7 @@ export function App() {
       window.removeEventListener('keydown', briefingKeyHandler)
       window.removeEventListener('mousemove', activityHandler)
       window.removeEventListener('keydown', activityHandler)
+      window.removeEventListener('sorcerer:briefing-settings-updated', handleBriefingSettingsUpdated)
       clearInterval(idleCheckInterval)
       clearInterval(remoteInterval)
       document.removeEventListener('visibilitychange', handleVisibilityChange)

@@ -97,9 +97,49 @@ function useSetting(key: string, fallback: string) {
   return [value, save] as const
 }
 
+function useDebouncedSetting(key: string, fallback: string, debounceMs = 250) {
+  const [value, setValue] = useState(fallback)
+  const loadedRef = useRef(false)
+  const latestValueRef = useRef(fallback)
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    loadedRef.current = false
+    getApi().settings.get(key).then((v: string | undefined) => {
+      if (cancelled) return
+      const next = v ?? fallback
+      latestValueRef.current = next
+      setValue(next)
+      loadedRef.current = true
+    })
+    return () => {
+      cancelled = true
+      if (timerRef.current) {
+        clearTimeout(timerRef.current)
+        timerRef.current = null
+        void getApi().settings.set(key, latestValueRef.current)
+      }
+    }
+  }, [fallback, key])
+
+  const save = (next: string) => {
+    latestValueRef.current = next
+    setValue(next)
+    if (!loadedRef.current) return
+    if (timerRef.current) clearTimeout(timerRef.current)
+    timerRef.current = setTimeout(() => {
+      timerRef.current = null
+      void getApi().settings.set(key, latestValueRef.current)
+    }, debounceMs)
+  }
+
+  return [value, save] as const
+}
+
 function ProfileTab() {
-  const [displayName, setDisplayName] = useSetting('display_name', '')
-  const [email, setEmail] = useSetting('gravatar_email', '')
+  const [displayName, setDisplayName] = useDebouncedSetting('display_name', '')
+  const [email, setEmail] = useDebouncedSetting('gravatar_email', '')
   const [osUsername, setOsUsername] = useState('')
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null)
   const [avatarSource, setAvatarSource] = useState<'gravatar' | 'system' | 'initial'>('initial')
@@ -201,9 +241,9 @@ function ProfileTab() {
 }
 
 function SessionsTab() {
-  const [shell, setShell] = useSetting('shell', '')
+  const [shell, setShell] = useDebouncedSetting('shell', '')
   const [fontSize, setFontSize] = useSetting('terminalFontSize', '13')
-  const [branchPrefix, setBranchPrefix] = useSetting('branchPrefix', 'sorcerer/')
+  const [branchPrefix, setBranchPrefix] = useDebouncedSetting('branchPrefix', 'sorcerer/')
   const [autoArchive, setAutoArchive] = useSetting('autoArchive', 'false')
   const [idleTimeout, setIdleTimeout] = useSetting('idleTimeout', '30m')
   const [confirmDelete, setConfirmDelete] = useSetting('confirmDelete', 'true')
@@ -307,7 +347,7 @@ function SessionsTab() {
 }
 
 function GitTab() {
-  const [defaultRemote, setDefaultRemote] = useSetting('defaultRemote', 'origin')
+  const [defaultRemote, setDefaultRemote] = useDebouncedSetting('defaultRemote', 'origin')
   const [autoPush, setAutoPush] = useSetting('autoPush', 'false')
   const [workspacesRoot, setWorkspacesRoot] = useState('')
 
@@ -908,13 +948,17 @@ const AI_PROVIDER_OPTIONS = [
 
 function BriefingTab() {
   const [provider, setProvider] = useSetting('briefingProvider', 'anthropic')
-  const [anthropicKey, setAnthropicKey] = useSetting('apiKey_anthropic', '')
-  const [openaiKey, setOpenaiKey] = useSetting('apiKey_openai', '')
-  const [googleKey, setGoogleKey] = useSetting('apiKey_google', '')
+  const [anthropicKey, setAnthropicKey] = useDebouncedSetting('apiKey_anthropic', '')
+  const [openaiKey, setOpenaiKey] = useDebouncedSetting('apiKey_openai', '')
+  const [googleKey, setGoogleKey] = useDebouncedSetting('apiKey_google', '')
   const [autoLoadOnStartup, setAutoLoadOnStartup] = useSetting('briefingAutoStartup', 'false')
   const [autoLoadOnIdle, setAutoLoadOnIdle] = useSetting('briefingAutoIdle', 'false')
-  const [idleMinutes, setIdleMinutes] = useSetting('briefingIdleMinutes', '15')
+  const [idleMinutes, setIdleMinutes] = useDebouncedSetting('briefingIdleMinutes', '15')
   const [showKeys, setShowKeys] = useState<Record<string, boolean>>({})
+
+  const notifyBriefingSettingsUpdated = () => {
+    window.dispatchEvent(new CustomEvent('sorcerer:briefing-settings-updated'))
+  }
 
   const toggleShowKey = (id: string) => {
     setShowKeys((prev) => ({ ...prev, [id]: !prev[id] }))
@@ -932,7 +976,10 @@ function BriefingTab() {
       <SettingRow label="Preferred provider" description="Which AI to use for generating briefings">
         <DialogSelect
           value={provider}
-          onChange={setProvider}
+          onChange={(nextValue) => {
+            setProvider(nextValue)
+            notifyBriefingSettingsUpdated()
+          }}
           style={{ width: 200 }}
           options={AI_PROVIDER_OPTIONS.map((p) => ({ value: p.id, label: p.name }))}
         />
@@ -946,7 +993,10 @@ function BriefingTab() {
               className="dialog-input"
               type={showKeys[field.id] ? 'text' : 'password'}
               value={field.value}
-              onChange={(e) => field.save(e.target.value)}
+              onChange={(e) => {
+                field.save(e.target.value)
+                notifyBriefingSettingsUpdated()
+              }}
               placeholder={field.placeholder}
               style={{ width: 240, fontFamily: 'var(--font-mono)', fontSize: 12 }}
             />
@@ -965,10 +1015,16 @@ function BriefingTab() {
 
       <SectionTitle>Behavior</SectionTitle>
       <SettingRow label="Show on startup" description="Auto-generate a briefing when Sorcerer launches">
-        <Toggle checked={autoLoadOnStartup === 'true'} onChange={(v) => setAutoLoadOnStartup(v ? 'true' : 'false')} label="Show on startup" />
+        <Toggle checked={autoLoadOnStartup === 'true'} onChange={(v) => {
+          setAutoLoadOnStartup(v ? 'true' : 'false')
+          notifyBriefingSettingsUpdated()
+        }} label="Show on startup" />
       </SettingRow>
       <SettingRow label="Show on return from idle" description="Refresh briefing when you come back after being away">
-        <Toggle checked={autoLoadOnIdle === 'true'} onChange={(v) => setAutoLoadOnIdle(v ? 'true' : 'false')} label="Show on return from idle" />
+        <Toggle checked={autoLoadOnIdle === 'true'} onChange={(v) => {
+          setAutoLoadOnIdle(v ? 'true' : 'false')
+          notifyBriefingSettingsUpdated()
+        }} label="Show on return from idle" />
       </SettingRow>
       {autoLoadOnIdle === 'true' && (
         <SettingRow label="Idle timeout (minutes)" description="How long before you're considered idle">
@@ -978,7 +1034,10 @@ function BriefingTab() {
             min="1"
             max="120"
             value={idleMinutes}
-            onChange={(e) => setIdleMinutes(e.target.value)}
+            onChange={(e) => {
+              setIdleMinutes(e.target.value)
+              notifyBriefingSettingsUpdated()
+            }}
             style={{ width: 80 }}
           />
         </SettingRow>
