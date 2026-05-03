@@ -453,7 +453,7 @@ async function createWindow(): Promise<void> {
       try {
         const remoteEnabled = dbService.getSetting('remoteEnabled')
         if (remoteEnabled === 'true') {
-          import('./server/api-server').then(async ({ ApiServer }) => {
+          const remoteStartupTask = import('./server/api-server').then(async ({ ApiServer }) => {
             const { getOrCreateAuthToken } = await import('./server/auth')
             const port = parseInt(dbService.getSetting('remotePort') || '7437')
             const bindAddress = dbService.getSetting('remoteBindAddress') || '127.0.0.1'
@@ -489,6 +489,7 @@ async function createWindow(): Promise<void> {
           }).catch((err) => {
             console.error('[remote-access] Auto-start failed:', err)
           })
+          trackStartupTask(remoteStartupTask)
         }
       } catch (err) {
         console.error('[remote-access] Startup check failed:', err)

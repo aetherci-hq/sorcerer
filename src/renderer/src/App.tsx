@@ -28,6 +28,10 @@ import { useToastStore } from './stores/useToastStore'
 import { useUIStore, findLeaf } from './stores/useUIStore'
 import type { Agent, Session, SplitNode } from './types'
 
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, ms))
+}
+
 function isQuickNotesPanelId(id: string): boolean {
   return /^quicknotes:(session|agent):.+$/.test(id)
 }
@@ -91,17 +95,16 @@ export function App() {
   const closeBriefing = useCallback(() => setBriefingOpen(false), [])
   const sessions = useSessionStore((s) => s.sessions)
   const agents = useAgentStore((s) => s.agents)
+  const needsResumeRefresh = sessions.some((session) =>
+    session.type !== 'quick-terminal' &&
+    session.provider === 'codex' &&
+    (
+      session.resume_status === 'launching' ||
+      (session.status === 'active' && !session.provider_session_id)
+    )
+  )
 
   useEffect(() => {
-    const needsResumeRefresh = sessions.some((session) =>
-      session.type !== 'quick-terminal' &&
-      session.provider === 'codex' &&
-      (
-        session.resume_status === 'launching' ||
-        (session.status === 'active' && !session.provider_session_id)
-      )
-    )
-
     if (!needsResumeRefresh) return
 
     const interval = setInterval(() => {
@@ -109,7 +112,7 @@ export function App() {
     }, 3000)
 
     return () => clearInterval(interval)
-  }, [sessions])
+  }, [needsResumeRefresh])
 
   useEffect(() => {
     if (!layoutReady || layoutRestored) return
@@ -146,20 +149,36 @@ export function App() {
     )
     useUIStore.setState({ poppedOutSessionIds: new Set(validPopouts) })
 
-    const restoreDelayMs = isDevRuntime ? 1200 : 0
-    const restoreInitialDelayMs = isDevRuntime ? 1500 : 0
+    let cancelled = false
 
-    for (const [index, panelId] of validPopouts.entries()) {
-      const entityName = buildPopoutEntityName(panelId, sessions, agents)
-      if (!entityName) continue
-      const open = () => void getApi().popout.open('terminal', panelId, entityName)
-      if (restoreDelayMs > 0) {
-        window.setTimeout(open, restoreInitialDelayMs + (index * restoreDelayMs))
-      } else {
-        open()
+    const restorePopouts = async () => {
+      const restoreDelayMs = isDevRuntime ? 1200 : 0
+      const restoreInitialDelayMs = isDevRuntime ? 1500 : 0
+
+      if (restoreInitialDelayMs > 0) {
+        await delay(restoreInitialDelayMs)
+      }
+
+      for (const panelId of validPopouts) {
+        if (cancelled) return
+        const entityName = buildPopoutEntityName(panelId, sessions, agents)
+        if (!entityName) continue
+        await getApi().popout.open('terminal', panelId, entityName)
+        if (restoreDelayMs > 0) {
+          await delay(restoreDelayMs)
+        }
+      }
+
+      if (!cancelled) {
+        setLayoutRestored(true)
       }
     }
-    setLayoutRestored(true)
+
+    void restorePopouts()
+
+    return () => {
+      cancelled = true
+    }
   }, [layoutReady, layoutRestored, sessions, agents])
 
   useEffect(() => {
@@ -340,15 +359,37 @@ export function App() {
       }
     })
 
+    let remotePollingEnabled = false
+
     // Poll for remote control viewers (which sessions have WS subscribers)
     const pollRemote = async () => {
+      if (!remotePollingEnabled || document.hidden) return
       try {
         const ids = await getApi().remote.remoteSessionIds()
         useUIStore.getState().setRemoteSessionIds(ids)
       } catch { /* remote server may not be running */ }
     }
-    pollRemote()
-    const remoteInterval = setInterval(pollRemote, 5000)
+
+    const updateRemotePollingState = async () => {
+      const enabled = await getApi().settings.get('remoteEnabled')
+      remotePollingEnabled = enabled === 'true'
+      if (!remotePollingEnabled) {
+        useUIStore.getState().setRemoteSessionIds([])
+        return
+      }
+      await pollRemote()
+    }
+
+    void updateRemotePollingState()
+    const remoteInterval = setInterval(() => {
+      void pollRemote()
+    }, 5000)
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        void updateRemotePollingState()
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibilityChange)
 
     return () => {
       unsub()
@@ -364,6 +405,7 @@ export function App() {
       window.removeEventListener('keydown', activityHandler)
       clearInterval(idleCheckInterval)
       clearInterval(remoteInterval)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
     }
   }, [])
 

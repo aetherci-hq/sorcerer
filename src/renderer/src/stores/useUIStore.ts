@@ -549,7 +549,20 @@ export const useUIStore = create<UIState>()(
       exitFocusMode: () => set({ focusModeSessionId: null }),
 
       remoteSessionIds: new Set(),
-      setRemoteSessionIds: (ids) => set({ remoteSessionIds: new Set(ids) }),
+      setRemoteSessionIds: (ids) => set((state) => {
+        const next = new Set(ids)
+        if (state.remoteSessionIds.size === next.size) {
+          let unchanged = true
+          for (const id of next) {
+            if (!state.remoteSessionIds.has(id)) {
+              unchanged = false
+              break
+            }
+          }
+          if (unchanged) return state
+        }
+        return { remoteSessionIds: next }
+      }),
 
       poppedOutSessionIds: new Set(),
       addPoppedOut: (id) => set((state) => {
