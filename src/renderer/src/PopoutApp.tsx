@@ -26,6 +26,11 @@ type EntityMap = {
   projects: Project[]
 }
 
+function getHydrationPanelIds(node: SplitNode | null, fallbackPanelId: string): string[] {
+  const ids = getAllPanelIds(node)
+  return ids.length > 0 ? ids : [fallbackPanelId]
+}
+
 let splitIdCounter = 0
 function nextSplitId(): string { return `pw_${++splitIdCounter}` }
 
@@ -447,41 +452,42 @@ function PopoutWorkspace({ params }: { params: PopoutParams }) {
   const [maximizedPanelId, setMaximizedPanelId] = useState<string | null>(null)
   const loadInFlightRef = useRef(false)
   const reloadQueuedRef = useRef(false)
+  const queuedPanelIdsRef = useRef<string[] | null>(null)
 
-  const loadEntities = useCallback(async () => {
+  const loadEntities = useCallback(async (panelIds?: string[]) => {
     if (loadInFlightRef.current) {
       reloadQueuedRef.current = true
+      queuedPanelIdsRef.current = panelIds ?? getHydrationPanelIds(splitRoot, params.panelId)
       return
     }
 
     loadInFlightRef.current = true
     try {
-      const [sessions, agents, projects] = await Promise.all([
-        getApi().session.list(),
-        getApi().agent.list(),
-        getApi().project.list()
-      ])
+      const nextPanelIds = panelIds ?? getHydrationPanelIds(splitRoot, params.panelId)
+      const { sessions, agents, projects } = await getApi().popout.getEntities(nextPanelIds)
       setData({ sessions, agents, projects })
     } finally {
       loadInFlightRef.current = false
       if (reloadQueuedRef.current) {
         reloadQueuedRef.current = false
-        void loadEntities()
+        const nextQueuedIds = queuedPanelIdsRef.current
+        queuedPanelIdsRef.current = null
+        void loadEntities(nextQueuedIds ?? undefined)
       }
     }
-  }, [])
+  }, [params.panelId, splitRoot])
 
   useEffect(() => {
-    void loadEntities()
+    void loadEntities(getHydrationPanelIds(splitRoot, params.panelId))
     const interval = setInterval(() => {
       if (!document.hidden) {
-        void loadEntities()
+        void loadEntities(getHydrationPanelIds(splitRoot, params.panelId))
       }
     }, 5000)
-    const handleWindowFocus = () => { void loadEntities() }
+    const handleWindowFocus = () => { void loadEntities(getHydrationPanelIds(splitRoot, params.panelId)) }
     const handleVisibilityChange = () => {
       if (!document.hidden) {
-        void loadEntities()
+        void loadEntities(getHydrationPanelIds(splitRoot, params.panelId))
       }
     }
     window.addEventListener('focus', handleWindowFocus)
@@ -491,11 +497,12 @@ function PopoutWorkspace({ params }: { params: PopoutParams }) {
       window.removeEventListener('focus', handleWindowFocus)
       document.removeEventListener('visibilitychange', handleVisibilityChange)
     }
-  }, [loadEntities])
+  }, [loadEntities, params.panelId, splitRoot])
 
   useEffect(() => {
     void getApi().popout.syncPanels(params.windowId, getAllPanelIds(splitRoot))
-  }, [params.windowId, splitRoot])
+    void loadEntities(getHydrationPanelIds(splitRoot, params.panelId))
+  }, [loadEntities, params.panelId, params.windowId, splitRoot])
 
   useEffect(() => {
     const focusedLeaf = findLeaf(splitRoot, focusedPanelId)
@@ -513,7 +520,7 @@ function PopoutWorkspace({ params }: { params: PopoutParams }) {
         if (!focusedLeaf || focusedLeaf.sessionId !== null) return current
         return assignLeafPanel(current, focusedLeaf.id, panelId)
       })
-      void loadEntities()
+      void loadEntities(getHydrationPanelIds(splitRoot, params.panelId))
     })
     const unsubUpdated = getApi().popout.onSessionUpdated((panelId, status, pid) => {
       setData((current) => ({
@@ -526,7 +533,7 @@ function PopoutWorkspace({ params }: { params: PopoutParams }) {
       unsubAssign()
       unsubUpdated()
     }
-  }, [focusedPanelId, loadEntities])
+  }, [focusedPanelId, loadEntities, params.panelId, splitRoot])
 
   useEffect(() => {
     const title = buildTitleForPanel(getAllPanelIds(splitRoot)[0] || params.panelId, data)
@@ -537,7 +544,7 @@ function PopoutWorkspace({ params }: { params: PopoutParams }) {
 
   const updateSessionState = (panelId: string, status: string, pid: number | null) => {
     getApi().popout.notifySessionUpdated(panelId, status, pid)
-    void loadEntities()
+    void loadEntities(getHydrationPanelIds(splitRoot, params.panelId))
   }
 
   const splitFocused = (leafId: string, direction: 'horizontal' | 'vertical', panelId: string) => {
@@ -571,7 +578,7 @@ function PopoutWorkspace({ params }: { params: PopoutParams }) {
     const session = panelId ? data.sessions.find((entry) => entry.id === panelId) : null
     if (session?.type === 'quick-terminal') {
       await getApi().session.delete(session.id)
-      void loadEntities()
+      void loadEntities(getHydrationPanelIds(splitRoot, params.panelId))
     }
 
     setSplitRoot((current) => {

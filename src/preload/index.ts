@@ -259,6 +259,12 @@ const api = {
       ipcRenderer.invoke('popout:isOpen', panelId) as Promise<boolean>,
     getScrollback: (sessionId: string) =>
       ipcRenderer.invoke('popout:getScrollback', sessionId) as Promise<string>,
+    getEntities: (panelIds: string[]) =>
+      ipcRenderer.invoke('popout:getEntities', panelIds) as Promise<{
+        sessions: any[]
+        agents: any[]
+        projects: any[]
+      }>,
     syncPanels: (windowId: string, panelIds: string[]) =>
       ipcRenderer.invoke('popout:syncPanels', windowId, panelIds) as Promise<{ added: string[]; removed: string[] }>,
     setSelectionTargetReady: (windowId: string, ready: boolean) =>

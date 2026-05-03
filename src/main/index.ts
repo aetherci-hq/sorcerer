@@ -57,6 +57,56 @@ const pendingExitPersistence = new Set<Promise<void>>()
 const pendingStartupTasks = new Set<Promise<void>>()
 let isShuttingDown = false
 
+function collectPopoutEntities(panelIds: string[]): { sessions: any[]; agents: any[]; projects: any[] } {
+  const sessions = new Map<string, any>()
+  const agents = new Map<string, any>()
+  const projects = new Map<string, any>()
+
+  const addSession = (sessionId: string) => {
+    const session = dbService?.getSession(sessionId)
+    if (!session) return false
+    sessions.set(session.id as string, session)
+    const projectId = session.project_id as string | undefined
+    if (projectId) {
+      const project = dbService?.getProject(projectId)
+      if (project) {
+        projects.set(project.id as string, project)
+      }
+    }
+    return true
+  }
+
+  const addAgent = (agentId: string) => {
+    const agent = dbService?.getAgent(agentId)
+    if (!agent) return false
+    agents.set(agent.id as string, agent)
+    return true
+  }
+
+  for (const panelId of panelIds) {
+    if (!panelId) continue
+    const quickNotesMatch = panelId.match(/^quicknotes:(session|agent):(.+)$/)
+    if (quickNotesMatch) {
+      const [, parentType, parentId] = quickNotesMatch
+      if (parentType === 'session') {
+        addSession(parentId)
+      } else {
+        addAgent(parentId)
+      }
+      continue
+    }
+
+    if (addSession(panelId)) continue
+    addAgent(panelId)
+  }
+
+  return {
+    sessions: Array.from(sessions.values()),
+    agents: Array.from(agents.values()),
+    projects: Array.from(projects.values())
+  }
+}
+
 function getWindowBounds(): { x?: number; y?: number; width: number; height: number; maximized: boolean } {
   const defaults = { width: 1200, height: 800, maximized: false }
   if (!dbService) return defaults
@@ -687,6 +737,10 @@ ipcMain.handle('popout:getScrollback', (_e, sessionId: string) => {
 
   const session = dbService?.getSession(sessionId)
   return (session?.last_output_tail as string | undefined) || ''
+})
+
+ipcMain.handle('popout:getEntities', (_e, panelIds: string[]) => {
+  return collectPopoutEntities(panelIds)
 })
 
 // When a popout window resumes/restarts a session, notify the main window
