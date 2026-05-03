@@ -617,6 +617,7 @@ function ProjectItem({
   onTopLevelDragOver,
   onTopLevelDragEnd,
   onTopLevelDrop,
+  subAgentClock,
 }: {
   project: Project
   staggerClass: string
@@ -631,6 +632,7 @@ function ProjectItem({
   onTopLevelDragOver?: (e: React.DragEvent, key: string) => void
   onTopLevelDragEnd?: () => void
   onTopLevelDrop?: (e: React.DragEvent, key: string) => void
+  subAgentClock: number
 }) {
   const { sessions, activeSessionId } = useSessionStore()
   const { expandedProjects, toggleProject, openContextMenu, renamingId, setRenamingId, setSidebarSelection } = useUIStore()
@@ -653,7 +655,6 @@ function ProjectItem({
   const hasVisibleChildren = topLevelActive.length > 0 || archivedSessions.length > 0
   const [resumeHealthBySession, setResumeHealthBySession] = useState<Record<string, SessionResumeHealth>>({})
   const [providerSubAgentsBySession, setProviderSubAgentsBySession] = useState<Record<string, ProviderSubAgent[]>>({})
-  const [subAgentClock, setSubAgentClock] = useState(() => Date.now())
   const resumeHealthKey = projectSessions
     .map((session) => [
       session.id,
@@ -701,13 +702,6 @@ function ProjectItem({
   }, [resumeHealthKey])
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      setSubAgentClock(Date.now())
-    }, 15_000)
-    return () => clearInterval(interval)
-  }, [])
-
-  useEffect(() => {
     let cancelled = false
     let interval: ReturnType<typeof setInterval> | null = null
 
@@ -717,7 +711,7 @@ function ProjectItem({
       !!session.provider_session_id
     )
 
-    if (codexSessions.length === 0) {
+    if (!isExpanded || codexSessions.length === 0) {
       setProviderSubAgentsBySession({})
       return
     }
@@ -745,7 +739,7 @@ function ProjectItem({
       cancelled = true
       if (interval) clearInterval(interval)
     }
-  }, [providerSubAgentKey])
+  }, [providerSubAgentKey, isExpanded])
 
   void subAgentClock
 
@@ -945,6 +939,7 @@ function GroupItem({
   onTopLevelDrop,
   clearTopLevelDropTarget,
   dragState,
+  subAgentClock,
 }: {
   group: ProjectGroup
   groupKey: string
@@ -965,6 +960,7 @@ function GroupItem({
   onTopLevelDrop: (e: React.DragEvent, key: string) => void
   clearTopLevelDropTarget: () => void
   dragState: { dragIndex: number | null; dropTarget: { index: number; position: 'above' | 'below' } | null }
+  subAgentClock: number
 }) {
   const { expandedGroups, toggleGroup, openContextMenu, renamingId, setRenamingId, setSidebarSelection } = useUIStore()
   const { moveProjectToGroup } = useProjectStore()
@@ -1166,12 +1162,13 @@ function GroupItem({
                   projectIndex={pIdx}
                   onDragStart={projectDragHandlers.onDragStart}
                   onDragOver={projectDragHandlers.onDragOver}
-                  onDragEnd={projectDragHandlers.onDragEnd}
-                  onDrop={projectDragHandlers.onDrop}
-                  dropPosition={dragState.dropTarget?.index === pIdx && dragState.dragIndex !== pIdx ? dragState.dropTarget.position : null}
-                />
-              )
-            })}
+                onDragEnd={projectDragHandlers.onDragEnd}
+                onDrop={projectDragHandlers.onDrop}
+                dropPosition={dragState.dropTarget?.index === pIdx && dragState.dragIndex !== pIdx ? dragState.dropTarget.position : null}
+                subAgentClock={subAgentClock}
+              />
+            )
+          })}
           </div>
         </div>
       )}
@@ -1187,6 +1184,14 @@ export function ProjectTree() {
   const [dropTarget, setDropTarget] = useState<{ index: number; position: 'above' | 'below' } | null>(null)
   const [topLevelDragKey, setTopLevelDragKey] = useState<string | null>(null)
   const [topLevelDropTarget, setTopLevelDropTarget] = useState<{ key: string; position: 'above' | 'below' } | null>(null)
+  const [subAgentClock, setSubAgentClock] = useState(() => Date.now())
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setSubAgentClock(Date.now())
+    }, 15_000)
+    return () => clearInterval(interval)
+  }, [])
 
   if (projects.length === 0) {
     return <EmptyState />
@@ -1422,6 +1427,7 @@ export function ProjectTree() {
                 onTopLevelDragOver={handleTopLevelDragOver}
                 onTopLevelDragEnd={handleTopLevelDragEnd}
                 onTopLevelDrop={handleTopLevelDrop}
+                subAgentClock={subAgentClock}
               />
             )
           }
@@ -1446,6 +1452,7 @@ export function ProjectTree() {
               onTopLevelDrop={handleTopLevelDrop}
               clearTopLevelDropTarget={() => setTopLevelDropTarget(null)}
               dragState={dragState}
+              subAgentClock={subAgentClock}
             />
           )
         })}
