@@ -12,9 +12,6 @@ Deferred findings after the current performance cleanup pass. These are real, bu
 
 ## Renderer / Performance
 
-- `src/renderer/src/PopoutApp.tsx`
-  Each popout still refreshes by reloading the full `session.list()`, `agent.list()`, and `project.list()` payloads on a fixed interval. Hidden popouts are skipped now, but visible multi-popout use still scales as `windows × full-entity reloads`. A better long-term shape would be targeted hydration for only the panels mounted in that popout, or push-based updates from the main window.
-
 - `src/renderer/src/components/ProjectTree.tsx`
   Expanding a project still triggers per-session git metadata fetches in each visible `SessionItem` (`divergence` and `gitStatus`). On large projects, that becomes a burst of git-backed IPC calls with no batching or project-level cache.
 
@@ -26,4 +23,4 @@ Deferred findings after the current performance cleanup pass. These are real, bu
 ## Tooling
 
 - `package.json`
-  There is still no dedicated lint script or repo-standard lint configuration. Current verification is `npx tsc --noEmit` plus `npm run build`, which catches type/build regressions but not style-level or broader static-analysis issues.
+  The repo now has explicit `typecheck`, `lint`, and `verify` scripts, but `lint` is still only a TypeScript static check. There is still no repo-standard lint configuration for broader style/static-analysis coverage.
