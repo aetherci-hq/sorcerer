@@ -7,7 +7,7 @@ import { SidebarFooter, PinnedStats, useStatsPinned } from './SidebarFooter'
 import { StatusDot } from './StatusDot'
 import { Tooltip } from './Tooltip'
 import { PanelLeftCloseIcon, PanelLeftOpenIcon, BotIcon, TerminalIcon, ShellPromptIcon } from './icons'
-import { useUIStore, getAllSessionIds, AGENT_PANE_MIN } from '../stores/useUIStore'
+import { useUIStore, getAllSessionIds, AGENT_PANE_MIN, SIDEBAR_DEFAULT } from '../stores/useUIStore'
 import { useProjectStore } from '../stores/useProjectStore'
 import { useSessionStore } from '../stores/useSessionStore'
 import { useAgentStore } from '../stores/useAgentStore'
@@ -25,12 +25,20 @@ export function Sidebar() {
   const showAgentPane = agents.length > 0 || agentGroups.length > 0 || searchQuery.trim().length > 0
 
   const SNAP_THRESHOLD = 120
+  const DEFAULT_WIDTH_SNAP = 20
 
   /* ---- Drag to resize ---- */
   const isResizing = useRef(false)
   const isAgentPaneResizing = useRef(false)
   const sidebarRef = useRef<HTMLElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
+
+  const getSidebarWidthWithSnap = useCallback((width: number, bypassSnap: boolean) => {
+    if (!bypassSnap && Math.abs(width - SIDEBAR_DEFAULT) <= DEFAULT_WIDTH_SNAP) {
+      return SIDEBAR_DEFAULT
+    }
+    return width
+  }, [])
 
   const onMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
@@ -51,7 +59,7 @@ export function Sidebar() {
           if (sidebarRef.current) {
             sidebarRef.current.style.opacity = ''
           }
-          setSidebarWidth(e.clientX)
+          setSidebarWidth(getSidebarWidthWithSnap(e.clientX, e.altKey))
         }
       }
       if (isAgentPaneResizing.current && contentRef.current) {
@@ -72,6 +80,8 @@ export function Sidebar() {
         }
         if (e.clientX < SNAP_THRESHOLD && !sidebarCollapsed) {
           toggleSidebarCollapse()
+        } else {
+          setSidebarWidth(getSidebarWidthWithSnap(e.clientX, e.altKey))
         }
       }
       isAgentPaneResizing.current = false
@@ -84,7 +94,7 @@ export function Sidebar() {
       window.removeEventListener('mousemove', onMouseMove)
       window.removeEventListener('mouseup', onMouseUp)
     }
-  }, [setSidebarWidth, sidebarCollapsed, toggleSidebarCollapse, setAgentPaneHeight])
+  }, [getSidebarWidthWithSnap, setSidebarWidth, sidebarCollapsed, toggleSidebarCollapse, setAgentPaneHeight])
 
   const onAgentPaneMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault()

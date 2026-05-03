@@ -232,7 +232,7 @@ function AgentItem({ agent, staggerClass, nested = false, nowSeconds }: { agent:
     <div className={`tree-project ${staggerClass || ''}`}>
       <div
         ref={itemRef}
-        className={`tree-item tree-item--agent-row ${!nested ? 'tree-item--root-agent' : ''} ${!hasChildren ? 'tree-item--no-chevron' : ''} ${isActive ? 'tree-item--active' : ''} ${isInSplit ? 'tree-item--split' : ''}`}
+        className={`tree-item tree-item--session-row tree-item--agent-row ${!nested ? 'tree-item--root-agent' : ''} ${!hasChildren ? 'tree-item--no-chevron' : ''} ${isActive ? 'tree-item--active' : ''} ${isInSplit ? 'tree-item--split' : ''}`}
         onClick={async () => {
           if (isRenaming) return
           if (await assignPanelToPopoutTarget(agent.id)) return
@@ -244,7 +244,7 @@ function AgentItem({ agent, staggerClass, nested = false, nowSeconds }: { agent:
         onDragEnd={handleDragEnd}
       >
         <BotIcon className="tree-icon tree-icon--agent" />
-        <div className="tree-label-group">
+        <div className="tree-item-main">
           {isRenaming ? (
             <input
               ref={renameInputRef}
@@ -257,18 +257,24 @@ function AgentItem({ agent, staggerClass, nested = false, nowSeconds }: { agent:
             />
           ) : (
             <>
-              <span className="tree-label tree-label--agent" onDoubleClick={handleDoubleClick}>{agent.name}</span>
-              {showProviderBadges && agent.provider && (
-                <span className="teammate-badge">{agent.provider}</span>
-              )}
-              {agent.description && (
-                <span className="tree-hint tree-hint--inline">{agent.description}</span>
-              )}
+              <div className="tree-item-titleline">
+                <span className="tree-label tree-label--agent" onDoubleClick={handleDoubleClick}>{agent.name}</span>
+              </div>
+              {(showProviderBadges && agent.provider) || agent.description ? (
+                <div className="tree-item-meta">
+                  {showProviderBadges && agent.provider && (
+                    <span className="tree-meta-badge">{agent.provider}</span>
+                  )}
+                  {agent.description && (
+                    <span className="tree-hint tree-hint--inline">{agent.description}</span>
+                  )}
+                </div>
+              ) : null}
             </>
           )}
         </div>
         {!isRenaming && (
-          <>
+          <div className="tree-item-tail">
             {agent.mission && agent.schedule_minutes > 0 && agent.status !== 'active' && (
               <AgentCountdown agent={agent} nowSeconds={nowSeconds} />
             )}
@@ -276,16 +282,16 @@ function AgentItem({ agent, staggerClass, nested = false, nowSeconds }: { agent:
               <MoreHorizontalIcon />
             </button>
             <StatusDot status={poppedOutSessionIds.has(agent.id) && agent.status === 'active' ? 'popped-out' : agent.status} />
-          </>
-        )}
-        {hasChildren && (
-          <ChevronIcon
-            className={`tree-chevron ${isExpanded ? 'tree-chevron--open' : ''}`}
-            onClick={(e) => {
-              e.stopPropagation()
-              toggleSession(agent.id)
-            }}
-          />
+            {hasChildren && (
+              <ChevronIcon
+                className={`tree-chevron ${isExpanded ? 'tree-chevron--open' : ''}`}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  toggleSession(agent.id)
+                }}
+              />
+            )}
+          </div>
         )}
       </div>
 

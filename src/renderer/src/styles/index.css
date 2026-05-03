@@ -554,29 +554,38 @@ body {
 }
 
 .sidebar-section-resize-handle {
-  height: 8px;
+  height: 6px;
   flex: 0 0 auto;
   cursor: row-resize;
   position: relative;
-  margin: 0 12px;
+  margin: 0;
   border-radius: 999px;
   -webkit-app-region: no-drag;
+  transition: background 0.15s, opacity 0.15s;
 }
 
 .sidebar-section-resize-handle::before {
   content: '';
   position: absolute;
-  left: 0;
-  right: 0;
+  left: 12px;
+  right: 12px;
   top: 50%;
   height: 1px;
   transform: translateY(-50%);
   background: var(--border-subtle);
+  transition: background 0.15s, opacity 0.15s;
+}
+
+.sidebar-section-resize-handle:hover,
+.sidebar-section-resize-handle:active {
+  background: var(--accent);
+  opacity: 0.3;
 }
 
 .sidebar-section-resize-handle:hover::before,
 .sidebar-section-resize-handle:active::before {
-  background: var(--border-medium);
+  background: var(--accent);
+  opacity: 0;
 }
 
 .tree-icon--agent {
@@ -2017,7 +2026,7 @@ body {
 .sidebar-resize-handle:active {
   background: var(--accent);
   opacity: 0.3;
-  transition: opacity 0.15s;
+  transition: background 0.15s, opacity 0.15s;
 }
 
 /* Collapsed action bar */

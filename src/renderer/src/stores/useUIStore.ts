@@ -32,7 +32,6 @@ interface SidebarSelection {
 }
 
 export const SIDEBAR_MIN = 200
-export const SIDEBAR_MAX = 420
 export const SIDEBAR_DEFAULT = 260
 export const AGENT_PANE_MIN = 120
 export const AGENT_PANE_DEFAULT = 240
@@ -400,7 +399,7 @@ export const useUIStore = create<UIState>()(
 
       sidebarWidth: SIDEBAR_DEFAULT,
       setSidebarWidth: (width) => set({
-        sidebarWidth: Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, width))
+        sidebarWidth: Math.max(SIDEBAR_MIN, width)
       }),
       agentPaneHeight: AGENT_PANE_DEFAULT,
       setAgentPaneHeight: (height) => set({
