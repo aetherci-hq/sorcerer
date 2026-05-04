@@ -3581,6 +3581,8 @@ button:focus-visible,
 }
 
 .split-panel-titlebar {
+  position: relative;
+  z-index: 3;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -3589,6 +3591,14 @@ button:focus-visible,
   background: var(--bg-sidebar);
   border-bottom: 1px solid var(--border-subtle);
   flex-shrink: 0;
+}
+
+.split-panel-body {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .split-panel-name {

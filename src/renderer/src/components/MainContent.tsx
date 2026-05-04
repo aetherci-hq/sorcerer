@@ -599,37 +599,39 @@ function SplitNodeView({ node }: { node: SplitNode }) {
             }}>&times;</button>
           </div>
         </div>
-        {isQuickNotes && node.sessionId ? (
-          <QuickNotesPanel panelSessionId={node.sessionId} />
-        ) : isEmpty ? (
-          <div
-            className="terminal-placeholder"
-            onDragOver={handleDragOver}
-            onDrop={handleDrop}
-          >
-            <TerminalIcon className="terminal-placeholder-icon" />
-            <div className="terminal-placeholder-text">
-              Click or drag a session from the sidebar to open it here
+        <div className="split-panel-body">
+          {isQuickNotes && node.sessionId ? (
+            <QuickNotesPanel panelSessionId={node.sessionId} />
+          ) : isEmpty ? (
+            <div
+              className="terminal-placeholder"
+              onDragOver={handleDragOver}
+              onDrop={handleDrop}
+            >
+              <TerminalIcon className="terminal-placeholder-icon" />
+              <div className="terminal-placeholder-text">
+                Click or drag a session from the sidebar to open it here
+              </div>
             </div>
-          </div>
-        ) : session?.status === 'archived' ? (
-          <div className="terminal-placeholder">
-            <TerminalIcon className="terminal-placeholder-icon" />
-            <div className="terminal-placeholder-text">
-              Session <strong>{session.name}</strong> is archived.
+          ) : session?.status === 'archived' ? (
+            <div className="terminal-placeholder">
+              <TerminalIcon className="terminal-placeholder-icon" />
+              <div className="terminal-placeholder-text">
+                Session <strong>{session.name}</strong> is archived.
+              </div>
             </div>
-          </div>
-        ) : activeItem?.status === 'idle' ? (
-          session?.type === 'quick-terminal' ? <IdleQuickTerminalPanel session={session} />
-          : agent ? <IdleAgentPanel agent={agent} /> : <IdleSessionPanel session={session!} />
-        ) : activeItem ? (
-          <TerminalView sessionId={activeItem.id} isFocused={isFocused} />
-        ) : (
-          <div className="terminal-placeholder">
-            <TerminalIcon className="terminal-placeholder-icon" />
-            <div className="terminal-placeholder-text">Session not found</div>
-          </div>
-        )}
+          ) : activeItem?.status === 'idle' ? (
+            session?.type === 'quick-terminal' ? <IdleQuickTerminalPanel session={session} />
+            : agent ? <IdleAgentPanel agent={agent} /> : <IdleSessionPanel session={session!} />
+          ) : activeItem ? (
+            <TerminalView sessionId={activeItem.id} isFocused={isFocused} />
+          ) : (
+            <div className="terminal-placeholder">
+              <TerminalIcon className="terminal-placeholder-icon" />
+              <div className="terminal-placeholder-text">Session not found</div>
+            </div>
+          )}
+        </div>
       </div>
     )
   }

@@ -705,21 +705,23 @@ function PopoutWorkspace({ params }: { params: PopoutParams }) {
               }}>&times;</button>
             </div>
           </div>
-          {isEmpty ? (
-            <div className="terminal-placeholder">
-              <TerminalIcon className="terminal-placeholder-icon" />
-              <div className="terminal-placeholder-text">
-                Click a session, agent, or notes entry in the sidebar to open it here
+          <div className="split-panel-body">
+            {isEmpty ? (
+              <div className="terminal-placeholder">
+                <TerminalIcon className="terminal-placeholder-icon" />
+                <div className="terminal-placeholder-text">
+                  Click a session, agent, or notes entry in the sidebar to open it here
+                </div>
               </div>
-            </div>
-          ) : (
-            <PopoutLeafContent
-              panelId={panelId!}
-              data={data}
-              onStarted={updateSessionState}
-              onExited={(id) => updateSessionState(id, 'idle', null)}
-            />
-          )}
+            ) : (
+              <PopoutLeafContent
+                panelId={panelId!}
+                data={data}
+                onStarted={updateSessionState}
+                onExited={(id) => updateSessionState(id, 'idle', null)}
+              />
+            )}
+          </div>
         </div>
       )
     }
