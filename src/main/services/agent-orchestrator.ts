@@ -60,7 +60,10 @@ export class AgentOrchestrator {
     this.pty.onExit((sessionId, exitCode) => {
       const running = this.runningAgents.get(sessionId)
       if (!running) return
-      this.handleRunComplete(sessionId, exitCode, running.startedAt)
+      this.handleRunComplete(sessionId, exitCode, running.startedAt).catch((err) => {
+        console.error(`[orchestrator] Failed to complete agent run ${sessionId}:`, err)
+        this.runningAgents.delete(sessionId)
+      })
     })
   }
 

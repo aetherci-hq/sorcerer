@@ -119,20 +119,25 @@ function getWindowBounds(): { x?: number; y?: number; width: number; height: num
 
 function saveWindowBounds(): void {
   if (!mainWindow || !dbService || mainWindow.isDestroyed()) return
-  const maximized = mainWindow.isMaximized()
-  // Only save non-maximized bounds so we restore to a good size
-  if (!maximized) {
-    const bounds = mainWindow.getBounds()
-    dbService.setSetting('windowBounds', JSON.stringify({ ...bounds, maximized: false }))
-  } else {
-    // Preserve previous x/y/width/height but mark as maximized
-    try {
-      const prev = dbService.getSetting('windowBounds')
-      const parsed = prev ? JSON.parse(prev) : { width: 1200, height: 800 }
+  try {
+    const maximized = mainWindow.isMaximized()
+    // Only save non-maximized bounds so we restore to a good size
+    if (!maximized) {
+      const bounds = mainWindow.getBounds()
+      dbService.setSetting('windowBounds', JSON.stringify({ ...bounds, maximized: false }))
+    } else {
+      // Preserve previous x/y/width/height but mark as maximized
+      let parsed: { width: number; height: number; [key: string]: unknown } = { width: 1200, height: 800 }
+      try {
+        const prev = dbService.getSetting('windowBounds')
+        if (prev) parsed = JSON.parse(prev)
+      } catch {
+        parsed = { width: 1200, height: 800 }
+      }
       dbService.setSetting('windowBounds', JSON.stringify({ ...parsed, maximized: true }))
-    } catch {
-      dbService.setSetting('windowBounds', JSON.stringify({ width: 1200, height: 800, maximized: true }))
     }
+  } catch (err) {
+    console.warn('[window] Failed to save window bounds:', err)
   }
 }
 
@@ -275,10 +280,10 @@ async function createWindow(): Promise<void> {
 
   // Capture Codex thread IDs from live PTY output as soon as Codex prints them.
   ptyService.onOutput((sessionId, data) => {
-    const session = dbService.getSession(sessionId)
-    if (!session || session.provider !== 'codex' || session.type === 'quick-terminal') return
-
     void (async () => {
+      const session = dbService.getSession(sessionId)
+      if (!session || session.provider !== 'codex' || session.type === 'quick-terminal') return
+
       const scrollbackText = ptyService.scrollback.getScrollback(sessionId)
       const extractedThreadId = extractCodexThreadIdFromOutput(scrollbackText)
       if (!extractedThreadId) return
@@ -293,24 +298,34 @@ async function createWindow(): Promise<void> {
 
       persistCodexSessionIdentity(dbService, sessionId, extractedThreadId, 'live-output')
       console.log(`[codex-thread] ${sessionId}: captured ${extractedThreadId} from live-output`)
-    })()
+    })().catch((err) => {
+      console.error(`[codex-thread] ${sessionId}: failed to persist live-output identity`, err)
+    })
   })
 
   // Detect failed resumes (e.g. "No conversation found to continue")
   ptyService.onExit((sessionId, exitCode) => {
-    const scrollbackText = ptyService.scrollback.getScrollback(sessionId)
-    const session = dbService.getSession(sessionId)
-    const agent = session ? null : dbService.getAgent(sessionId)
+    let scrollbackText = ''
+    let session: any | undefined
+    try {
+      scrollbackText = ptyService.scrollback.getScrollback(sessionId)
+      session = dbService.getSession(sessionId)
+      const agent = session ? null : dbService.getAgent(sessionId)
 
-    if (session) {
-      dbService.updateSession(sessionId, { status: 'idle', pid: null })
-    } else if (agent) {
-      dbService.updateAgent(sessionId, { status: 'idle', pid: null })
+      if (session) {
+        dbService.updateSession(sessionId, { status: 'idle', pid: null })
+      } else if (agent) {
+        dbService.updateAgent(sessionId, { status: 'idle', pid: null })
+      }
+
+      if (session) {
+        persistSessionExitSummary(dbService, sessionId, scrollbackText, exitCode)
+      }
+    } catch (err) {
+      console.error(`[pty-exit] ${sessionId}: failed to persist exit state`, err)
+      return
     }
 
-    if (session) {
-      persistSessionExitSummary(dbService, sessionId, scrollbackText, exitCode)
-    }
     if (session && session.provider === 'codex' && session.type !== 'quick-terminal') {
       const cwd = resolveSessionWorkingDirectory(dbService, session, { allowProjectFallback: true })
       const allowCwdRecovery = canRecoverSessionByCwd(dbService, session)
@@ -634,34 +649,44 @@ app.on('before-quit', () => {
 
 app.on('window-all-closed', () => {
   void (async () => {
-    isShuttingDown = true
-    flushWindowBounds()
-    // Give PTY exit handlers a brief chance to persist final state before the DB closes.
-    if (ptyService) await ptyService.killAllAndWait()
-    await waitForExitPersistence()
-    await waitForStartupTasks()
-    agentOrchestrator?.stop()
-    agentOrchestrator = null
-    if (rateLimitsDebounceTimer) {
-      clearTimeout(rateLimitsDebounceTimer)
-      rateLimitsDebounceTimer = null
-    }
-    if (rateLimitsWatcher) {
-      rateLimitsWatcher.close()
-      rateLimitsWatcher = null
-    }
-    if (fileWatcherService) fileWatcherService.close()
+    try {
+      isShuttingDown = true
+      flushWindowBounds()
+      // Give PTY exit handlers a brief chance to persist final state before the DB closes.
+      if (ptyService) await ptyService.killAllAndWait()
+      await waitForExitPersistence()
+      await waitForStartupTasks()
+      agentOrchestrator?.stop()
+      agentOrchestrator = null
+      if (rateLimitsDebounceTimer) {
+        clearTimeout(rateLimitsDebounceTimer)
+        rateLimitsDebounceTimer = null
+      }
+      if (rateLimitsWatcher) {
+        rateLimitsWatcher.close()
+        rateLimitsWatcher = null
+      }
+      if (fileWatcherService) fileWatcherService.close()
 
-    // Stop remote access server
-    import('./ipc/handlers').then(({ getGlobalApiServer }) => {
-      const server = getGlobalApiServer()
-      if (server) server.stop()
-    }).catch(() => {})
+      // Stop remote access server
+      import('./ipc/handlers').then(({ getGlobalApiServer }) => {
+        const server = getGlobalApiServer()
+        if (server) server.stop()
+      }).catch(() => {})
 
-    if (dbService) dbService.close()
-
-    if (process.platform !== 'darwin') {
-      app.quit()
+      if (dbService) {
+        try {
+          dbService.close()
+        } catch (err) {
+          console.error('[shutdown] Failed to close database cleanly:', err)
+        }
+      }
+    } catch (err) {
+      console.error('[shutdown] Failed during window-all-closed cleanup:', err)
+    } finally {
+      if (process.platform !== 'darwin') {
+        app.quit()
+      }
     }
   })()
 })
