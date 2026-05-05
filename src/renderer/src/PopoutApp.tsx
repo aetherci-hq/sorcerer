@@ -779,7 +779,3 @@ export function PopoutApp() {
 
   return <div className="popout-error">Unknown panel type: {params.panelType}</div>
 }
-
-export function isPopout(): boolean {
-  return new URLSearchParams(window.location.search).has('popout')
-}

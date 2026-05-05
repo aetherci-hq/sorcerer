@@ -1,7 +1,8 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { App } from './App'
-import { PopoutApp, isPopout } from './PopoutApp'
+import { PopoutApp } from './PopoutApp'
+import { isPopout } from './popout'
 import { getThemeById, applyTheme } from './themes'
 import './styles/index.css'
 
