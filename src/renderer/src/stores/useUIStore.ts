@@ -82,6 +82,7 @@ interface UIState {
   focusedPanelId: string | null
   maximizedPanelId: string | null
   focusModeSessionId: string | null
+  spotlightMode: boolean
   splitRight: (sessionId: string) => void
   splitDown: (sessionId: string) => void
   closePanel: (panelId: string) => void
@@ -91,6 +92,8 @@ interface UIState {
   setPanelSession: (panelId: string, sessionId: string | null) => void
   toggleMaximizePanel: (panelId: string) => void
   unmaximizePanel: () => void
+  toggleSpotlightMode: () => void
+  setSpotlightMode: (enabled: boolean) => void
   enterFocusMode: (sessionId: string) => void
   exitFocusMode: () => void
 
@@ -411,6 +414,7 @@ export const useUIStore = create<UIState>()(
       focusedPanelId: null,
       maximizedPanelId: null,
       focusModeSessionId: null,
+      spotlightMode: false,
 
       splitRight: (sessionId) => {
         const state = get()
@@ -545,6 +549,8 @@ export const useUIStore = create<UIState>()(
       },
 
       unmaximizePanel: () => set({ maximizedPanelId: null }),
+      toggleSpotlightMode: () => set((state) => ({ spotlightMode: !state.spotlightMode })),
+      setSpotlightMode: (enabled) => set({ spotlightMode: enabled }),
       enterFocusMode: (sessionId) => set({ focusModeSessionId: sessionId, maximizedPanelId: null }),
       exitFocusMode: () => set({ focusModeSessionId: null }),
 
@@ -598,6 +604,7 @@ export const useUIStore = create<UIState>()(
         splitRoot: state.splitRoot,
         focusedPanelId: state.focusedPanelId,
         maximizedPanelId: state.maximizedPanelId,
+        spotlightMode: state.spotlightMode,
         poppedOutSessionIds: state.poppedOutSessionIds
       })
     }

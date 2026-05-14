@@ -207,9 +207,11 @@ export function useKeyboardShortcuts() {
             focusActiveTerminal()
           }
         } else {
-          const { focusModeSessionId, exitFocusMode, maximizedPanelId, unmaximizePanel } = useUIStore.getState()
+          const { focusModeSessionId, exitFocusMode, maximizedPanelId, unmaximizePanel, spotlightMode, setSpotlightMode } = useUIStore.getState()
           if (focusModeSessionId) {
             exitFocusMode()
+          } else if (spotlightMode) {
+            setSpotlightMode(false)
           } else if (maximizedPanelId) {
             unmaximizePanel()
           } else if (closeActivePanel()) {

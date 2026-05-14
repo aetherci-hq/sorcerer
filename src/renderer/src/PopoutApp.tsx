@@ -3,7 +3,8 @@ import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { getApi } from './api/client'
 import { getAppliedTheme, getThemeById, applyTheme, toXtermTheme } from './themes'
-import { GitBranchIcon, TerminalIcon, BotIcon, NotesIcon, SplitHorizontalIcon, SplitVerticalIcon, MaximizeIcon, MinimizeIcon } from './components/icons'
+import { GitBranchIcon, TerminalIcon, BotIcon, NotesIcon, SplitHorizontalIcon, SplitVerticalIcon, MaximizeIcon, MinimizeIcon, EyeIcon } from './components/icons'
+import { PanelActionsMenu, type PanelActionMenuItem } from './components/PanelActionsMenu'
 import { QuickNotesPanel, parseQuickNotesPanelId } from './components/QuickNotesPanel'
 import { useQuickNotesStore } from './stores/useQuickNotesStore'
 import type { SorcererTheme } from './themes'
@@ -450,6 +451,7 @@ function PopoutWorkspace({ params }: { params: PopoutParams }) {
   })
   const [focusedPanelId, setFocusedPanelId] = useState(splitRoot.id)
   const [maximizedPanelId, setMaximizedPanelId] = useState<string | null>(null)
+  const [spotlightMode, setSpotlightMode] = useState(false)
   const loadInFlightRef = useRef(false)
   const reloadQueuedRef = useRef(false)
   const queuedPanelIdsRef = useRef<string[] | null>(null)
@@ -609,6 +611,7 @@ function PopoutWorkspace({ params }: { params: PopoutParams }) {
   const renderNode = (node: SplitNode): ReactElement => {
     if (node.type === 'leaf') {
       const isFocused = focusedPanelId === node.id
+      const isDimmedBySpotlight = spotlightMode && !!focusedPanelId && !isFocused
       const panelId = node.sessionId
       const isEmpty = panelId === null
       const isQuickNotes = !!panelId?.startsWith('quicknotes:')
@@ -632,73 +635,91 @@ function PopoutWorkspace({ params }: { params: PopoutParams }) {
         if (filledLeafId) setFocusedPanelId(filledLeafId)
       }
 
+      const panelMenuItems: PanelActionMenuItem[] = []
+      if (session && session.type !== 'quick-terminal') {
+        panelMenuItems.push(
+          {
+            label: 'Open Quick Notes',
+            icon: <NotesIcon />,
+            action: () => openQuickNotes(session.id, 'session')
+          },
+          {
+            label: 'Open Quick Terminal',
+            icon: <TerminalIcon />,
+            action: async () => {
+              const quickTerminal = await getApi().session.createQuickTerminal(session.id)
+              if (!quickTerminal) return
+              await loadEntities()
+              const leafId = fillEmptyOrSplit(quickTerminal.id)
+              if (leafId) setFocusedPanelId(leafId)
+            }
+          }
+        )
+      }
+      if (agent) {
+        panelMenuItems.push(
+          {
+            label: 'Open Quick Notes',
+            icon: <NotesIcon />,
+            action: () => openQuickNotes(agent.id, 'agent')
+          },
+          {
+            label: 'Open Quick Terminal',
+            icon: <TerminalIcon />,
+            action: async () => {
+              const quickTerminal = await getApi().agent.createQuickTerminal(agent.id)
+              if (!quickTerminal) return
+              await loadEntities()
+              const leafId = fillEmptyOrSplit(quickTerminal.id)
+              if (leafId) setFocusedPanelId(leafId)
+            }
+          }
+        )
+      }
+      if (panelMenuItems.length > 0 && panelId) {
+        panelMenuItems.push({ type: 'separator' })
+      }
+      if (panelId) {
+        panelMenuItems.push(
+          {
+            label: 'Split Right',
+            icon: <SplitHorizontalIcon />,
+            action: () => splitFocused(node.id, 'horizontal', panelId)
+          },
+          {
+            label: 'Split Down',
+            icon: <SplitVerticalIcon />,
+            action: () => splitFocused(node.id, 'vertical', panelId)
+          }
+        )
+      }
+      if (panelMenuItems.length > 0) {
+        panelMenuItems.push({ type: 'separator' })
+      }
+      panelMenuItems.push(
+        {
+          label: spotlightMode ? 'Turn off Spotlight' : 'Spotlight',
+          icon: <EyeIcon />,
+          active: spotlightMode,
+          action: () => {
+            setFocusedPanelId(node.id)
+            setSpotlightMode((current) => !current)
+          }
+        },
+        {
+          label: maximizedPanelId === node.id ? 'Restore' : 'Maximize',
+          icon: maximizedPanelId === node.id ? <MinimizeIcon /> : <MaximizeIcon />,
+          active: maximizedPanelId === node.id,
+          action: () => setMaximizedPanelId((current) => current === node.id ? null : node.id)
+        }
+      )
+
       return (
-        <div className={`split-panel ${isFocused ? 'split-panel--focused' : ''}`} onClick={() => setFocusedPanelId(node.id)}>
+        <div className={`split-panel ${isFocused ? 'split-panel--focused' : ''} ${isDimmedBySpotlight ? 'split-panel--spotlight-dimmed' : ''}`} onClick={() => setFocusedPanelId(node.id)}>
           <div className="split-panel-titlebar">
             <PanelHeaderInfo panelId={panelId} data={data} />
             <div className="split-panel-actions">
-              {session && session.type !== 'quick-terminal' && (
-                <>
-                  <button className="split-panel-action" title="Open Quick Notes" onClick={(e) => {
-                    e.stopPropagation()
-                    openQuickNotes(session.id, 'session')
-                  }}>
-                    <NotesIcon />
-                  </button>
-                  <button className="split-panel-action" title="Open Quick Terminal" onClick={async (e) => {
-                    e.stopPropagation()
-                    const quickTerminal = await getApi().session.createQuickTerminal(session.id)
-                    if (!quickTerminal) return
-                    await loadEntities()
-                    const leafId = fillEmptyOrSplit(quickTerminal.id)
-                    if (leafId) setFocusedPanelId(leafId)
-                  }}>
-                    <TerminalIcon />
-                  </button>
-                </>
-              )}
-              {agent && (
-                <>
-                  <button className="split-panel-action" title="Open Quick Notes" onClick={(e) => {
-                    e.stopPropagation()
-                    openQuickNotes(agent.id, 'agent')
-                  }}>
-                    <NotesIcon />
-                  </button>
-                  <button className="split-panel-action" title="Open Quick Terminal" onClick={async (e) => {
-                    e.stopPropagation()
-                    const quickTerminal = await getApi().agent.createQuickTerminal(agent.id)
-                    if (!quickTerminal) return
-                    await loadEntities()
-                    const leafId = fillEmptyOrSplit(quickTerminal.id)
-                    if (leafId) setFocusedPanelId(leafId)
-                  }}>
-                    <TerminalIcon />
-                  </button>
-                </>
-              )}
-              {panelId && (
-                <>
-                  <button className="split-panel-action" title="Split Right" onClick={(e) => {
-                    e.stopPropagation()
-                    splitFocused(node.id, 'horizontal', panelId)
-                  }}>
-                    <SplitHorizontalIcon />
-                  </button>
-                  <button className="split-panel-action" title="Split Down" onClick={(e) => {
-                    e.stopPropagation()
-                    splitFocused(node.id, 'vertical', panelId)
-                  }}>
-                    <SplitVerticalIcon />
-                  </button>
-                </>
-              )}
-              <button className="split-panel-action" title={maximizedPanelId === node.id ? 'Restore' : 'Maximize'} onClick={(e) => {
-                e.stopPropagation()
-                setMaximizedPanelId((current) => current === node.id ? null : node.id)
-              }}>
-                {maximizedPanelId === node.id ? <MinimizeIcon /> : <MaximizeIcon />}
-              </button>
+              <PanelActionsMenu items={panelMenuItems} />
               <button className="split-panel-close" onClick={(e) => {
                 e.stopPropagation()
                 void closeLeaf(node.id, panelId)

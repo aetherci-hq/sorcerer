@@ -3580,6 +3580,16 @@ button:focus-visible,
   background: var(--accent-glow-strong);
 }
 
+.split-panel--spotlight-dimmed {
+  filter: blur(1.6px) saturate(0.72);
+  opacity: 0.34;
+  transition: filter 0.18s var(--ease-out), opacity 0.18s var(--ease-out);
+}
+
+.split-panel--spotlight-dimmed:hover {
+  opacity: 0.48;
+}
+
 .split-panel-titlebar {
   position: relative;
   z-index: 3;
@@ -3686,6 +3696,11 @@ button:focus-visible,
 
 .split-panel-action:hover {
   background: var(--bg-hover);
+  color: var(--accent);
+  opacity: 1;
+}
+
+.split-panel-action[aria-pressed="true"] {
   color: var(--accent);
   opacity: 1;
 }

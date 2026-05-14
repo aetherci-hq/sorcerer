@@ -5,12 +5,13 @@ import { useProjectStore } from '../stores/useProjectStore'
 import { useAgentStore } from '../stores/useAgentStore'
 import { useUIStore, findLeaf, findLeafBySession } from '../stores/useUIStore'
 import { OrphanWorkspaceBanner } from './OrphanWorkspaceBanner'
-import { GitBranchIcon, TerminalIcon, BotIcon, NotesIcon, SplitHorizontalIcon, SplitVerticalIcon, MaximizeIcon, MinimizeIcon } from './icons'
+import { GitBranchIcon, TerminalIcon, BotIcon, NotesIcon, SplitHorizontalIcon, SplitVerticalIcon, MaximizeIcon, MinimizeIcon, EyeIcon } from './icons'
 import { TerminalView } from './TerminalView'
 import { QuickNotesPanel, parseQuickNotesPanelId } from './QuickNotesPanel'
 import { useQuickNotesStore } from '../stores/useQuickNotesStore'
 import { MissionPanel } from './MissionPanel'
 import { ParticleCanvas } from './ParticleCanvas'
+import { PanelActionsMenu, type PanelActionMenuItem } from './PanelActionsMenu'
 import type { Session, Agent, SessionResumeHealth, SessionDiagnostics, SplitNode } from '../types'
 
 function IdleSessionPanel({ session }: { session: Session }) {
@@ -370,7 +371,7 @@ function FocusModeOverlay({
 }
 
 function SplitNodeView({ node }: { node: SplitNode }) {
-  const { focusedPanelId, setFocusedPanel, closePanel, setSplitRatio, setPanelSession, splitRight, splitDown, maximizedPanelId, toggleMaximizePanel } = useUIStore()
+  const { focusedPanelId, setFocusedPanel, closePanel, setSplitRatio, setPanelSession, splitRight, splitDown, maximizedPanelId, toggleMaximizePanel, spotlightMode, toggleSpotlightMode } = useUIStore()
   const { sessions, setActiveSession, deleteSession, createQuickTerminal, addLocalSession } = useSessionStore()
   const { agents: agentsList } = useAgentStore()
 
@@ -381,6 +382,7 @@ function SplitNodeView({ node }: { node: SplitNode }) {
     const agent = node.sessionId && !session && !isQuickNotes ? agentsList.find((a) => a.id === node.sessionId) : undefined
     const activeItem = session || agent
     const isFocused = focusedPanelId === node.id
+    const isDimmedBySpotlight = spotlightMode && !!focusedPanelId && !isFocused
     const isEmpty = node.sessionId === null
 
     // Resolve quicknotes panel name
@@ -468,9 +470,105 @@ function SplitNodeView({ node }: { node: SplitNode }) {
       }
     }
 
+    const panelMenuItems: PanelActionMenuItem[] = []
+    if (session && session.type !== 'quick-terminal') {
+      panelMenuItems.push(
+        {
+          label: 'Open Quick Notes',
+          icon: <NotesIcon />,
+          action: () => openQuickNotesSplit(session.id, 'session')
+        },
+        {
+          label: 'Open Quick Terminal',
+          icon: <TerminalIcon />,
+          action: async () => {
+            const newSession = await createQuickTerminal(session.id)
+            if (!newSession) return
+            ensureExpanded(session.id)
+            fillEmptyOrSplit(newSession.id)
+            const { splitRoot: root } = useUIStore.getState()
+            if (root) {
+              const leaf = findLeafBySession(root, newSession.id)
+              if (leaf) setFocusedPanel(leaf.id)
+            }
+            setActiveSession(newSession.id)
+          }
+        }
+      )
+    }
+    if (agent) {
+      panelMenuItems.push(
+        {
+          label: 'Open Quick Notes',
+          icon: <NotesIcon />,
+          action: () => openQuickNotesSplit(agent.id, 'agent')
+        },
+        {
+          label: 'Open Quick Terminal',
+          icon: <TerminalIcon />,
+          action: async () => {
+            const qt = await getApi().agent.createQuickTerminal(agent.id)
+            if (!qt) return
+            addLocalSession(qt as any)
+            ensureExpanded(agent.id)
+            fillEmptyOrSplit(qt.id)
+            const { splitRoot: root } = useUIStore.getState()
+            if (root) {
+              const leaf = findLeafBySession(root, qt.id)
+              if (leaf) setFocusedPanel(leaf.id)
+            }
+            setActiveSession(qt.id)
+          }
+        }
+      )
+    }
+    if (panelMenuItems.length > 0 && node.sessionId) {
+      panelMenuItems.push({ type: 'separator' })
+    }
+    if (node.sessionId) {
+      panelMenuItems.push(
+        {
+          label: 'Split Right',
+          icon: <SplitHorizontalIcon />,
+          action: () => {
+            setFocusedPanel(node.id)
+            splitRight(node.sessionId!)
+          }
+        },
+        {
+          label: 'Split Down',
+          icon: <SplitVerticalIcon />,
+          action: () => {
+            setFocusedPanel(node.id)
+            splitDown(node.sessionId!)
+          }
+        }
+      )
+    }
+    if (panelMenuItems.length > 0) {
+      panelMenuItems.push({ type: 'separator' })
+    }
+    panelMenuItems.push(
+      {
+        label: spotlightMode ? 'Turn off Spotlight' : 'Spotlight',
+        icon: <EyeIcon />,
+        active: spotlightMode,
+        action: () => {
+          setFocusedPanel(node.id)
+          toggleSpotlightMode()
+        }
+      },
+      {
+        label: maximizedPanelId === node.id ? 'Restore' : 'Maximize',
+        icon: maximizedPanelId === node.id ? <MinimizeIcon /> : <MaximizeIcon />,
+        active: maximizedPanelId === node.id,
+        action: () => toggleMaximizePanel(node.id)
+      }
+    )
+
     return (
       <div
-        className={`split-panel ${isFocused ? 'split-panel--focused' : ''}`}
+        className={`split-panel ${isFocused ? 'split-panel--focused' : ''} ${isDimmedBySpotlight ? 'split-panel--spotlight-dimmed' : ''}`}
         onClick={handleClick}
       >
         <div className="split-panel-titlebar">
@@ -480,111 +578,7 @@ function SplitNodeView({ node }: { node: SplitNode }) {
             <PanelHeaderInfo session={session} agent={agent} />
           )}
           <div className="split-panel-actions">
-            {session && session.type !== 'quick-terminal' && (
-              <>
-                <button
-                  className="split-panel-action"
-                  title="Open Quick Notes"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    openQuickNotesSplit(session.id, 'session')
-                  }}
-                >
-                  <NotesIcon />
-                </button>
-                <button
-                  className="split-panel-action"
-                  title="Open Quick Terminal"
-                  onClick={async (e) => {
-                    e.stopPropagation()
-                    const newSession = await createQuickTerminal(session.id)
-                    if (newSession) {
-                      ensureExpanded(session.id)
-                      fillEmptyOrSplit(newSession.id)
-                      const { splitRoot: root } = useUIStore.getState()
-                      if (root) {
-                        const leaf = findLeafBySession(root, newSession.id)
-                        if (leaf) setFocusedPanel(leaf.id)
-                      }
-                      setActiveSession(newSession.id)
-                    }
-                  }}
-                >
-                  <TerminalIcon />
-                </button>
-              </>
-            )}
-            {agent && (
-              <>
-                <button
-                  className="split-panel-action"
-                  title="Open Quick Notes"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    openQuickNotesSplit(agent.id, 'agent')
-                  }}
-                >
-                  <NotesIcon />
-                </button>
-                <button
-                  className="split-panel-action"
-                  title="Open Quick Terminal"
-                  onClick={async (e) => {
-                    e.stopPropagation()
-                    const qt = await getApi().agent.createQuickTerminal(agent.id)
-                    if (qt) {
-                      addLocalSession(qt as any)
-                      ensureExpanded(agent.id)
-                      fillEmptyOrSplit(qt.id)
-                      const { splitRoot: root } = useUIStore.getState()
-                      if (root) {
-                        const leaf = findLeafBySession(root, qt.id)
-                        if (leaf) setFocusedPanel(leaf.id)
-                      }
-                      setActiveSession(qt.id)
-                    }
-                  }}
-                >
-                  <TerminalIcon />
-                </button>
-              </>
-            )}
-            {node.sessionId && (
-              <>
-                <button
-                  className="split-panel-action"
-                  title="Split Right"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    setFocusedPanel(node.id)
-                    splitRight(node.sessionId!)
-                  }}
-                >
-                  <SplitHorizontalIcon />
-                </button>
-                <button
-                  className="split-panel-action"
-                  title="Split Down"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    setFocusedPanel(node.id)
-                    splitDown(node.sessionId!)
-                  }}
-                >
-                  <SplitVerticalIcon />
-                </button>
-              </>
-            )}
-            <button
-              className="split-panel-action"
-              title={maximizedPanelId === node.id ? 'Restore' : 'Maximize'}
-              onClick={(e) => {
-                e.stopPropagation()
-                toggleMaximizePanel(node.id)
-              }}
-            >
-              {maximizedPanelId === node.id ? <MinimizeIcon /> : <MaximizeIcon />}
-            </button>
+            <PanelActionsMenu items={panelMenuItems} />
             <button className="split-panel-close" onClick={(e) => {
               e.stopPropagation()
               // Quick notes: remove from openNotePanels
@@ -710,7 +704,7 @@ export function MainContent() {
   const { sessions, activeSessionId, setActiveSession, deleteSession, createQuickTerminal, addLocalSession } = useSessionStore()
   const { projects } = useProjectStore()
   const { agents: agentsList } = useAgentStore()
-  const { splitRoot, splitRight, splitDown, maximizedPanelId, focusModeSessionId, exitFocusMode } = useUIStore()
+  const { splitRoot, splitRight, splitDown, maximizedPanelId, focusModeSessionId, exitFocusMode, spotlightMode, toggleSpotlightMode } = useUIStore()
   const updateAvailable = useUpdateCheck()
   const particles = useParticleSettings()
 
@@ -725,6 +719,118 @@ export function MainContent() {
   const hasActiveSessions = sessions.some((s) => s.status === 'active')
   // Empty state = no split layout and no active item selected
   const showingEmptyState = !splitRoot && !activeSession && !activeAgent && !activeQuickNotes
+  const activePanelMenuItems: PanelActionMenuItem[] = []
+
+  if (activeQuickNotes && activeSessionId) {
+    activePanelMenuItems.push(
+      { label: 'Split Right', icon: <SplitHorizontalIcon />, action: () => splitRight(activeSessionId) },
+      { label: 'Split Down', icon: <SplitVerticalIcon />, action: () => splitDown(activeSessionId) },
+      { type: 'separator' },
+      {
+        label: spotlightMode ? 'Turn off Spotlight' : 'Spotlight',
+        icon: <EyeIcon />,
+        active: spotlightMode,
+        action: toggleSpotlightMode
+      }
+    )
+  } else if (activeSession) {
+    if (activeSession.type !== 'quick-terminal') {
+      activePanelMenuItems.push(
+        {
+          label: 'Open Quick Notes',
+          icon: <NotesIcon />,
+          action: () => {
+            const notePanelId = `quicknotes:session:${activeSession.id}`
+            useQuickNotesStore.getState().addNotePanel(activeSession.id)
+            if (!useUIStore.getState().expandedSessions.has(activeSession.id)) {
+              useUIStore.getState().toggleSession(activeSession.id)
+            }
+            useSessionStore.setState({ activeSessionId: notePanelId })
+          }
+        },
+        {
+          label: 'Open Quick Terminal',
+          icon: <TerminalIcon />,
+          action: async () => {
+            const originalId = activeSession.id
+            const newSession = await createQuickTerminal(activeSession.id)
+            if (!newSession) return
+            if (!useUIStore.getState().expandedSessions.has(activeSession.id)) {
+              useUIStore.getState().toggleSession(activeSession.id)
+            }
+            useSessionStore.setState({ activeSessionId: originalId })
+            splitRight(newSession.id)
+            const { splitRoot: root, setFocusedPanel } = useUIStore.getState()
+            if (root) {
+              const leaf = findLeafBySession(root, newSession.id)
+              if (leaf) setFocusedPanel(leaf.id)
+            }
+            setActiveSession(newSession.id)
+          }
+        }
+      )
+    }
+    if (activePanelMenuItems.length > 0) {
+      activePanelMenuItems.push({ type: 'separator' })
+    }
+    activePanelMenuItems.push(
+      { label: 'Split Right', icon: <SplitHorizontalIcon />, action: () => splitRight(activeSession.id) },
+      { label: 'Split Down', icon: <SplitVerticalIcon />, action: () => splitDown(activeSession.id) },
+      { type: 'separator' },
+      {
+        label: spotlightMode ? 'Turn off Spotlight' : 'Spotlight',
+        icon: <EyeIcon />,
+        active: spotlightMode,
+        action: toggleSpotlightMode
+      }
+    )
+  } else if (activeAgent) {
+    activePanelMenuItems.push(
+      {
+        label: 'Open Quick Notes',
+        icon: <NotesIcon />,
+        action: () => {
+          const notePanelId = `quicknotes:agent:${activeAgent.id}`
+          useQuickNotesStore.getState().addNotePanel(activeAgent.id)
+          if (!useUIStore.getState().expandedSessions.has(activeAgent.id)) {
+            useUIStore.getState().toggleSession(activeAgent.id)
+          }
+          useSessionStore.setState({ activeSessionId: notePanelId })
+        }
+      },
+      {
+        label: 'Open Quick Terminal',
+        icon: <TerminalIcon />,
+        action: async () => {
+          const originalId = activeAgent.id
+          const qt = await getApi().agent.createQuickTerminal(activeAgent.id)
+          if (!qt) return
+          addLocalSession(qt as any)
+          if (!useUIStore.getState().expandedSessions.has(activeAgent.id)) {
+            useUIStore.getState().toggleSession(activeAgent.id)
+          }
+          useSessionStore.setState({ activeSessionId: originalId })
+          splitRight(qt.id)
+          const { splitRoot: root, setFocusedPanel } = useUIStore.getState()
+          if (root) {
+            const leaf = findLeafBySession(root, qt.id)
+            if (leaf) setFocusedPanel(leaf.id)
+          }
+          setActiveSession(qt.id)
+        }
+      },
+      { type: 'separator' },
+      { label: 'Split Right', icon: <SplitHorizontalIcon />, action: () => splitRight(activeAgent.id) },
+      { label: 'Split Down', icon: <SplitVerticalIcon />, action: () => splitDown(activeAgent.id) },
+      { type: 'separator' },
+      {
+        label: spotlightMode ? 'Turn off Spotlight' : 'Spotlight',
+        icon: <EyeIcon />,
+        active: spotlightMode,
+        action: toggleSpotlightMode
+      }
+    )
+  }
 
   useEffect(() => {
     if (!focusModeSessionId) return
@@ -780,6 +886,7 @@ export function MainContent() {
                 : `Notes: ${agentsList.find((a) => a.id === activeQuickNotes.parentId)?.name ?? 'Agent'}`}
             </span>
             <div className="split-panel-actions">
+              <PanelActionsMenu items={activePanelMenuItems} />
               <button className="split-panel-close" onClick={() => {
                 useQuickNotesStore.getState().removeNotePanel(activeQuickNotes.parentId)
                 useSessionStore.setState({ activeSessionId: null })
@@ -793,123 +900,7 @@ export function MainContent() {
           <div className="split-panel-titlebar">
             <PanelHeaderInfo session={activeSession} agent={activeAgent} />
             <div className="split-panel-actions">
-              {activeSession && activeSession.type !== 'quick-terminal' && (
-                <>
-                  <button
-                    className="split-panel-action"
-                    title="Open Quick Notes"
-                    onClick={() => {
-                      const notePanelId = `quicknotes:session:${activeSession.id}`
-                      useQuickNotesStore.getState().addNotePanel(activeSession.id)
-                      if (!useUIStore.getState().expandedSessions.has(activeSession.id)) {
-                        useUIStore.getState().toggleSession(activeSession.id)
-                      }
-                      if (!useUIStore.getState().splitRoot) {
-                        useSessionStore.setState({ activeSessionId: notePanelId })
-                        return
-                      }
-                      const originalId = activeSession.id
-                      useSessionStore.setState({ activeSessionId: originalId })
-                      splitRight(notePanelId)
-                      const { splitRoot: root, setFocusedPanel } = useUIStore.getState()
-                      if (root) {
-                        const leaf = findLeafBySession(root, notePanelId)
-                        if (leaf) setFocusedPanel(leaf.id)
-                      }
-                    }}
-                  >
-                    <NotesIcon />
-                  </button>
-                  <button
-                    className="split-panel-action"
-                    title="Open Quick Terminal"
-                    onClick={async () => {
-                      const originalId = activeSession.id
-                      const newSession = await createQuickTerminal(activeSession.id)
-                      if (newSession) {
-                        if (!useUIStore.getState().expandedSessions.has(activeSession.id)) {
-                          useUIStore.getState().toggleSession(activeSession.id)
-                        }
-                        useSessionStore.setState({ activeSessionId: originalId })
-                        splitRight(newSession.id)
-                        const { splitRoot: root, setFocusedPanel } = useUIStore.getState()
-                        if (root) {
-                          const leaf = findLeafBySession(root, newSession.id)
-                          if (leaf) setFocusedPanel(leaf.id)
-                        }
-                        setActiveSession(newSession.id)
-                      }
-                    }}
-                  >
-                    <TerminalIcon />
-                  </button>
-                  <button className="split-panel-action" title="Split Right" onClick={() => splitRight(activeSession.id)}>
-                    <SplitHorizontalIcon />
-                  </button>
-                  <button className="split-panel-action" title="Split Down" onClick={() => splitDown(activeSession.id)}>
-                    <SplitVerticalIcon />
-                  </button>
-                </>
-              )}
-              {activeAgent && (
-                <>
-                  <button
-                    className="split-panel-action"
-                    title="Open Quick Notes"
-                    onClick={() => {
-                      const notePanelId = `quicknotes:agent:${activeAgent.id}`
-                      useQuickNotesStore.getState().addNotePanel(activeAgent.id)
-                      if (!useUIStore.getState().expandedSessions.has(activeAgent.id)) {
-                        useUIStore.getState().toggleSession(activeAgent.id)
-                      }
-                      if (!useUIStore.getState().splitRoot) {
-                        useSessionStore.setState({ activeSessionId: notePanelId })
-                        return
-                      }
-                      const originalId = activeAgent.id
-                      useSessionStore.setState({ activeSessionId: originalId })
-                      splitRight(notePanelId)
-                      const { splitRoot: root, setFocusedPanel } = useUIStore.getState()
-                      if (root) {
-                        const leaf = findLeafBySession(root, notePanelId)
-                        if (leaf) setFocusedPanel(leaf.id)
-                      }
-                    }}
-                  >
-                    <NotesIcon />
-                  </button>
-                  <button
-                    className="split-panel-action"
-                    title="Open Quick Terminal"
-                    onClick={async () => {
-                      const originalId = activeAgent.id
-                      const qt = await getApi().agent.createQuickTerminal(activeAgent.id)
-                      if (qt) {
-                        addLocalSession(qt as any)
-                        if (!useUIStore.getState().expandedSessions.has(activeAgent.id)) {
-                          useUIStore.getState().toggleSession(activeAgent.id)
-                        }
-                        useSessionStore.setState({ activeSessionId: originalId })
-                        splitRight(qt.id)
-                        const { splitRoot: root, setFocusedPanel } = useUIStore.getState()
-                        if (root) {
-                          const leaf = findLeafBySession(root, qt.id)
-                          if (leaf) setFocusedPanel(leaf.id)
-                        }
-                        setActiveSession(qt.id)
-                      }
-                    }}
-                  >
-                    <TerminalIcon />
-                  </button>
-                  <button className="split-panel-action" title="Split Right" onClick={() => splitRight(activeAgent.id)}>
-                    <SplitHorizontalIcon />
-                  </button>
-                  <button className="split-panel-action" title="Split Down" onClick={() => splitDown(activeAgent.id)}>
-                    <SplitVerticalIcon />
-                  </button>
-                </>
-              )}
+              <PanelActionsMenu items={activePanelMenuItems} />
               <button className="split-panel-close" onClick={() => {
                 if (activeSession?.type === 'quick-terminal') {
                   deleteSession(activeSession.id)
