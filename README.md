@@ -1,6 +1,6 @@
 # Sorcerer
 
-The desktop workbench for AI command-line coding tools. Not an IDE — a mission control for the agents that do the work.
+The desktop workbench for AI command-line coding tools. Not an IDE — a `mission control` for working with multiple coding agents.
 
 ![Sorcerer](Sorcerer_Screenshot.png)
 
@@ -52,13 +52,11 @@ Electron, React 19, TypeScript, electron-vite, xterm.js, node-pty, sql.js, Zusta
 
 ## Project Charter
 
-Sorcerer is a mission control for AI-first development. It is explicitly not an IDE; it is the orchestration layer above, managing the agents that do the work. While editors focus on typing code, Sorcerer focuses on directing it—handling concurrent sessions, git worktrees, and cross-project context so you can scale your AI workforce.
-
-We believe in staying out of the IDE's lane. If a feature doesn't help orchestrate coding agents, it doesn't belong here. Sorcerer is designed for developers whose primary workflow *is* the AI, providing a professional workbench for directing work rather than manually editing files.
+Sorcerer is a mission control for AI-first development, as such it should not implement features that traditional IDEs already do well. Editors focus on typing code, Sorcerer focuses on helping users interact with coding agents in one place - handling concurrent sessions, git worktrees, and cross-project context.
 
 ## Contributing
 
-We welcome your help in making Sorcerer better! Please read our [Contributing Guidelines](CONTRIBUTING.md) to get started.
+Please help us make Sorcerer better. Please read our [Contributing Guidelines](CONTRIBUTING.md) to get started.
 
 ## License
 
