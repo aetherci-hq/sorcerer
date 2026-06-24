@@ -139,6 +139,20 @@ export function ContextMenu() {
     })
   }
 
+  const refreshProjectSidebar = async () => {
+    try {
+      await Promise.all([
+        useProjectStore.getState().loadGroups(),
+        useProjectStore.getState().loadProjects(),
+        useSessionStore.getState().loadSessions()
+      ])
+      addToast('Projects refreshed', 'success')
+    } catch (err) {
+      console.error('[context-menu] refreshProjectSidebar failed:', err)
+      addToast('Failed to refresh projects', 'error')
+    }
+  }
+
   // Find session/agent to determine state
   const targetSession = contextMenu.type === 'session'
     ? sessions.find((s) => s.id === contextMenu.targetId)
@@ -328,6 +342,7 @@ export function ContextMenu() {
     items = [
       { label: 'Add Project', icon: <PlusIcon className={iconClass} />, action: () => openDialog('add-project') },
       { label: 'Import Sessions', icon: <UploadIcon className={iconClass} />, action: () => openDialog('import-sessions') },
+      { label: 'Refresh Projects', icon: <RefreshIcon className={iconClass} />, eager: true, action: refreshProjectSidebar },
       { type: 'separator' },
       { label: 'New Group', icon: <FolderIcon className={iconClass} />, action: async () => {
         const group = await useProjectStore.getState().addGroup('New Group')
@@ -379,6 +394,7 @@ export function ContextMenu() {
         await getApi().project.syncWorktrees(contextMenu.targetId)
         await useSessionStore.getState().loadSessions()
       }},
+      { label: 'Refresh Projects', icon: <RefreshIcon className={iconClass} />, eager: true, action: refreshProjectSidebar },
       ...groupItems,
       { type: 'separator' },
       { label: 'Remove Project', icon: <TrashIcon className={iconClass} />, danger: true, action: () => openDialog('delete-session', contextMenu.targetId) }
