@@ -233,7 +233,21 @@ PowerShell:
 ) | Set-Clipboard
 ```
 
-### 3. Add GitHub Actions secrets
+### 3. Protect the signing environment
+
+In the repository's **Settings → Environments**, create an environment named
+`android-release`. Before uploading the permanent key:
+
+- require at least one trusted reviewer and prevent self-review when available
+- restrict deployments to `main` and Android release tags matching
+  `android-v*`
+- keep the keystore secrets environment-scoped, not available to ordinary CI
+
+The workflow independently verifies that the release commit is contained in
+`main`. It builds and tests the unsigned APK in a read-only job, then waits at
+the protected environment before a separate job receives the signing secrets.
+
+### 4. Add Android environment secrets
 
 | Secret Name | Value |
 |-------------|-------|
@@ -242,10 +256,11 @@ PowerShell:
 | `ANDROID_KEY_ALIAS` | `sorcerer-remote` |
 | `ANDROID_KEY_PASSWORD` | Private-key password |
 
+Add all four values as secrets on the protected `android-release` environment.
 The Android release workflow fails closed when signing credentials are absent;
 it never publishes an unsigned APK.
 
-### 4. Publish and verify
+### 5. Publish and verify
 
 Push an independent Android tag:
 
