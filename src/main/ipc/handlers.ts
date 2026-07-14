@@ -66,10 +66,48 @@ import {
   setAgentRemoteControl
 } from './shared-handlers'
 
-let globalApiServer: any = null
+interface RemoteApiServer {
+  start(): Promise<void>
+  stop(): void
+  isRunning(): boolean
+  getRemoteSessionIds(): string[]
+  setAuthToken?(token: string): void
+  createPairingCode?(ttlMs?: number): {
+    code: string
+    expiresAt: number
+    protocolVersion: number
+  }
+  listPairedDevices?(): unknown[]
+  revokePairedDevice?(deviceId: string): boolean
+}
 
-export function getGlobalApiServer(): any { return globalApiServer }
-export function setGlobalApiServer(server: any): void { globalApiServer = server }
+let globalApiServer: RemoteApiServer | null = null
+
+export function getGlobalApiServer(): RemoteApiServer | null { return globalApiServer }
+export function setGlobalApiServer(server: RemoteApiServer): void { globalApiServer = server }
+
+function isLoopbackAddress(address: string): boolean {
+  const normalized = address.trim().toLowerCase().replace(/^\[|\]$/g, '')
+  return normalized === 'localhost' || normalized === '::1' || normalized === '0:0:0:0:0:0:0:1' || /^127(?:\.|$)/.test(normalized)
+}
+
+function getPairingHost(bindAddress: string, advertisedHost?: unknown): string {
+  const wildcardBind = bindAddress === '0.0.0.0' || bindAddress === '::'
+  const requestedHost = typeof advertisedHost === 'string' ? advertisedHost : ''
+  const host = (wildcardBind ? requestedHost || getNetworkIp() : bindAddress)
+    .trim()
+    .replace(/^\[|\]$/g, '')
+
+  if (!host || isLoopbackAddress(host) || host === '0.0.0.0' || host === '::') {
+    throw new Error('Android pairing requires a LAN-reachable address. Choose Private network, then try again.')
+  }
+
+  if (host.length > 253 || !/^[a-zA-Z0-9._:%-]+$/.test(host)) {
+    throw new Error('Enter a valid LAN IP address or DNS name for the Android connection.')
+  }
+
+  return host
+}
 
 export function registerIPC(
   ptyService: PTYService,
@@ -855,6 +893,7 @@ export function registerIPC(
       running: globalApiServer?.isRunning() ?? false,
       port: dbService.getSetting('remotePort') || '7437',
       bindAddress: dbService.getSetting('remoteBindAddress') || '127.0.0.1',
+      advertisedHost: dbService.getSetting('remoteAdvertisedHost') || '',
       token: dbService.getSetting('remoteAuthToken') || ''
     }
   })
@@ -882,12 +921,90 @@ export function registerIPC(
   ipcMain.handle('remote:regenerate-token', async () => {
     const { regenerateAuthToken } = await import('../server/auth')
     const token = regenerateAuthToken(dbService)
+
+    // Token rotation must invalidate the old credential immediately. Older
+    // ApiServer implementations did not observe the value written to settings
+    // until the next app restart, so prefer the live update API and retain a
+    // restart fallback for compatibility.
+    if (globalApiServer?.isRunning()) {
+      if (globalApiServer.setAuthToken) {
+        globalApiServer.setAuthToken(token)
+      } else {
+        const { ApiServer } = await import('../server/api-server')
+        const port = parseInt(dbService.getSetting('remotePort') || '7437')
+        const bindAddress = dbService.getSetting('remoteBindAddress') || '127.0.0.1'
+        globalApiServer.stop()
+        globalApiServer = new ApiServer(services, { port, bindAddress, authToken: token })
+        try {
+          await globalApiServer.start()
+        } catch (error) {
+          dbService.setSetting('remoteEnabled', 'false')
+          throw error
+        }
+      }
+    }
+
     return token
   })
 
-  ipcMain.handle('remote:update-config', (_event, config: { port?: number; bindAddress?: string }) => {
+  ipcMain.handle('remote:update-config', (_event, config: { port?: number; bindAddress?: string; advertisedHost?: string }) => {
     if (config.port !== undefined) dbService.setSetting('remotePort', String(config.port))
     if (config.bindAddress !== undefined) dbService.setSetting('remoteBindAddress', config.bindAddress)
+    if (config.advertisedHost !== undefined) {
+      if (typeof config.advertisedHost !== 'string') {
+        throw new Error('Phone address must be a string.')
+      }
+      const host = config.advertisedHost.trim().replace(/^\[|\]$/g, '')
+      if (host && (host.length > 253 || !/^[a-zA-Z0-9._:%-]+$/.test(host) || isLoopbackAddress(host) || host === '0.0.0.0' || host === '::')) {
+        throw new Error('Enter a valid LAN IP address or DNS name for the Android connection.')
+      }
+      dbService.setSetting('remoteAdvertisedHost', host)
+    }
+  })
+
+  ipcMain.handle('remote:create-pairing-code', (_event, advertisedHost?: unknown) => {
+    if (!globalApiServer?.isRunning() || !globalApiServer.createPairingCode) {
+      throw new Error('Start remote access before pairing an Android device.')
+    }
+
+    const bindAddress = dbService.getSetting('remoteBindAddress') || '127.0.0.1'
+    const host = getPairingHost(
+      bindAddress,
+      advertisedHost || dbService.getSetting('remoteAdvertisedHost')
+    )
+    const port = parseInt(dbService.getSetting('remotePort') || '7437')
+    const pairing = globalApiServer.createPairingCode(2 * 60 * 1000)
+    const deepLink = `sorcerer-remote://pair?${new URLSearchParams({
+      scheme: 'http',
+      host,
+      port: String(port),
+      code: pairing.code,
+      v: String(pairing.protocolVersion)
+    }).toString()}`
+
+    return {
+      ...pairing,
+      scheme: 'http' as const,
+      host,
+      port,
+      deepLink
+    }
+  })
+
+  ipcMain.handle('remote:list-paired-devices', () => {
+    return dbService.listMobileDevices()
+  })
+
+  ipcMain.handle('remote:revoke-paired-device', (_event, deviceId: string) => {
+    if (typeof deviceId !== 'string' || !deviceId.trim()) {
+      throw new Error('A device ID is required.')
+    }
+
+    // The running server owns active mobile sockets, so let it apply the
+    // revocation immediately. The database fallback keeps device management
+    // available while remote access is stopped.
+    return globalApiServer?.revokePairedDevice?.(deviceId)
+      ?? dbService.revokeMobileDevice(deviceId)
   })
 
   // Electron-only: uses child_process execSync and Windows registry
