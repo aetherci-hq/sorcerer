@@ -45,4 +45,3 @@ describe('mobile RPC v1 contract', () => {
     expect(validateMobileRpcRequest('theme:get', { key: 'remoteAuthToken' }).allowed).toBe(false)
   })
 })
-

@@ -1,6 +1,7 @@
 # Android Companion Design
 
-**Date:** 2026-07-13  
+**Date:** 2026-07-13
+
 **Status:** Approved for implementation
 
 ## Scope and architecture
@@ -31,6 +32,8 @@ code. It never embeds the long-lived remote credential. The Android app shows
 the decoded connection for confirmation, exchanges the code for a random
 per-device token, and stores that token using Android Keystore-backed
 encryption. Pairing codes expire quickly and cannot be replayed.
+The QR uses a package-bound Android intent so another installed custom-scheme
+handler cannot intercept and redeem it.
 
 The host stores only a hash of each device token together with a device ID,
 display name, creation time, and last-used time. A device can be revoked without
@@ -91,9 +94,10 @@ network loss, desktop restart, revocation, token rotation, fresh installation,
 and upgrade installation.
 
 Android uses independent `android-v*` tags. The release workflow imports a
-long-lived signing key from protected secrets, derives a monotonic version code,
-builds a signed APK, verifies it with `apksigner`, records package metadata, and
-publishes the renamed APK plus a SHA-256 checksum. The package ID and signing
-certificate are selected before the first distributed release and registered
-for Android developer verification when distribution expands beyond personal
-ADB installs.
+long-lived signing key from protected secrets, derives a monotonic version
+code, builds and tests an unsigned APK in a read-only job, and signs it in a
+separate protected job. It then verifies the APK with `apksigner`, records
+package metadata, and publishes the renamed APK plus a SHA-256 checksum. The
+package ID and signing certificate are selected before the first distributed
+release and registered for Android developer verification when distribution
+expands beyond personal ADB installs.

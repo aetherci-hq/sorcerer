@@ -1,7 +1,12 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import http from 'http'
 import { WebSocket } from 'ws'
-import { WebSocketAuthConfig, WebSocketHandler } from '../ws-handler'
+import {
+  MAX_PENDING_AUTHENTICATIONS,
+  MAX_WEBSOCKET_MESSAGE_BYTES,
+  WebSocketAuthConfig,
+  WebSocketHandler
+} from '../ws-handler'
 import { ScrollbackBuffer } from '../scrollback'
 
 // ── Helpers ────────────────────────────────────────────────
@@ -154,6 +159,41 @@ describe('WebSocketHandler', () => {
       expect(await authenticated).toEqual({ type: 'authenticated', protocolVersion: 1 })
       expect(ctx.handler.clientCount).toBe(1)
       ws.close()
+    })
+
+    it('closes an oversized unauthenticated frame before parsing it', async () => {
+      const addr = ctx.server.address() as { port: number }
+      const ws = await connectClient(`ws://127.0.0.1:${addr.port}/ws`)
+      const closed = new Promise<number>((resolve) => {
+        ws.once('close', (code) => resolve(code))
+      })
+
+      ws.send(Buffer.alloc(MAX_WEBSOCKET_MESSAGE_BYTES + 1))
+
+      expect(await closed).toBe(1009)
+      expect(ctx.handler.clientCount).toBe(0)
+    })
+
+    it('caps simultaneous unauthenticated connections', async () => {
+      await ctx.close()
+      ctx = await createTestServer({
+        authenticateQueryToken: () => null,
+        authenticateMessageToken: () => null,
+        authTimeoutMs: 10_000
+      })
+      const addr = ctx.server.address() as { port: number }
+      const clients: WebSocket[] = []
+      for (let index = 0; index < MAX_PENDING_AUTHENTICATIONS; index++) {
+        clients.push(await connectClient(`ws://127.0.0.1:${addr.port}/ws`))
+      }
+
+      const rejected = new WebSocket(`ws://127.0.0.1:${addr.port}/ws`)
+      const closeCode = new Promise<number>((resolve) => {
+        rejected.once('close', (code) => resolve(code))
+      })
+
+      expect(await closeCode).toBe(1013)
+      clients.forEach((client) => client.close())
     })
 
     it('rejects upgrade to non-/ws path', async () => {

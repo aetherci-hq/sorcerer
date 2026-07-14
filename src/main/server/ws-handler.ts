@@ -5,6 +5,9 @@ import { PTYService } from '../services/pty-service'
 import { ScrollbackBuffer } from './scrollback'
 import { MOBILE_PROTOCOL_VERSION, MOBILE_SCOPES } from './mobile-contract'
 
+export const MAX_WEBSOCKET_MESSAGE_BYTES = 256 * 1024
+export const MAX_PENDING_AUTHENTICATIONS = 32
+
 export interface WebSocketPrincipal {
   kind: 'legacy' | 'mobile'
   deviceId?: string
@@ -24,6 +27,7 @@ interface ClientState {
   subscriptions: Set<string>
   principal: WebSocketPrincipal | null
   authTimer: ReturnType<typeof setTimeout> | null
+  awaitingAuthentication: boolean
 }
 
 interface AuthenticatedUpgradeRequest extends http.IncomingMessage {
@@ -56,6 +60,7 @@ export class WebSocketHandler {
   private wss: WebSocketServer
   private clients = new Map<WebSocket, ClientState>()
   private authConfig: WebSocketAuthConfig
+  private pendingAuthentications = 0
 
   constructor(
     server: http.Server,
@@ -64,12 +69,23 @@ export class WebSocketHandler {
     auth: string | WebSocketAuthConfig
   ) {
     this.authConfig = typeof auth === 'string' ? legacyAuthConfig(auth) : auth
-    this.wss = new WebSocketServer({ noServer: true })
+    this.wss = new WebSocketServer({
+      noServer: true,
+      maxPayload: MAX_WEBSOCKET_MESSAGE_BYTES
+    })
     this.wss.on('connection', (ws, req) => this.handleConnection(ws, req))
 
     // Handle HTTP upgrade requests for the /ws path
     server.on('upgrade', (req, socket, head) => {
-      const url = new URL(req.url || '/', `http://${req.headers.host}`)
+      let url: URL
+      try {
+        // The Host header is untrusted and irrelevant to local route matching.
+        url = new URL(req.url || '/', 'http://localhost')
+      } catch {
+        socket.write('HTTP/1.1 400 Bad Request\r\n\r\n')
+        socket.destroy()
+        return
+      }
 
       // Only handle upgrades to /ws
       if (url.pathname !== '/ws') {
@@ -102,21 +118,33 @@ export class WebSocketHandler {
     const clientState: ClientState = {
       subscriptions: new Set(),
       principal,
-      authTimer: null
+      authTimer: null,
+      awaitingAuthentication: false
     }
     this.clients.set(ws, clientState)
 
+    ws.on('close', () => {
+      if (clientState.authTimer) clearTimeout(clientState.authTimer)
+      this.finishPendingAuthentication(clientState)
+      this.clients.delete(ws)
+    })
+    // Protocol and payload-limit errors close the socket; consuming the error
+    // prevents an unauthenticated malformed frame from becoming an uncaught
+    // EventEmitter error in the desktop process.
+    ws.on('error', () => {})
+
     if (!principal) {
+      if (this.pendingAuthentications >= MAX_PENDING_AUTHENTICATIONS) {
+        ws.close(1013, 'Too many pending authentication attempts')
+        return
+      }
+      clientState.awaitingAuthentication = true
+      this.pendingAuthentications++
       clientState.authTimer = setTimeout(() => {
         ws.close(1008, 'Authentication required')
       }, this.authConfig.authTimeoutMs ?? 5000)
       clientState.authTimer.unref?.()
     }
-
-    ws.on('close', () => {
-      if (clientState.authTimer) clearTimeout(clientState.authTimer)
-      this.clients.delete(ws)
-    })
 
     ws.on('message', (raw) => {
       try {
@@ -153,6 +181,7 @@ export class WebSocketHandler {
     state.principal = principal
     if (state.authTimer) clearTimeout(state.authTimer)
     state.authTimer = null
+    this.finishPendingAuthentication(state)
     this.sendTo(ws, { type: 'authenticated', protocolVersion: MOBILE_PROTOCOL_VERSION })
   }
 
@@ -330,13 +359,20 @@ export class WebSocketHandler {
     this.sendTo(ws, { type: 'error', code: 'forbidden', action })
   }
 
+  private finishPendingAuthentication(state: ClientState): void {
+    if (!state.awaitingAuthentication) return
+    state.awaitingAuthentication = false
+    this.pendingAuthentications = Math.max(0, this.pendingAuthentications - 1)
+  }
+
   // ── Shutdown ─────────────────────────────────────────────
 
   /**
    * Gracefully close all connections and shut down the WebSocket server.
    */
   close(): void {
-    for (const [ws] of this.clients) {
+    for (const [ws, state] of this.clients) {
+      this.finishPendingAuthentication(state)
       ws.close(1001, 'Server shutting down')
     }
     this.clients.clear()

@@ -188,6 +188,15 @@ describe('ApiServer mobile v1', () => {
     expect(response.headers['cache-control']).toBe('no-store')
   })
 
+  it('serves fragment bootstrap with the exact native authentication-failure signal', async () => {
+    const response = await request(port, '/rc')
+
+    expect(response.status).toBe(200)
+    expect(response.text).toContain("location.href = 'sorcerer-remote://auth-failed'")
+    expect(response.text).not.toContain('sorcerer-remote://auth-failed?')
+    expect(response.text).toContain("history.replaceState(null, '', location.pathname)")
+  })
+
   it('pairs once, authorizes named RPC, sanitizes records, and rejects a revoked token', async () => {
     const pairing = server.createPairingCode()
     const paired = await request(port, '/api/mobile/v1/pair', {

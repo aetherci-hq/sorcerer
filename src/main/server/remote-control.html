@@ -631,9 +631,34 @@
   let detailTerminalTouchCleanup = null;
   let pendingReplaySessionId = null;
   let detailOverlayRenderSignature = null;
+  let authFailureSignaled = false;
+  let reconnectTimer = null;
+
+  function signalAuthenticationFailure() {
+    if (authFailureSignaled) return;
+    authFailureSignaled = true;
+    connected = false;
+    if (reconnectTimer) {
+      clearTimeout(reconnectTimer);
+      reconnectTimer = null;
+    }
+    const activeSocket = ws;
+    ws = null;
+    if (activeSocket) {
+      activeSocket.onclose = null;
+      try {
+        activeSocket.close(1000, 'Authentication failed');
+      } catch {}
+    }
+    updateConnDot();
+    location.href = 'sorcerer-remote://auth-failed';
+  }
 
   // ── RPC helper ──────────────────────────────
   async function rpc(method, params = {}) {
+    if (authFailureSignaled) {
+      throw new Error('This device is no longer authorized. Pair it again from Sorcerer Desktop.');
+    }
     const res = await fetch(`${BASE}/api/mobile/v1/rpc`, {
       method: 'POST',
       headers: {
@@ -642,6 +667,10 @@
       },
       body: JSON.stringify({ method, params })
     });
+    if (!USE_LEGACY_QUERY_AUTH && (res.status === 401 || res.status === 403)) {
+      signalAuthenticationFailure();
+      throw new Error('This device is no longer authorized. Pair it again from Sorcerer Desktop.');
+    }
     const json = await res.json();
     if (json.error) throw new Error(json.error);
     return json.result;
@@ -1040,11 +1069,13 @@
 
   // ── WebSocket ───────────────────────────────
   function connectWS() {
-    ws = new WebSocket(WS_URL);
+    if (authFailureSignaled) return;
+    const socket = new WebSocket(WS_URL);
+    ws = socket;
 
-    ws.onopen = () => {
+    socket.onopen = () => {
       if (!USE_LEGACY_QUERY_AUTH) {
-        ws.send(JSON.stringify({ action: 'authenticate', token: TOKEN }));
+        socket.send(JSON.stringify({ action: 'authenticate', token: TOKEN }));
         return;
       }
       onWSAuthenticated();
@@ -1059,7 +1090,7 @@
       if (activeDetailSessionId) subscribeToSession(activeDetailSessionId);
     }
 
-    ws.onmessage = (e) => {
+    socket.onmessage = (e) => {
       try {
         const msg = JSON.parse(e.data);
         if (msg.type === 'authenticated') {
@@ -1087,13 +1118,19 @@
       } catch {}
     };
 
-    ws.onclose = () => {
+    socket.onclose = () => {
+      if (ws === socket) ws = null;
       connected = false;
       updateConnDot();
-      setTimeout(connectWS, 3000);
+      if (!authFailureSignaled) {
+        reconnectTimer = setTimeout(() => {
+          reconnectTimer = null;
+          connectWS();
+        }, 3000);
+      }
     };
 
-    ws.onerror = () => { ws.close(); };
+    socket.onerror = () => { socket.close(); };
   }
 
   function wsSend(msg) {
@@ -1478,7 +1515,7 @@
 
   // ── Refresh on visibility ───────────────────
   document.addEventListener('visibilitychange', () => {
-    if (!document.hidden) {
+    if (!document.hidden && !authFailureSignaled) {
       loadTheme();
       loadState();
       syncViewportHeight();
@@ -1499,6 +1536,7 @@
 
   // ── Periodic refresh ────────────────────────
   setInterval(() => {
+    if (authFailureSignaled) return;
     loadTheme();
     loadState();
   }, 15000);

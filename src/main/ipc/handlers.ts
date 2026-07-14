@@ -65,6 +65,11 @@ import {
   setSessionRemoteControl,
   setAgentRemoteControl
 } from './shared-handlers'
+import {
+  buildAndroidPairingIntent,
+  normalizePairingHost,
+  parseRemotePort
+} from '../server/remote-network'
 
 interface RemoteApiServer {
   start(): Promise<void>
@@ -86,27 +91,14 @@ let globalApiServer: RemoteApiServer | null = null
 export function getGlobalApiServer(): RemoteApiServer | null { return globalApiServer }
 export function setGlobalApiServer(server: RemoteApiServer): void { globalApiServer = server }
 
-function isLoopbackAddress(address: string): boolean {
-  const normalized = address.trim().toLowerCase().replace(/^\[|\]$/g, '')
-  return normalized === 'localhost' || normalized === '::1' || normalized === '0:0:0:0:0:0:0:1' || /^127(?:\.|$)/.test(normalized)
-}
-
 function getPairingHost(bindAddress: string, advertisedHost?: unknown): string {
+  if (advertisedHost !== undefined && typeof advertisedHost !== 'string') {
+    throw new Error('Phone address must be a string.')
+  }
   const wildcardBind = bindAddress === '0.0.0.0' || bindAddress === '::'
-  const requestedHost = typeof advertisedHost === 'string' ? advertisedHost : ''
-  const host = (wildcardBind ? requestedHost || getNetworkIp() : bindAddress)
-    .trim()
-    .replace(/^\[|\]$/g, '')
-
-  if (!host || isLoopbackAddress(host) || host === '0.0.0.0' || host === '::') {
-    throw new Error('Android pairing requires a LAN-reachable address. Choose Private network, then try again.')
-  }
-
-  if (host.length > 253 || !/^[a-zA-Z0-9._:%-]+$/.test(host)) {
-    throw new Error('Enter a valid LAN IP address or DNS name for the Android connection.')
-  }
-
-  return host
+  const requestedHost = typeof advertisedHost === 'string' ? advertisedHost.trim() : ''
+  const candidate = wildcardBind ? requestedHost || getNetworkIp() : bindAddress
+  return normalizePairingHost(candidate)
 }
 
 export function registerIPC(
@@ -902,7 +894,7 @@ export function registerIPC(
     const { ApiServer } = await import('../server/api-server')
     const { getOrCreateAuthToken } = await import('../server/auth')
 
-    const port = parseInt(dbService.getSetting('remotePort') || '7437')
+    const port = parseRemotePort(dbService.getSetting('remotePort') || '7437')
     const bindAddress = dbService.getSetting('remoteBindAddress') || '127.0.0.1'
     const authToken = getOrCreateAuthToken(dbService)
 
@@ -931,7 +923,7 @@ export function registerIPC(
         globalApiServer.setAuthToken(token)
       } else {
         const { ApiServer } = await import('../server/api-server')
-        const port = parseInt(dbService.getSetting('remotePort') || '7437')
+        const port = parseRemotePort(dbService.getSetting('remotePort') || '7437')
         const bindAddress = dbService.getSetting('remoteBindAddress') || '127.0.0.1'
         globalApiServer.stop()
         globalApiServer = new ApiServer(services, { port, bindAddress, authToken: token })
@@ -947,19 +939,31 @@ export function registerIPC(
     return token
   })
 
-  ipcMain.handle('remote:update-config', (_event, config: { port?: number; bindAddress?: string; advertisedHost?: string }) => {
-    if (config.port !== undefined) dbService.setSetting('remotePort', String(config.port))
-    if (config.bindAddress !== undefined) dbService.setSetting('remoteBindAddress', config.bindAddress)
-    if (config.advertisedHost !== undefined) {
-      if (typeof config.advertisedHost !== 'string') {
-        throw new Error('Phone address must be a string.')
-      }
-      const host = config.advertisedHost.trim().replace(/^\[|\]$/g, '')
-      if (host && (host.length > 253 || !/^[a-zA-Z0-9._:%-]+$/.test(host) || isLoopbackAddress(host) || host === '0.0.0.0' || host === '::')) {
-        throw new Error('Enter a valid LAN IP address or DNS name for the Android connection.')
-      }
-      dbService.setSetting('remoteAdvertisedHost', host)
+  ipcMain.handle('remote:update-config', (_event, value: unknown) => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      throw new Error('Remote configuration must be an object.')
     }
+    const config = value as Record<string, unknown>
+
+    const port = config.port === undefined ? undefined : parseRemotePort(config.port, 1024)
+    const bindAddress = config.bindAddress
+    if (
+      bindAddress !== undefined &&
+      (typeof bindAddress !== 'string' || !['127.0.0.1', '0.0.0.0', '::1', '::'].includes(bindAddress))
+    ) {
+      throw new Error('Bind address must be a supported loopback or wildcard address.')
+    }
+    const advertisedHost = config.advertisedHost === undefined
+      ? undefined
+      : typeof config.advertisedHost === 'string' && config.advertisedHost.trim() === ''
+        ? ''
+        : normalizePairingHost(config.advertisedHost)
+
+    // Validate every supplied field before persisting any of them, so an
+    // invalid multi-field update cannot leave a partially changed config.
+    if (port !== undefined) dbService.setSetting('remotePort', String(port))
+    if (typeof bindAddress === 'string') dbService.setSetting('remoteBindAddress', bindAddress)
+    if (advertisedHost !== undefined) dbService.setSetting('remoteAdvertisedHost', advertisedHost)
   })
 
   ipcMain.handle('remote:create-pairing-code', (_event, advertisedHost?: unknown) => {
@@ -972,15 +976,18 @@ export function registerIPC(
       bindAddress,
       advertisedHost || dbService.getSetting('remoteAdvertisedHost')
     )
-    const port = parseInt(dbService.getSetting('remotePort') || '7437')
+    const port = parseRemotePort(dbService.getSetting('remotePort') || '7437')
     const pairing = globalApiServer.createPairingCode(2 * 60 * 1000)
-    const deepLink = `sorcerer-remote://pair?${new URLSearchParams({
+    // Pin QR dispatch to the production package. A bare custom-scheme URL can
+    // be claimed by another installed app, which could race to redeem the
+    // one-time code before Sorcerer Remote receives it.
+    const deepLink = buildAndroidPairingIntent({
       scheme: 'http',
       host,
-      port: String(port),
+      port,
       code: pairing.code,
-      v: String(pairing.protocolVersion)
-    }).toString()}`
+      protocolVersion: pairing.protocolVersion
+    })
 
     return {
       ...pairing,

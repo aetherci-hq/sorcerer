@@ -51,6 +51,10 @@ installed build. Do not mix locally debug-signed builds with release builds.
 The QR contains a short-lived, single-use pairing code, not the permanent
 device credential. Pairing creates a separate token for that phone. The host
 stores only its hash, and Android protects its copy with Android Keystore.
+The QR is also bound to the production package ID so another installed app
+cannot claim the custom link and race to redeem the code. Developers using the
+separate `.debug` package should enter the displayed host, port, and code
+manually.
 
 If the QR expires, create a new one. Reusing an already accepted QR is rejected.
 
@@ -99,4 +103,3 @@ cd android-client
 The debug APK is written under `android-client/app/build/outputs/apk/debug/`.
 Release signing and CI secret setup are documented in
 [Code Signing Setup](plans/code-signing-setup.md#android-setup).
-
