@@ -4,6 +4,31 @@ import path from 'path'
 import os from 'os'
 import fs from 'fs'
 
+export interface MobileDeviceRecord {
+  id: string
+  name: string
+  platform: string | null
+  appVersion: string | null
+  scopes: string[]
+  createdAt: number
+  lastSeenAt: number | null
+  revokedAt: number | null
+}
+
+export interface MobileDeviceCredentialRecord extends MobileDeviceRecord {
+  tokenHash: string
+}
+
+export interface CreateMobileDeviceInput {
+  id: string
+  name: string
+  tokenHash: string
+  platform?: string | null
+  appVersion?: string | null
+  scopes: string[]
+  createdAt: number
+}
+
 export class DatabaseService {
   private db: SqlJsDatabase | null = null
   private dbPath: string
@@ -259,6 +284,26 @@ export class DatabaseService {
         model TEXT NOT NULL,
         created_at INTEGER NOT NULL DEFAULT (strftime('%s','now'))
       );
+    `)
+
+    // Paired mobile devices. Raw bearer tokens are never persisted; only their
+    // SHA-256 hashes are stored so a copied database cannot be used to connect.
+    this.db.run(`
+      CREATE TABLE IF NOT EXISTS mobile_devices (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        token_hash TEXT NOT NULL UNIQUE,
+        platform TEXT,
+        app_version TEXT,
+        scopes TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        last_seen_at INTEGER,
+        revoked_at INTEGER
+      );
+    `)
+    this.db.run(`
+      CREATE INDEX IF NOT EXISTS idx_mobile_devices_token_hash
+      ON mobile_devices(token_hash);
     `)
 
     this.save()
@@ -709,6 +754,118 @@ export class DatabaseService {
   }
 
   // Settings operations
+  createMobileDevice(input: CreateMobileDeviceInput): MobileDeviceRecord {
+    if (!this.db) throw new Error('Database not initialized')
+    this.db.run(
+      `INSERT INTO mobile_devices
+       (id, name, token_hash, platform, app_version, scopes, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [
+        input.id,
+        input.name,
+        input.tokenHash,
+        input.platform || null,
+        input.appVersion || null,
+        JSON.stringify(input.scopes),
+        input.createdAt
+      ]
+    )
+    this.save()
+
+    const created = this.getMobileDeviceByTokenHash(input.tokenHash)
+    if (!created) throw new Error('Failed to create mobile device')
+    return this.toPublicMobileDevice(created)
+  }
+
+  getMobileDeviceByTokenHash(tokenHash: string): MobileDeviceCredentialRecord | undefined {
+    if (!this.db) return undefined
+    const stmt = this.db.prepare(
+      `SELECT id, name, token_hash, platform, app_version, scopes,
+              created_at, last_seen_at, revoked_at
+       FROM mobile_devices WHERE token_hash = ?`
+    )
+    stmt.bind([tokenHash])
+    const row = stmt.step() ? stmt.getAsObject() : undefined
+    stmt.free()
+    return row ? this.mapMobileDevice(row, true) as MobileDeviceCredentialRecord : undefined
+  }
+
+  listMobileDevices(): MobileDeviceRecord[] {
+    if (!this.db) return []
+    const stmt = this.db.prepare(
+      `SELECT id, name, platform, app_version, scopes,
+              created_at, last_seen_at, revoked_at
+       FROM mobile_devices ORDER BY created_at DESC`
+    )
+    const results: MobileDeviceRecord[] = []
+    while (stmt.step()) {
+      results.push(this.mapMobileDevice(stmt.getAsObject(), false))
+    }
+    stmt.free()
+    return results
+  }
+
+  touchMobileDevice(id: string, seenAt: number): void {
+    if (!this.db) return
+    this.db.run(
+      `UPDATE mobile_devices SET last_seen_at = ?
+       WHERE id = ? AND revoked_at IS NULL`,
+      [seenAt, id]
+    )
+    this.save()
+  }
+
+  revokeMobileDevice(id: string, revokedAt: number = Date.now()): boolean {
+    if (!this.db) return false
+    const existing = this.db.prepare(
+      'SELECT id FROM mobile_devices WHERE id = ? AND revoked_at IS NULL'
+    )
+    existing.bind([id])
+    const canRevoke = existing.step()
+    existing.free()
+    if (!canRevoke) return false
+
+    this.db.run(
+      `UPDATE mobile_devices SET revoked_at = ?
+       WHERE id = ? AND revoked_at IS NULL`,
+      [revokedAt, id]
+    )
+    this.save()
+    return true
+  }
+
+  private mapMobileDevice(
+    row: Record<string, unknown>,
+    includeCredential: boolean
+  ): MobileDeviceRecord | MobileDeviceCredentialRecord {
+    let scopes: string[] = []
+    try {
+      const parsed = JSON.parse(String(row.scopes || '[]'))
+      if (Array.isArray(parsed)) scopes = parsed.filter((scope): scope is string => typeof scope === 'string')
+    } catch {
+      scopes = []
+    }
+
+    const device: MobileDeviceRecord = {
+      id: String(row.id),
+      name: String(row.name),
+      platform: row.platform == null ? null : String(row.platform),
+      appVersion: row.app_version == null ? null : String(row.app_version),
+      scopes,
+      createdAt: Number(row.created_at),
+      lastSeenAt: row.last_seen_at == null ? null : Number(row.last_seen_at),
+      revokedAt: row.revoked_at == null ? null : Number(row.revoked_at)
+    }
+
+    if (!includeCredential) return device
+    return { ...device, tokenHash: String(row.token_hash) }
+  }
+
+  private toPublicMobileDevice(device: MobileDeviceCredentialRecord): MobileDeviceRecord {
+    const { tokenHash: _tokenHash, ...publicDevice } = device
+    return publicDevice
+  }
+
   private isSecret(key: string): boolean {
     return key.startsWith('apiKey_') || key === 'remoteAuthToken'
   }

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import http from 'http'
 import { WebSocket } from 'ws'
-import { WebSocketHandler } from '../ws-handler'
+import { WebSocketAuthConfig, WebSocketHandler } from '../ws-handler'
 import { ScrollbackBuffer } from '../scrollback'
 
 // ── Helpers ────────────────────────────────────────────────
@@ -26,11 +26,11 @@ function createMockPTY() {
 }
 
 /** Start an HTTP server + WebSocketHandler, returns a cleanup function. */
-function createTestServer() {
+function createTestServer(auth: string | WebSocketAuthConfig = TEST_TOKEN) {
   const server = http.createServer()
   const scrollback = new ScrollbackBuffer()
   const pty = createMockPTY()
-  const handler = new WebSocketHandler(server, pty as any, scrollback, TEST_TOKEN)
+  const handler = new WebSocketHandler(server, pty as any, scrollback, auth)
 
   return new Promise<{
     server: http.Server
@@ -130,17 +130,30 @@ describe('WebSocketHandler', () => {
       expect(ctx.handler.clientCount).toBe(0)
     })
 
-    it('rejects connection with no token', async () => {
+    it('rejects a no-query connection that sends an action before authenticating', async () => {
       const addr = ctx.server.address() as { port: number }
       const noTokenUrl = `ws://127.0.0.1:${addr.port}/ws`
-      const ws = new WebSocket(noTokenUrl)
+      const ws = await connectClient(noTokenUrl)
 
-      await new Promise<void>((resolve) => {
-        ws.on('error', () => resolve())
+      const closed = new Promise<void>((resolve) => {
         ws.on('close', () => resolve())
       })
+      sendAction(ws, { action: 'terminal:write', sessionId: 's1', data: 'nope' })
+      await closed
 
       expect(ctx.handler.clientCount).toBe(0)
+      expect(ctx.pty.write).not.toHaveBeenCalled()
+    })
+
+    it('accepts a valid token in the first frame without putting it in the URL', async () => {
+      const addr = ctx.server.address() as { port: number }
+      const ws = await connectClient(`ws://127.0.0.1:${addr.port}/ws`)
+      const authenticated = waitForMessage(ws)
+      sendAction(ws, { action: 'authenticate', token: TEST_TOKEN })
+
+      expect(await authenticated).toEqual({ type: 'authenticated', protocolVersion: 1 })
+      expect(ctx.handler.clientCount).toBe(1)
+      ws.close()
     })
 
     it('rejects upgrade to non-/ws path', async () => {
@@ -184,6 +197,56 @@ describe('WebSocketHandler', () => {
       await delay(50)
 
       expect(ctx.pty.write).not.toHaveBeenCalled()
+      ws.close()
+    })
+  })
+
+  describe('mobile scopes', () => {
+    it('allows terminal reads but rejects writes and non-terminal subscriptions without scope', async () => {
+      await ctx.close()
+      ctx = await createTestServer({
+        authenticateQueryToken: () => null,
+        authenticateMessageToken: (token) => token === 'read-only-device-token'
+          ? {
+              kind: 'mobile',
+              deviceId: 'device-1',
+              scopes: new Set(['terminal:read'])
+            }
+          : null,
+        authTimeoutMs: 100
+      })
+      const addr = ctx.server.address() as { port: number }
+      const ws = await connectClient(`ws://127.0.0.1:${addr.port}/ws`)
+
+      const authMessage = waitForMessage(ws)
+      sendAction(ws, { action: 'authenticate', token: 'read-only-device-token' })
+      await authMessage
+
+      const writeError = waitForMessage(ws)
+      sendAction(ws, { action: 'terminal:write', sessionId: 'sess-1', data: 'blocked' })
+      expect(await writeError).toEqual({
+        type: 'error',
+        code: 'forbidden',
+        action: 'terminal:write'
+      })
+      expect(ctx.pty.write).not.toHaveBeenCalled()
+
+      sendAction(ws, { action: 'subscribe', channel: 'terminal:data:sess-1' })
+      await delay(25)
+      const terminalData = waitForMessage(ws)
+      ctx.handler.broadcastTerminalData('sess-1', 'allowed')
+      expect(await terminalData).toMatchObject({
+        channel: 'terminal:data:sess-1',
+        data: 'allowed'
+      })
+
+      const subscriptionError = waitForMessage(ws)
+      sendAction(ws, { action: 'subscribe', channel: 'filewatcher:teams-update' })
+      expect(await subscriptionError).toEqual({
+        type: 'error',
+        code: 'forbidden',
+        action: 'subscribe'
+      })
       ws.close()
     })
   })

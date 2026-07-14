@@ -598,15 +598,22 @@
 
   // ── Config ──────────────────────────────────
   const params = new URLSearchParams(location.search);
-  const TOKEN = params.get('token');
+  const fragmentParams = new URLSearchParams(location.hash.slice(1));
+  const legacyQueryToken = params.get('token');
+  const TOKEN = legacyQueryToken || fragmentParams.get('token');
+  const USE_LEGACY_QUERY_AUTH = !!legacyQueryToken;
+  if (!legacyQueryToken && fragmentParams.has('token')) {
+    history.replaceState(null, '', location.pathname);
+  }
   if (!TOKEN) {
     document.getElementById('sessionList').innerHTML =
-      '<div class="empty-state">Append <code>?token=YOUR_TOKEN</code> to the URL to connect.</div>';
+      '<div class="empty-state">Open this page from a paired Sorcerer client.</div>';
     return;
   }
 
   const BASE = location.origin;
-  const WS_URL = `ws${location.protocol === 'https:' ? 's' : ''}://${location.host}/ws?token=${TOKEN}`;
+  const WS_BASE = `ws${location.protocol === 'https:' ? 's' : ''}://${location.host}/ws`;
+  const WS_URL = USE_LEGACY_QUERY_AUTH ? `${WS_BASE}?token=${encodeURIComponent(TOKEN)}` : WS_BASE;
 
   // ── State ───────────────────────────────────
   let sessions = [];
@@ -626,14 +633,14 @@
   let detailOverlayRenderSignature = null;
 
   // ── RPC helper ──────────────────────────────
-  async function rpc(method, ...args) {
-    const res = await fetch(`${BASE}/api/rpc`, {
+  async function rpc(method, params = {}) {
+    const res = await fetch(`${BASE}/api/mobile/v1/rpc`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${TOKEN}`
       },
-      body: JSON.stringify({ method, args })
+      body: JSON.stringify({ method, params })
     });
     const json = await res.json();
     if (json.error) throw new Error(json.error);
@@ -776,7 +783,7 @@
 
   async function loadTheme() {
     try {
-      const themeId = await rpc('settings:get', 'theme');
+      const themeId = await rpc('theme:get');
       if (!themeId || themeId === currentThemeId) return;
       const theme = THEMES[themeId] || THEMES.default;
       const colors = theme.colors;
@@ -1036,17 +1043,29 @@
     ws = new WebSocket(WS_URL);
 
     ws.onopen = () => {
+      if (!USE_LEGACY_QUERY_AUTH) {
+        ws.send(JSON.stringify({ action: 'authenticate', token: TOKEN }));
+        return;
+      }
+      onWSAuthenticated();
+    };
+
+    function onWSAuthenticated() {
       connected = true;
       subscribedId = null;
       updateConnDot();
       subscribeExitAll();
       const activeDetailSessionId = getActiveDetailSessionId();
       if (activeDetailSessionId) subscribeToSession(activeDetailSessionId);
-    };
+    }
 
     ws.onmessage = (e) => {
       try {
         const msg = JSON.parse(e.data);
+        if (msg.type === 'authenticated') {
+          onWSAuthenticated();
+          return;
+        }
         if (msg.channel && msg.channel.startsWith('terminal:data:')) {
           const sid = msg.channel.slice('terminal:data:'.length);
           if (pendingReplaySessionId === sid) {
@@ -1220,7 +1239,7 @@
   }
 
   function isDirectSession(item) {
-    return item && item._type === 'session' && item._project && item.worktree_path === item._project.path;
+    return item && item._type === 'session' && item.is_main_repo === true;
   }
 
   function buildDetailBadges(item) {
@@ -1423,9 +1442,9 @@
     async resume(id, type) {
       try {
         if (type === 'agent') {
-          await rpc('agent:resume', id);
+          await rpc('agent:resume', { agentId: id });
         } else {
-          await rpc('session:resume', id);
+          await rpc('session:resume', { sessionId: id });
         }
         detailOverlayError = '';
         detailOverlayId = null;
@@ -1441,9 +1460,9 @@
     async restart(id, type) {
       try {
         if (type === 'agent') {
-          await rpc('agent:restart', id);
+          await rpc('agent:restart', { agentId: id });
         } else {
-          await rpc('session:restart', id);
+          await rpc('session:restart', { sessionId: id });
         }
         detailOverlayError = '';
         detailOverlayId = null;
