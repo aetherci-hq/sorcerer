@@ -192,6 +192,83 @@ Get-AuthenticodeSignature "Sorcerer Setup 1.x.x.exe"
 
 ---
 
+## Android Setup
+
+Sorcerer Remote is distributed as a directly installable APK. Android requires
+the same package ID and signing certificate for every future update, so create
+and back up the release key before publishing the first APK.
+
+The permanent package ID is `com.aetherci.sorcerer.remote`.
+
+### 1. Generate the release key
+
+Use the JDK `keytool` command on a trusted machine:
+
+```bash
+keytool -genkeypair -v \
+  -keystore sorcerer-remote.jks \
+  -alias sorcerer-remote \
+  -keyalg RSA \
+  -keysize 4096 \
+  -validity 10000
+```
+
+Use strong, unique passwords. Store the keystore and its recovery information
+in at least two encrypted locations. Do not commit the keystore or passwords.
+Losing this key prevents installed copies from receiving normal updates.
+
+### 2. Encode the keystore for CI
+
+macOS or Linux:
+
+```bash
+base64 < sorcerer-remote.jks | tr -d '\n'
+```
+
+PowerShell:
+
+```powershell
+[Convert]::ToBase64String(
+  [IO.File]::ReadAllBytes((Resolve-Path .\sorcerer-remote.jks))
+) | Set-Clipboard
+```
+
+### 3. Add GitHub Actions secrets
+
+| Secret Name | Value |
+|-------------|-------|
+| `ANDROID_KEYSTORE_BASE64` | Base64-encoded keystore contents |
+| `ANDROID_KEYSTORE_PASSWORD` | Keystore password |
+| `ANDROID_KEY_ALIAS` | `sorcerer-remote` |
+| `ANDROID_KEY_PASSWORD` | Private-key password |
+
+The Android release workflow fails closed when signing credentials are absent;
+it never publishes an unsigned APK.
+
+### 4. Publish and verify
+
+Push an independent Android tag:
+
+```bash
+git tag android-v0.1.0
+git push origin android-v0.1.0
+```
+
+CI runs lint and unit tests, builds the signed APK, verifies its signature,
+records package metadata, and publishes both the APK and its SHA-256 checksum.
+Test both a clean install and an upgrade before announcing the release:
+
+```bash
+adb install Sorcerer-Remote-0.1.0.apk
+adb install -r Sorcerer-Remote-0.1.1.apk
+```
+
+For distribution beyond personal ADB installs, register the package name and
+signing certificate through the
+[Android Developer Console](https://developer.android.com/developer-verification/guides/android-developer-console).
+
+---
+
 ## How It Works in CI
 
 The release workflow (`.github/workflows/release.yml`) handles everything automatically:
@@ -207,6 +284,9 @@ The release workflow (`.github/workflows/release.yml`) handles everything automa
    - electron-builder calls `scripts/sign-windows.js` for each binary
    - Script authenticates with Azure and signs via Trusted Signing API
 4. **Release job**: Collects all artifacts and creates a GitHub Release
+
+Android releases use a separate `android-v*` workflow so an Android signing or
+SDK failure cannot block the Windows, macOS, or Linux desktop release.
 
 ### Without Credentials
 

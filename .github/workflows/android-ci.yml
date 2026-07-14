@@ -1,0 +1,62 @@
+name: Android CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "android-client/**"
+      - ".github/workflows/android-*.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "android-client/**"
+      - ".github/workflows/android-*.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: android-client
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Install Android SDK packages
+        shell: bash
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platforms;android-37" "build-tools;36.0.0" "platform-tools"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Make Gradle wrapper executable
+        run: chmod +x gradlew
+
+      - name: Lint, test, and assemble debug APK
+        run: ./gradlew --no-daemon lint testDebugUnitTest assembleDebug
+
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-reports
+          path: |
+            android-client/app/build/reports/**
+            android-client/app/build/test-results/**
+
+      - name: Upload debug APK
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sorcerer-remote-debug
+          path: android-client/app/build/outputs/apk/debug/*.apk

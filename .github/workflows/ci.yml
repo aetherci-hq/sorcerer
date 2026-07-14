@@ -29,5 +29,8 @@ jobs:
       - name: Rebuild native modules for Electron
         run: npm run rebuild
 
-      - name: Build (electron-vite)
-        run: npm run build
+      - name: Verify types and production build
+        run: npm run verify
+
+      - name: Run tests
+        run: npx vitest run
