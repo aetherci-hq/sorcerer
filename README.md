@@ -9,7 +9,7 @@ The desktop workbench for AI command-line coding tools. Not an IDE — a `missio
 
 Grab the latest release for your platform:
 
-**[Download for Windows, macOS, and Linux](https://github.com/aetherci-hq/sorcerer/releases/latest)**
+**[Download for Windows, macOS, and Linux](https://github.com/joe-scalise/sorcerer/releases/latest)**
 
 Requires a supported AI CLI tool installed and available on `PATH`, such as [Claude Code](https://docs.anthropic.com/en/docs/claude-code), Gemini CLI, or Codex CLI.
 
@@ -60,4 +60,4 @@ Please help us make Sorcerer better. Please read our [Contributing Guidelines](C
 
 ## License
 
-[Apache-2.0](LICENSE) — Built by [AetherCI](https://aetherci.com)
+[Apache-2.0](LICENSE) — Created by [Joe Scalise](https://scalise.us) and built and released with [AetherCI](https://aetherci.com).
