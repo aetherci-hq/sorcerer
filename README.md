@@ -2,7 +2,7 @@
 
 The desktop workbench for AI command-line coding tools. Not an IDE — a `mission control` for working with multiple coding agents.
 
-![Sorcerer](Sorcerer_Screenshot.png)
+![Sorcerer desktop interface showing four concurrent AI coding-agent sessions](Sorcerer_Screenshot.png)
 
 
 ## Download
